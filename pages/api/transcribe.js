@@ -22,6 +22,7 @@ export const config = {
   
     const file = data.files.audio?.[0];
     if (!file) {
+      console.error("No audio file received.");
       return res.status(400).json({ error: 'No audio file uploaded' });
     }
   
