@@ -43,10 +43,7 @@ export default function PodcastApp() {
       setStatusMessage("❌ Audio playback failed. Try again.");
     });
   };
-    audio.play().catch(err => {
-      console.error("🔇 Autoplay or loading error:", err);
-      setStatusMessage("❌ Audio playback failed. Try again.");
-    });
+    
   };
 
   const handlePlayPause = () => {
@@ -55,7 +52,7 @@ export default function PodcastApp() {
       audioRef.current.play();
       setIsPlaying(true);
     }
-  };
+  
 
   const startVoiceQuestion = async () => {
     if (!streamRef.current) return;
@@ -244,4 +241,5 @@ export default function PodcastApp() {
       </div>
     </div>
   );
+}
 
