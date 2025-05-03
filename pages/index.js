@@ -105,7 +105,12 @@ export default function PodcastApp() {
           });
 
           const { transcript } = await response.json();
-          setQuestion(transcript);
+if (!transcript) {
+  console.error("Transcript is undefined or empty");
+  setIsAsking(false);
+  return;
+}
+setQuestion(transcript);
           handleAsk(transcript);
         } catch (err) {
           console.error("Transcription failed:", err);
