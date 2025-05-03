@@ -237,7 +237,7 @@ export default function PodcastApp() {
                 stopAllAudio();
               }
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full text-lg shadow-md transition transform hover:scale-105 active:scale-95"
+            className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-8 py-3 rounded-full text-lg font-semibold shadow-lg transition transform hover:scale-105 active:scale-95"
           >{isPlaying ? "Pause" : "Start Conversation"}</button>
         </div>
 
@@ -247,7 +247,7 @@ export default function PodcastApp() {
 
         <div className="mb-6 text-center">
           <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
             {["If you were living today, what would you be doing?",
               "Do you think AI can create true art?",
               "Do you think we will ever have a colony in Mars?",
@@ -257,7 +257,7 @@ export default function PodcastApp() {
                   key={i}
                   onClick={() => { setShowContinue(false); askQuestion(q); }}
                   disabled={isAsking || isListening}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-2 rounded-lg text-sm disabled:opacity-50 shadow-sm transition transform hover:scale-105 active:scale-95"
+                  className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium disabled:opacity-50 shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
                 >{q}</button>
               ))}
           </div>
@@ -271,7 +271,7 @@ export default function PodcastApp() {
                 audioRef.current.play();
                 setIsPlaying(true);
               }}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-full text-sm shadow-md transition transform hover:scale-105 active:scale-95"
+                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-2 rounded-full text-sm font-medium shadow-lg transition transform hover:scale-105 active:scale-95"
               >▶️ Continue Your Story</button>
             </div>
           )}
@@ -280,7 +280,7 @@ export default function PodcastApp() {
           <button
             onClick={startVoiceQuestion}
             disabled={isAsking || isListening}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-full text-lg shadow-md disabled:opacity-50 transition transform hover:scale-105 active:scale-95"
+            className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-8 py-3 rounded-full text-lg font-semibold shadow-lg disabled:opacity-50 transition transform hover:scale-105 active:scale-95"
             title="Click to speak your question aloud"
           >🎤 Ask by Voice</button>
         </div>
