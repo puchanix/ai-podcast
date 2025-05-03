@@ -254,9 +254,7 @@ export default function PodcastApp() {
             </div>
           )}
         </div>
-        </div>
-
-        <div className="text-center">
+        <div className="text-center mt-4">
           <button
             onClick={startVoiceQuestion}
             disabled={isAsking || isListening}
