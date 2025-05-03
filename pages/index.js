@@ -43,8 +43,6 @@ export default function PodcastApp() {
       setStatusMessage("❌ Audio playback failed. Try again.");
     });
   };
-    
-  };
 
   const handlePlayPause = () => {
     stopAllAudio();
@@ -52,7 +50,7 @@ export default function PodcastApp() {
       audioRef.current.play();
       setIsPlaying(true);
     }
-  
+  };
 
   const startVoiceQuestion = async () => {
     if (!streamRef.current) return;
