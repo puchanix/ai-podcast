@@ -5,45 +5,65 @@ export default function PodcastApp() {
   const [isAsking, setIsAsking] = useState(false);
   const [question, setQuestion] = useState("");
   const [answerAudioUrl, setAnswerAudioUrl] = useState(null);
-  const [isListening, setIsListening] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [recordedChunks, setRecordedChunks] = useState([]);
   const audioRef = useRef(null);
-  const recognitionRef = useRef(null);
-  const recognitionTimeoutRef = useRef(null);
+  const currentAudioRef = useRef(null);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
-      const recognition = new webkitSpeechRecognition();
-      recognition.lang = "en-US";
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      recognition.onresult = (event) => {
-        clearTimeout(recognitionTimeoutRef.current);
-        const transcript = event.results[0][0].transcript;
-        setQuestion(transcript);
-        setIsListening(false);
-        handleAsk(transcript);
-      };
-      recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error);
-        clearTimeout(recognitionTimeoutRef.current);
-        setIsListening(false);
-      };
-      recognitionRef.current = recognition;
+    if (navigator.mediaDevices && window.MediaRecorder) {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          const recorder = new MediaRecorder(stream, { mimeType: 'audio/mp4' });
+          setMediaRecorder(recorder);
+
+          recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              setRecordedChunks(prev => [...prev, event.data]);
+            }
+          };
+
+          recorder.onstop = async () => {
+            const blob = new Blob(recordedChunks, { type: 'audio/mp4' });
+            setRecordedChunks([]);
+
+            const formData = new FormData();
+            formData.append('audio', blob);
+
+            const response = await fetch('/api/transcribe', {
+              method: 'POST',
+              body: formData
+            });
+
+            const { transcript } = await response.json();
+            setQuestion(transcript);
+            handleAsk(transcript);
+          };
+        })
+        .catch(err => console.error("Microphone access error:", err));
     }
   }, []);
 
+  const stopAllAudio = () => {
+    if (audioRef.current) audioRef.current.pause();
+    if (currentAudioRef.current) currentAudioRef.current.pause();
+    setIsPlaying(false);
+  };
+
   const handlePlayPause = () => {
-    if (!isPlaying) audioRef.current.play();
-    else audioRef.current.pause();
-    setIsPlaying(!isPlaying);
+    stopAllAudio();
+    if (!isPlaying) {
+      audioRef.current.play();
+      setIsPlaying(true);
+    }
   };
 
   const handleAsk = async (customQuestion) => {
     const q = customQuestion || question;
     if (!q.trim()) return;
     setIsAsking(true);
-    audioRef.current.pause();
-    setIsPlaying(false);
+    stopAllAudio();
 
     const gptResponse = await fetch("/api/ask", {
       method: "POST",
@@ -60,6 +80,7 @@ export default function PodcastApp() {
     const { audioUrl } = await ttsResponse.json();
 
     const answerAudio = new Audio(audioUrl);
+    currentAudioRef.current = answerAudio;
     setIsAsking(false);
 
     answerAudio.onended = () => {
@@ -73,79 +94,68 @@ export default function PodcastApp() {
     answerAudio.play();
   };
 
-  const startListening = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-        recognitionTimeoutRef.current = setTimeout(() => {
-          console.warn("Speech recognition timeout.");
-          recognitionRef.current.stop();
-          setIsListening(false);
-        }, 10000);
-      } catch (error) {
-        console.error("Failed to start recognition:", error);
-        setIsListening(false);
-      }
+  const startRecording = () => {
+    if (mediaRecorder && mediaRecorder.state === 'inactive') {
+      setRecordedChunks([]);
+      setRecording(true);
+      mediaRecorder.start();
+      setTimeout(() => {
+        mediaRecorder.stop();
+        setRecording(false);
+      }, 5000);
     }
   };
 
-  const handleInteractiveAsk = () => {
-    audioRef.current.pause();
-    setIsPlaying(false);
-    const promptAudio = new Audio("/askprompt.mp3");
-    promptAudio.play();
-    promptAudio.onended = () => {
-      // Require a manual tap to start listening after prompt finishes
-      alert("Tap OK and then speak your question.");
-      startListening();
-    };
-  };
-
   return (
-    <div className="px-4 py-6 max-w-xl mx-auto sm:px-6 md:px-8">
-      <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-center">🎧 Interactive Podcast: Da Vinci Speaks</h1>
-      <audio ref={audioRef} src="/podcast.mp3" preload="auto" onEnded={() => setIsPlaying(false)} />
+    <div className="min-h-screen bg-gray-100 px-4 py-8 flex flex-col items-center justify-start">
+      <div className="bg-white shadow-xl rounded-2xl p-6 w-full max-w-xl">
+        <h1 className="text-3xl font-bold mb-6 text-center text-gray-800">🎧 Da Vinci Interactive Podcast</h1>
 
-      <div className="flex justify-center mb-4">
-        <button onClick={handlePlayPause} className="bg-blue-600 text-white px-6 py-3 rounded text-lg">
-          {isPlaying ? "Pause" : "Play Podcast"}
-        </button>
-      </div>
+        <audio ref={audioRef} src="/podcast.mp3" preload="auto" onEnded={() => setIsPlaying(false)} />
 
-      <div className="mt-6">
-        <label className="block mb-2 font-medium text-lg">Ask Da Vinci a question:</label>
-        <input
-          className="border border-gray-300 rounded w-full p-3 text-base"
-          placeholder="What do you think about AI, Leonardo?"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-        />
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-4">
+        <div className="flex justify-center mb-6">
           <button
-            onClick={() => handleAsk()}
-            disabled={isAsking}
-            className="bg-green-600 text-white px-4 py-2 rounded text-base"
+            onClick={handlePlayPause}
+            className="bg-blue-600 hover:bg-blue-700 transition text-white px-6 py-3 rounded-full text-lg shadow"
           >
-            {isAsking ? "Thinking..." : "Ask"}
-          </button>
-
-          <button
-            onClick={handleInteractiveAsk}
-            disabled={isListening || isAsking}
-            className="bg-purple-600 text-white px-4 py-2 rounded text-base"
-          >
-            {isListening ? "Listening..." : "🎤 I have a question"}
+            Play Podcast
           </button>
         </div>
-      </div>
 
-      {answerAudioUrl && (
-        <div className="mt-6">
-          <p className="font-semibold mb-2">Da Vinci replies:</p>
-          <audio controls autoPlay src={answerAudioUrl} className="w-full" />
+        <div className="mb-6">
+          <label className="block mb-2 font-medium text-gray-700 text-lg">Ask Da Vinci a question:</label>
+          <input
+            className="border border-gray-300 rounded-lg w-full p-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="What do you think about AI, Leonardo?"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+          />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-4">
+            <button
+              onClick={() => handleAsk()}
+              disabled={isAsking}
+              className="bg-green-600 hover:bg-green-700 transition text-white px-5 py-2 rounded-full text-base shadow disabled:opacity-50"
+            >
+              {isAsking ? "Thinking..." : "Ask"}
+            </button>
+
+            <button
+              onClick={startRecording}
+              disabled={isAsking || recording}
+              className="bg-purple-600 hover:bg-purple-700 transition text-white px-5 py-2 rounded-full text-base shadow disabled:opacity-50"
+            >
+              {recording ? "Recording..." : "🎤 Speak Now"}
+            </button>
+          </div>
         </div>
-      )}
+
+        {answerAudioUrl && (
+          <div className="mt-4">
+            <p className="font-semibold mb-2 text-gray-700">Da Vinci replies:</p>
+            <audio controls autoPlay src={answerAudioUrl} className="w-full rounded-lg border border-gray-300" />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
