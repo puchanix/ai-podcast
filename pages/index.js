@@ -197,10 +197,8 @@ export default function PodcastApp() {
       }
 
       playAudio(audioUrl, () => {
-        playAudio("/followup.mp3", () => {
-          setStatusMessage("🤔 Do you have another question, or should I continue with my story?");
-          setShowContinue(true);
-        });
+        setStatusMessage("🤔 Do you have another question, or should I continue with my story?");
+        setShowContinue(true);
       });
     } catch (err) {
       console.error("Ask flow failed:", err);
@@ -220,7 +218,14 @@ export default function PodcastApp() {
 
         <div className="flex justify-center mb-6">
           <button
-            onClick={handlePlayPause}
+            onClick={() => {
+                setShowContinue(false);
+                playAudio("/followup.mp3", () => {
+                  audioRef.current.src = "/podcast.mp3";
+                  audioRef.current.play();
+                  setIsPlaying(true);
+                });
+              }}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full text-lg"
           >Start Conversation</button>
         </div>
