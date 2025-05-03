@@ -6,6 +6,7 @@ export const config = {
   
   import { IncomingForm } from 'formidable';
   import fs from 'fs/promises';
+  import FormData from 'form-data';
   
   export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -33,10 +34,12 @@ export const config = {
   
     try {
       const fileBuffer = await fs.readFile(file.filepath);
-      const blob = new Blob([fileBuffer], { type: file.mimetype });
   
       const formData = new FormData();
-      formData.append('file', blob, file.originalFilename);
+      formData.append('file', fileBuffer, {
+        filename: file.originalFilename,
+        contentType: file.mimetype
+      });
       formData.append('model', 'whisper-1');
   
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
