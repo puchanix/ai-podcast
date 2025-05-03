@@ -1,6 +1,6 @@
 import { OpenAI } from 'openai';
+import { Readable } from 'stream';
 import Busboy from 'busboy';
-import { Writable } from 'stream';
 
 export const config = {
   api: { bodyParser: false },
@@ -10,46 +10,45 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const busboy = Busboy({ headers: req.headers });
   let audioBuffer = Buffer.alloc(0);
 
+  const busboy = Busboy({ headers: req.headers });
+
   await new Promise((resolve, reject) => {
-    busboy.on('file', (fieldname, file) => {
-      const writable = new Writable({
-        write(chunk, encoding, callback) {
-          audioBuffer = Buffer.concat([audioBuffer, chunk]);
-          callback();
-        },
+    busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
+      file.on('data', data => {
+        audioBuffer = Buffer.concat([audioBuffer, data]);
       });
-      file.pipe(writable);
+      file.on('end', () => resolve());
     });
 
-    busboy.on('finish', resolve);
     busboy.on('error', reject);
     req.pipe(busboy);
   });
 
-  if (!audioBuffer || audioBuffer.length === 0) {
-    return res.status(400).json({ error: 'Invalid or empty audio file' });
+  if (!audioBuffer.length) {
+    return res.status(400).json({ error: 'No audio data received' });
   }
 
   try {
+    const fileStream = Readable.from(audioBuffer);
     const transcription = await openai.audio.transcriptions.create({
-      file: audioBuffer,
+      file: fileStream,
       model: 'whisper-1',
       filename: 'question.webm',
       mimetype: 'audio/webm',
     });
 
     return res.status(200).json({ transcript: transcription.text });
-  } catch (err) {
-    console.error('Whisper transcription failed:', err);
-    return res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error('Whisper transcription failed:', error);
+    return res.status(500).json({ error: error.message });
   }
 }
+
 
 
 
