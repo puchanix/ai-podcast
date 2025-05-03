@@ -5,11 +5,11 @@ export default function PodcastApp() {
   const [isAsking, setIsAsking] = useState(false);
   const [question, setQuestion] = useState("");
   const [answerAudioUrl, setAnswerAudioUrl] = useState(null);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const audioRef = useRef(null);
   const currentAudioRef = useRef(null);
   const streamRef = useRef(null);
+  const recorderRef = useRef(null);
 
   useEffect(() => {
     if (navigator.mediaDevices && window.MediaRecorder) {
@@ -81,38 +81,49 @@ export default function PodcastApp() {
       return;
     }
 
-    const recorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
-    setRecordedChunks([]);
-    setMediaRecorder(recorder);
-    stopAllAudio();
+    try {
+      const recorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
+      recorderRef.current = recorder;
+      setRecordedChunks([]);
+      stopAllAudio();
 
-    const chunks = [];
-    recorder.ondataavailable = (event) => {
-      if (event.data.size > 0) chunks.push(event.data);
-    };
+      const chunks = [];
+      recorder.ondataavailable = (event) => {
+        console.log("Data available:", event.data);
+        if (event.data.size > 0) chunks.push(event.data);
+      };
 
-    recorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: 'audio/webm' });
-      const formData = new FormData();
-      formData.append('audio', blob);
+      recorder.onstop = async () => {
+        console.log("Recorder stopped. Chunks:", chunks);
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', blob);
 
-      try {
-        const response = await fetch('/api/transcribe', {
-          method: 'POST',
-          body: formData
-        });
+        try {
+          const response = await fetch('/api/transcribe', {
+            method: 'POST',
+            body: formData
+          });
 
-        const { transcript } = await response.json();
-        console.log("Transcript:", transcript);
-        setQuestion(transcript);
-        handleAsk(transcript);
-      } catch (err) {
-        console.error("Transcription failed:", err);
-      }
-    };
+          const { transcript } = await response.json();
+          console.log("Transcript received:", transcript);
+          setQuestion(transcript);
+          handleAsk(transcript);
+        } catch (err) {
+          console.error("Transcription failed:", err);
+        }
+      };
 
-    recorder.start();
-    setTimeout(() => recorder.stop(), 5000);
+      recorder.start();
+      console.log("Recording started");
+      setTimeout(() => {
+        console.log("Stopping recorder after timeout");
+        recorder.stop();
+      }, 5000);
+
+    } catch (err) {
+      console.error("Recording failed to start:", err);
+    }
   };
 
   return (
