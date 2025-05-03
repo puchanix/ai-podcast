@@ -62,8 +62,10 @@ export default function PodcastApp() {
     const dataArray = new Uint8Array(bufferLength);
 
     playAudio("/question_ack.mp3", () => {
-      const recorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
+      recorderRef.current = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
       const chunks = [];
+      const recorder = recorderRef.current;
+
       recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
       recorder.onstop = async () => {
         setIsListening(false);
@@ -84,17 +86,7 @@ export default function PodcastApp() {
         }
       };
 
-      recorderRef.current = recorder;
       recorder.start();
-
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioCtx.createMediaStreamSource(streamRef.current);
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 2048;
-      source.connect(analyser);
-
-      const bufferLength = analyser.fftSize;
-      const dataArray = new Uint8Array(bufferLength);
 
       let silenceStart = null;
       const silenceThreshold = 0.01;
