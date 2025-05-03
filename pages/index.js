@@ -217,8 +217,8 @@ export default function PodcastApp() {
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8 flex flex-col items-center">
-      <div className="bg-white shadow-xl rounded-2xl p-6 w-full max-w-xl">
-        <h1 className="text-3xl font-bold text-center mb-4">💬 Talk with the Heroes of History</h1>
+      <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-2xl transition-all duration-300">
+        <h1 className="text-4xl font-extrabold text-center mb-6 text-indigo-800">💬 Talk with the Heroes of History</h1>
 
         <audio ref={audioRef} src="/podcast.mp3" preload="auto" onEnded={() => setIsPlaying(false)} />
 
@@ -234,7 +234,7 @@ export default function PodcastApp() {
                 stopAllAudio();
               }
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full text-lg"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full text-lg shadow-md transition"
           >{isPlaying ? "Pause" : "Start Conversation"}</button>
         </div>
 
@@ -254,7 +254,7 @@ export default function PodcastApp() {
                   key={i}
                   onClick={() => { setShowContinue(false); askQuestion(q); }}
                   disabled={isAsking || isListening}
-                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-2 rounded-lg text-sm disabled:opacity-50 shadow-sm transition"
                 >{q}</button>
               ))}
           </div>
@@ -268,7 +268,7 @@ export default function PodcastApp() {
                 audioRef.current.play();
                 setIsPlaying(true);
               }}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm"
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-full text-sm shadow-md transition"
               >▶️ Continue Your Story</button>
             </div>
           )}
@@ -277,7 +277,7 @@ export default function PodcastApp() {
           <button
             onClick={startVoiceQuestion}
             disabled={isAsking || isListening}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-full text-lg disabled:opacity-50"
+            className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-full text-lg shadow-md disabled:opacity-50 transition"
           >🎤 Ask by Voice</button>
         </div>
       </div>
