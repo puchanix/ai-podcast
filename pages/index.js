@@ -87,43 +87,47 @@ export default function PodcastApp() {
   };
 
   return (
-    <div className="p-6 max-w-xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">🎧 Interactive Podcast: Da Vinci Speaks</h1>
+    <div className="px-4 py-6 max-w-xl mx-auto sm:px-6 md:px-8">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-center">🎧 Interactive Podcast: Da Vinci Speaks</h1>
       <audio ref={audioRef} src="/podcast.mp3" preload="auto" onEnded={() => setIsPlaying(false)} />
 
-      <button onClick={handlePlayPause} className="bg-blue-600 text-white px-4 py-2 rounded">
-        {isPlaying ? "Pause" : "Play Podcast"}
-      </button>
+      <div className="flex justify-center mb-4">
+        <button onClick={handlePlayPause} className="bg-blue-600 text-white px-6 py-3 rounded text-lg">
+          {isPlaying ? "Pause" : "Play Podcast"}
+        </button>
+      </div>
 
       <div className="mt-6">
-        <label className="block mb-2 font-medium">Ask Da Vinci a question:</label>
+        <label className="block mb-2 font-medium text-lg">Ask Da Vinci a question:</label>
         <input
-          className="border border-gray-300 rounded w-full p-2"
+          className="border border-gray-300 rounded w-full p-3 text-base"
           placeholder="What do you think about AI, Leonardo?"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
         />
-        <button
-          onClick={() => handleAsk()}
-          disabled={isAsking}
-          className="bg-green-600 text-white px-4 py-2 rounded mt-2"
-        >
-          {isAsking ? "Thinking..." : "Ask"}
-        </button>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-4">
+          <button
+            onClick={() => handleAsk()}
+            disabled={isAsking}
+            className="bg-green-600 text-white px-4 py-2 rounded text-base"
+          >
+            {isAsking ? "Thinking..." : "Ask"}
+          </button>
 
-        <button
-          onClick={handleInteractiveAsk}
-          disabled={isListening || isAsking}
-          className="bg-purple-600 text-white px-4 py-2 rounded mt-2 ml-2"
-        >
-          {isListening ? "Listening..." : "🎤 I have a question"}
-        </button>
+          <button
+            onClick={handleInteractiveAsk}
+            disabled={isListening || isAsking}
+            className="bg-purple-600 text-white px-4 py-2 rounded text-base"
+          >
+            {isListening ? "Listening..." : "🎤 I have a question"}
+          </button>
+        </div>
       </div>
 
       {answerAudioUrl && (
-        <div className="mt-4">
-          <p className="font-semibold">Da Vinci replies:</p>
-          <audio controls autoPlay src={answerAudioUrl} />
+        <div className="mt-6">
+          <p className="font-semibold mb-2">Da Vinci replies:</p>
+          <audio controls autoPlay src={answerAudioUrl} className="w-full" />
         </div>
       )}
     </div>
