@@ -1,5 +1,6 @@
 import { OpenAI } from 'openai';
-import formidable from 'formidable';
+import Busboy from 'busboy';
+import { Writable } from 'stream';
 
 export const config = {
   api: { bodyParser: false },
@@ -8,41 +9,48 @@ export const config = {
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async function handler(req, res) {
-  const form = formidable({
-    multiples: false,
-    keepExtensions: true,
-    fileWriteStreamHandler: () => null,
-  });
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-  form.parse(req, async (err, fields, files) => {
-    if (err) {
-      console.error('Form parse error:', err);
-      return res.status(500).json({ error: 'Form parsing failed' });
-    }
+  const busboy = Busboy({ headers: req.headers });
+  let audioBuffer = Buffer.alloc(0);
 
-    const file = files?.audio;
-
-    if (!file || Array.isArray(file) || typeof file.toBuffer !== 'function') {
-      console.error('Invalid audio file:', file);
-      return res.status(400).json({ error: 'Invalid or missing audio file' });
-    }
-
-    try {
-      const buffer = await file.toBuffer();
-      const response = await openai.audio.transcriptions.create({
-        file: buffer,
-        model: 'whisper-1',
-        filename: 'question.webm',
-        mimetype: 'audio/webm',
+  await new Promise((resolve, reject) => {
+    busboy.on('file', (fieldname, file) => {
+      const writable = new Writable({
+        write(chunk, encoding, callback) {
+          audioBuffer = Buffer.concat([audioBuffer, chunk]);
+          callback();
+        },
       });
+      file.pipe(writable);
+    });
 
-      return res.status(200).json({ transcript: response.text });
-    } catch (error) {
-      console.error('Whisper transcription failed:', error);
-      return res.status(500).json({ error: error.message });
-    }
+    busboy.on('finish', resolve);
+    busboy.on('error', reject);
+    req.pipe(busboy);
   });
+
+  if (!audioBuffer || audioBuffer.length === 0) {
+    return res.status(400).json({ error: 'Invalid or empty audio file' });
+  }
+
+  try {
+    const transcription = await openai.audio.transcriptions.create({
+      file: audioBuffer,
+      model: 'whisper-1',
+      filename: 'question.webm',
+      mimetype: 'audio/webm',
+    });
+
+    return res.status(200).json({ transcript: transcription.text });
+  } catch (err) {
+    console.error('Whisper transcription failed:', err);
+    return res.status(500).json({ error: err.message });
+  }
 }
+
 
 
 
