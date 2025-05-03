@@ -34,11 +34,10 @@ export const config = {
   
     try {
       const fileBuffer = await fs.readFile(file.filepath);
-  
       const formData = new FormData();
       formData.append('file', fileBuffer, {
-        filename: file.originalFilename,
-        contentType: file.mimetype
+        filename: file.originalFilename || 'audio.webm',
+        contentType: file.mimetype || 'audio/webm'
       });
       formData.append('model', 'whisper-1');
   
