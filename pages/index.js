@@ -8,6 +8,7 @@ export default function PodcastApp() {
   const [isListening, setIsListening] = useState(false);
   const audioRef = useRef(null);
   const recognitionRef = useRef(null);
+  const followupRef = useRef(null);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
@@ -56,8 +57,18 @@ export default function PodcastApp() {
     });
     const { audioUrl } = await ttsResponse.json();
 
-    setAnswerAudioUrl(audioUrl);
+    const answerAudio = new Audio(audioUrl);
     setIsAsking(false);
+
+    answerAudio.onended = () => {
+      const resumeClip = new Audio("/followup.mp3");
+      resumeClip.onended = () => {
+        audioRef.current.play();
+        setIsPlaying(true);
+      };
+      resumeClip.play();
+    };
+    answerAudio.play();
   };
 
   const startListening = () => {
@@ -70,9 +81,9 @@ export default function PodcastApp() {
   const handleInteractiveAsk = () => {
     audioRef.current.pause();
     setIsPlaying(false);
-    const questionPrompt = new SpeechSynthesisUtterance("Go ahead, what is your question?");
-    speechSynthesis.speak(questionPrompt);
-    questionPrompt.onend = () => startListening();
+    const promptAudio = new Audio("/askprompt.mp3");
+    promptAudio.onended = () => startListening();
+    promptAudio.play();
   };
 
   return (
@@ -112,7 +123,7 @@ export default function PodcastApp() {
       {answerAudioUrl && (
         <div className="mt-4">
           <p className="font-semibold">Da Vinci replies:</p>
-          <audio controls autoPlay src={answerAudioUrl} onEnded={() => audioRef.current.play()} />
+          <audio controls autoPlay src={answerAudioUrl} />
         </div>
       )}
     </div>
