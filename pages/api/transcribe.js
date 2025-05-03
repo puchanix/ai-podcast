@@ -45,6 +45,7 @@ export const config = {
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
+          ...formData.getHeaders(),
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
         },
         body: formData

@@ -58,7 +58,6 @@ export default function PodcastApp() {
 
       const answerAudio = new Audio(audioUrl);
       currentAudioRef.current = answerAudio;
-      setIsAsking(false);
 
       answerAudio.onended = () => {
         const resumeClip = new Audio("/followup.mp3");
@@ -68,6 +67,8 @@ export default function PodcastApp() {
         };
         resumeClip.play();
       };
+
+      setIsAsking(false);
       answerAudio.play();
     } catch (err) {
       console.error("Ask handling failed:", err);
@@ -89,12 +90,10 @@ export default function PodcastApp() {
 
       const chunks = [];
       recorder.ondataavailable = (event) => {
-        console.log("Data available:", event.data);
         if (event.data.size > 0) chunks.push(event.data);
       };
 
       recorder.onstop = async () => {
-        console.log("Recorder stopped. Chunks:", chunks);
         const blob = new Blob(chunks, { type: 'audio/webm' });
         const formData = new FormData();
         formData.append('audio', blob);
@@ -106,7 +105,6 @@ export default function PodcastApp() {
           });
 
           const { transcript } = await response.json();
-          console.log("Transcript received:", transcript);
           setQuestion(transcript);
           handleAsk(transcript);
         } catch (err) {
@@ -115,12 +113,7 @@ export default function PodcastApp() {
       };
 
       recorder.start();
-      console.log("Recording started");
-      setTimeout(() => {
-        console.log("Stopping recorder after timeout");
-        recorder.stop();
-      }, 5000);
-
+      setTimeout(() => recorder.stop(), 5000);
     } catch (err) {
       console.error("Recording failed to start:", err);
     }
@@ -156,7 +149,7 @@ export default function PodcastApp() {
               disabled={isAsking}
               className="bg-purple-600 hover:bg-purple-700 transition text-white px-5 py-2 rounded-full text-base shadow disabled:opacity-50"
             >
-              {isAsking ? "Processing..." : "🎤 Ask by Voice"}
+              {isAsking ? "Thinking..." : "🎤 Ask by Voice"}
             </button>
           </div>
         </div>
