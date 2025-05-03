@@ -1,15 +1,11 @@
 export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Only POST requests allowed' });
-    }
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   
     const { text } = req.body;
-    if (!text) {
-      return res.status(400).json({ error: 'Missing text in request' });
-    }
+    if (!text) return res.status(400).json({ error: 'Missing text' });
   
     try {
-      const response = await fetch(
+      const elevenRes = await fetch(
         `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
         {
           method: 'POST',
@@ -28,21 +24,20 @@ export default async function handler(req, res) {
         }
       );
   
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error('ElevenLabs TTS error:', errText);
-        return res.status(500).json({ error: 'TTS generation failed' });
+      if (!elevenRes.ok) {
+        const msg = await elevenRes.text();
+        console.error('ElevenLabs error:', msg);
+        return res.status(500).json({ error: 'TTS failed' });
       }
   
-      const buffer = await response.arrayBuffer();
+      const buffer = await elevenRes.arrayBuffer();
       const base64 = Buffer.from(buffer).toString('base64');
-      const audioUrl = `data:audio/mpeg;base64,${base64}`;
-  
-      res.status(200).json({ audioUrl });
+      return res.status(200).json({ audioUrl: `data:audio/mpeg;base64,${base64}` });
     } catch (err) {
-      console.error('Speak API error:', err);
-      res.status(500).json({ error: err.message });
+      console.error('Speak error:', err);
+      return res.status(500).json({ error: err.message });
     }
   }
+  
   
   
