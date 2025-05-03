@@ -98,11 +98,10 @@ export default function PodcastApp() {
       const { audioUrl } = await ttsRes.json();
 
       playAudio(audioUrl, () => {
-          playAudio("/followup.mp3", () => {
-            audioRef.current.play();
-            setIsPlaying(true);
-            setStatusMessage("");
-          });
+        playAudio("/followup.mp3", () => {
+          audioRef.current.play();
+          setIsPlaying(true);
+          setStatusMessage("");
         });
       });
     } catch (err) {
@@ -141,3 +140,4 @@ export default function PodcastApp() {
       </div>
     </div>
   );
+}
