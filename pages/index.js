@@ -177,8 +177,12 @@ export default function PodcastApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: answerText })
       });
-      const { audioUrl } = await ttsRes.json();
-      if (!audioUrl) throw new Error("TTS failed to return audio URL");
+      const ttsData = await ttsRes.json();
+      console.log("🔊 TTS response:", ttsData);
+      const { audioUrl } = ttsData;
+      if (!audioUrl) {
+        throw new Error("TTS failed to return audio URL or audio URL was empty");
+      }
 
       playAudio(audioUrl, () => {
         playAudio("/followup.mp3", () => {
