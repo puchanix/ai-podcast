@@ -47,6 +47,20 @@ export default function PodcastApp() {
     setIsListening(true);
     setStatusMessage("🎙️ Listening...");
 
+    // Create and resume AudioContext immediately after user tap
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+    }
+
+    const source = audioCtx.createMediaStreamSource(streamRef.current);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    source.connect(analyser);
+
+    const bufferLength = analyser.fftSize;
+    const dataArray = new Uint8Array(bufferLength);
+
     playAudio("/question_ack.mp3", () => {
       const recorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
       const chunks = [];
