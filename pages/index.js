@@ -216,9 +216,12 @@ export default function PodcastApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-8 flex flex-col items-center">
-      <div className="bg-white shadow-2xl rounded-2xl p-8 w-full max-w-2xl transition-all duration-300">
+    <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center">
+      <div className="bg-white shadow-2xl border border-gray-200 rounded-2xl p-10 w-full max-w-2xl transition-all duration-300 space-y-6">
         <h1 className="text-4xl font-extrabold text-center mb-6 text-indigo-800">💬 Talk with the Heroes of History</h1>
+          <div className="flex justify-center mb-4">
+            <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-32 h-32 rounded-full shadow-lg" />
+          </div>
 
         <audio ref={audioRef} src="/podcast.mp3" preload="auto" onEnded={() => setIsPlaying(false)} />
 
