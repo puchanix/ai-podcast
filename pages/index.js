@@ -223,17 +223,17 @@ export default function PodcastApp() {
         <div className="flex justify-center mb-6">
           <button
             onClick={() => {
-                setShowContinue(false);
-                if (!isPlaying) {
-                  audioRef.current.currentTime = podcastPositionRef.current;
-                  audioRef.current.play();
-                  setIsPlaying(true);
-                } else {
-                  stopAllAudio();
-                }
-              }}
+              setShowContinue(false);
+              if (!isPlaying) {
+                audioRef.current.currentTime = podcastPositionRef.current;
+                audioRef.current.play();
+                setIsPlaying(true);
+              } else {
+                stopAllAudio();
+              }
+            }}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full text-lg"
-          >Start Conversation</button>
+          >{isPlaying ? "Pause" : "Start Conversation"}</button>
         </div>
 
         <div className="mb-4 text-center text-gray-700">
@@ -261,11 +261,9 @@ export default function PodcastApp() {
               <button
                 onClick={() => {
                 setShowContinue(false);
-                playAudio("/followup.mp3", () => {
-                  audioRef.current.currentTime = podcastPositionRef.current;
-                  audioRef.current.play();
-                  setIsPlaying(true);
-                });
+                audioRef.current.currentTime = podcastPositionRef.current;
+                audioRef.current.play();
+                setIsPlaying(true);
               }}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm"
               >▶️ Continue Your Story</button>
