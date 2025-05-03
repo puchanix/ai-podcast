@@ -5,7 +5,6 @@ export default function PodcastApp() {
   const [isAsking, setIsAsking] = useState(false);
   const [question, setQuestion] = useState("");
   const [answerAudioUrl, setAnswerAudioUrl] = useState(null);
-  const [recording, setRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [recordedChunks, setRecordedChunks] = useState([]);
   const audioRef = useRef(null);
@@ -94,14 +93,13 @@ export default function PodcastApp() {
     answerAudio.play();
   };
 
-  const startRecording = () => {
+  const startRecordingAndAsk = () => {
     if (mediaRecorder && mediaRecorder.state === 'inactive') {
+      stopAllAudio();
       setRecordedChunks([]);
-      setRecording(true);
       mediaRecorder.start();
       setTimeout(() => {
         mediaRecorder.stop();
-        setRecording(false);
       }, 5000);
     }
   };
@@ -132,19 +130,11 @@ export default function PodcastApp() {
           />
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-4">
             <button
-              onClick={() => handleAsk()}
+              onClick={startRecordingAndAsk}
               disabled={isAsking}
-              className="bg-green-600 hover:bg-green-700 transition text-white px-5 py-2 rounded-full text-base shadow disabled:opacity-50"
-            >
-              {isAsking ? "Thinking..." : "Ask"}
-            </button>
-
-            <button
-              onClick={startRecording}
-              disabled={isAsking || recording}
               className="bg-purple-600 hover:bg-purple-700 transition text-white px-5 py-2 rounded-full text-base shadow disabled:opacity-50"
             >
-              {recording ? "Recording..." : "🎤 Speak Now"}
+              {isAsking ? "Processing..." : "🎤 Ask by Voice"}
             </button>
           </div>
         </div>
