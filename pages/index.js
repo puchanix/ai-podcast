@@ -9,6 +9,7 @@ export default function PodcastApp() {
   const [statusMessage, setStatusMessage] = useState("");
 
   const audioRef = useRef(null);
+  const podcastPositionRef = useRef(0);
   const currentAudioRef = useRef(null);
   const streamRef = useRef(null);
   const recorderRef = useRef(null);
@@ -22,7 +23,10 @@ export default function PodcastApp() {
   }, []);
 
   const stopAllAudio = () => {
-    if (audioRef.current) audioRef.current.pause();
+    if (audioRef.current) {
+      podcastPositionRef.current = audioRef.current.currentTime;
+      audioRef.current.pause();
+    }
     if (currentAudioRef.current) currentAudioRef.current.pause();
     setIsPlaying(false);
   };
@@ -220,9 +224,13 @@ export default function PodcastApp() {
           <button
             onClick={() => {
                 setShowContinue(false);
-                audioRef.current.src = "/podcast.mp3";
-                audioRef.current.play();
-                setIsPlaying(true);
+                if (!isPlaying) {
+                  audioRef.current.currentTime = podcastPositionRef.current;
+                  audioRef.current.play();
+                  setIsPlaying(true);
+                } else {
+                  stopAllAudio();
+                }
               }}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full text-lg"
           >Start Conversation</button>
@@ -254,7 +262,7 @@ export default function PodcastApp() {
                 onClick={() => {
                 setShowContinue(false);
                 playAudio("/followup.mp3", () => {
-                  audioRef.current.src = "/podcast.mp3";
+                  audioRef.current.currentTime = podcastPositionRef.current;
                   audioRef.current.play();
                   setIsPlaying(true);
                 });
