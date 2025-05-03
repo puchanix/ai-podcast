@@ -4,11 +4,11 @@ export const config = {
     }
   };
   
-  import formidable from 'formidable';
   import fs from 'fs';
   
   export default async function handler(req, res) {
-    const form = new formidable.IncomingForm();
+    const formidable = await import('formidable');
+    const form = new formidable.default.IncomingForm();
   
     form.parse(req, async (err, fields, files) => {
       if (err) {
