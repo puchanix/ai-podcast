@@ -1,11 +1,33 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 export default function PodcastApp() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [question, setQuestion] = useState("");
   const [answerAudioUrl, setAnswerAudioUrl] = useState(null);
+  const [isListening, setIsListening] = useState(false);
   const audioRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
+      const recognition = new webkitSpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setQuestion(transcript);
+        setIsListening(false);
+        handleAsk(transcript);
+      };
+      recognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        setIsListening(false);
+      };
+      recognitionRef.current = recognition;
+    }
+  }, []);
 
   const handlePlayPause = () => {
     if (!isPlaying) audioRef.current.play();
@@ -13,8 +35,9 @@ export default function PodcastApp() {
     setIsPlaying(!isPlaying);
   };
 
-  const handleAsk = async () => {
-    if (!question.trim()) return;
+  const handleAsk = async (customQuestion) => {
+    const q = customQuestion || question;
+    if (!q.trim()) return;
     setIsAsking(true);
     audioRef.current.pause();
     setIsPlaying(false);
@@ -22,7 +45,7 @@ export default function PodcastApp() {
     const gptResponse = await fetch("/api/ask", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question })
+      body: JSON.stringify({ question: q })
     });
     const { answerText } = await gptResponse.json();
 
@@ -35,6 +58,21 @@ export default function PodcastApp() {
 
     setAnswerAudioUrl(audioUrl);
     setIsAsking(false);
+  };
+
+  const startListening = () => {
+    if (recognitionRef.current) {
+      setIsListening(true);
+      recognitionRef.current.start();
+    }
+  };
+
+  const handleInteractiveAsk = () => {
+    audioRef.current.pause();
+    setIsPlaying(false);
+    const questionPrompt = new SpeechSynthesisUtterance("Go ahead, what is your question?");
+    speechSynthesis.speak(questionPrompt);
+    questionPrompt.onend = () => startListening();
   };
 
   return (
@@ -55,18 +93,26 @@ export default function PodcastApp() {
           onChange={(e) => setQuestion(e.target.value)}
         />
         <button
-          onClick={handleAsk}
+          onClick={() => handleAsk()}
           disabled={isAsking}
           className="bg-green-600 text-white px-4 py-2 rounded mt-2"
         >
           {isAsking ? "Thinking..." : "Ask"}
+        </button>
+
+        <button
+          onClick={handleInteractiveAsk}
+          disabled={isListening || isAsking}
+          className="bg-purple-600 text-white px-4 py-2 rounded mt-2 ml-2"
+        >
+          {isListening ? "Listening..." : "🎤 I have a question"}
         </button>
       </div>
 
       {answerAudioUrl && (
         <div className="mt-4">
           <p className="font-semibold">Da Vinci replies:</p>
-          <audio controls src={answerAudioUrl} />
+          <audio controls autoPlay src={answerAudioUrl} onEnded={() => audioRef.current.play()} />
         </div>
       )}
     </div>
