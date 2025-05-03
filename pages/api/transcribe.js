@@ -6,7 +6,6 @@ export const config = {
   
   import { IncomingForm } from 'formidable';
   import { readFile } from 'fs/promises';
-  import { buffer } from 'micro';
   
   export default async function handler(req, res) {
     if (req.method !== 'POST') {
