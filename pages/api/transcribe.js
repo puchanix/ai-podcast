@@ -28,17 +28,24 @@ export const config = {
       return res.status(400).json({ error: 'No audio file uploaded' });
     }
   
+    let filename = file.originalFilename || 'recording.webm';
+    if (!filename.endsWith('.webm')) {
+      filename = 'recording.webm';
+    }
+  
+    const mimetype = file.mimetype === 'audio/webm' ? 'audio/webm' : 'audio/webm';
+  
     console.log("Received audio file:");
-    console.log("Name:", file.originalFilename);
-    console.log("Type:", file.mimetype);
+    console.log("Name:", filename);
+    console.log("Type:", mimetype);
     console.log("Path:", file.filepath);
   
     try {
       const fileBuffer = await fs.readFile(file.filepath);
       const formData = new FormData();
       formData.append('file', fileBuffer, {
-        filename: file.originalFilename || 'audio.webm',
-        contentType: file.mimetype || 'audio/webm'
+        filename,
+        contentType: mimetype
       });
       formData.append('model', 'whisper-1');
   
