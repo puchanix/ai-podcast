@@ -28,13 +28,21 @@ export default function PodcastApp() {
 
   const playAudio = (src, callback) => {
     console.log("▶️ Playing audio:", src);
-    const audio = new Audio(src);
-    currentAudioRef.current = audio;
-    audio.onended = () => callback && callback();
-    audio.onerror = (e) => {
+    if (!audioRef.current) {
+      console.error("❌ audioRef not initialized");
+      return;
+    }
+    audioRef.current.src = src;
+    audioRef.current.onended = () => callback && callback();
+    audioRef.current.onerror = (e) => {
       console.error("❌ Error playing audio:", e);
       setStatusMessage("❌ Failed to play audio response. Try again.");
     };
+    audioRef.current.play().catch(err => {
+      console.error("🔇 Autoplay or loading error:", err);
+      setStatusMessage("❌ Audio playback failed. Try again.");
+    });
+  };
     audio.play().catch(err => {
       console.error("🔇 Autoplay or loading error:", err);
       setStatusMessage("❌ Audio playback failed. Try again.");
@@ -236,4 +244,4 @@ export default function PodcastApp() {
       </div>
     </div>
   );
-}
+
