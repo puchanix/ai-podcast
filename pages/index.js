@@ -81,16 +81,21 @@ export default function PodcastApp() {
         formData.append('audio', blob);
 
         try {
-          const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 15000);
+          const res = await fetch('/api/transcribe', { method: 'POST', body: formData, signal: controller.signal });
+          clearTimeout(timeoutId);
           const { transcript } = await res.json();
-          if (!transcript) throw new Error("No transcript");
+          if (!transcript) {
+            throw new Error("No transcript returned — possibly silence or API error");
+          }
           setQuestion(transcript);
           clearInterval(thinkingInterval);
           askQuestion(transcript);
         } catch (err) {
           console.error("Transcription failed:", err);
           clearInterval(thinkingInterval);
-          setStatusMessage("❌ Error transcribing");
+          setStatusMessage("❌ Error transcribing or no response from server. Try again.");
         }
       };
 
