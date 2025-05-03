@@ -214,7 +214,7 @@ export default function PodcastApp() {
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-8 flex flex-col items-center">
       <div className="bg-white shadow-xl rounded-2xl p-6 w-full max-w-xl">
-        <h1 className="text-3xl font-bold text-center mb-4">🎧 Da Vinci Interactive Podcast</h1>
+        <h1 className="text-3xl font-bold text-center mb-4">💬 Talk with the Heroes of History</h1>
 
         <audio ref={audioRef} src="/podcast.mp3" preload="auto" onEnded={() => setIsPlaying(false)} />
 
@@ -222,11 +222,29 @@ export default function PodcastApp() {
           <button
             onClick={handlePlayPause}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full text-lg"
-          >Play Podcast</button>
+          >Start Conversation</button>
         </div>
 
         <div className="mb-4 text-center text-gray-700">
           {statusMessage && <p className="italic text-lg">{statusMessage}</p>}
+        </div>
+
+        <div className="mb-6 text-center">
+          <h2 className="text-xl font-semibold mb-2">Suggested Questions</h2>
+          <div className="grid gap-2">
+            {["If you were living today, what would you be doing?",
+              "Do you think AI can create true art?",
+              "Do you think we will ever have a colony in Mars?",
+              "What inspired you paint the Mona Lisa?",
+              "What is your favorite animal?"].map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => askQuestion(q)}
+                  disabled={isAsking || isListening}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm disabled:opacity-50"
+                >{q}</button>
+              ))}
+          </div>
         </div>
 
         <div className="text-center">
