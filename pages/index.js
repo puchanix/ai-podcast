@@ -107,7 +107,7 @@ export default function PodcastApp() {
       });
     } catch (err) {
       console.error("Ask flow failed:", err);
-      setStatusMessage("❌ Error answering");
+      // setStatusMessage("❌ Error answering");
     }
 
     setIsAsking(false);
