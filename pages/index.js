@@ -72,7 +72,47 @@ export default function PodcastApp() {
 
       recorderRef.current = recorder;
       recorder.start();
-      // Removed duplicate recorder stop
+
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(streamRef.current);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+      source.connect(analyser);
+
+      const bufferLength = analyser.fftSize;
+      const dataArray = new Uint8Array(bufferLength);
+
+      let silenceStart = null;
+      const silenceThreshold = 0.01;
+      const silenceDuration = 2000;
+
+      const detectSilence = () => {
+        analyser.getByteTimeDomainData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const normalized = (dataArray[i] - 128) / 128;
+          sum += normalized * normalized;
+        }
+        const volume = Math.sqrt(sum / bufferLength);
+
+        const now = Date.now();
+        if (volume < silenceThreshold) {
+          if (!silenceStart) silenceStart = now;
+          else if (now - silenceStart > silenceDuration && recorder.state === 'recording') {
+            recorder.stop();
+            audioCtx.close();
+            return;
+          }
+        } else {
+          silenceStart = null;
+        }
+
+        if (recorder.state === 'recording') {
+          requestAnimationFrame(detectSilence);
+        }
+      };
+
+      detectSilence();
     });
     
   };
