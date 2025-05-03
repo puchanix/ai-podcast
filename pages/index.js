@@ -201,7 +201,8 @@ export default function PodcastApp() {
       }
 
       playAudio(audioUrl, () => {
-        podcastPositionRef.current = audioRef.current.currentTime;
+        // Do NOT save podcast position after playing answer
+        // That causes 'Continue Your Story' to repeat answer audio
         setStatusMessage("🤔 Do you have another question, or should I continue with my story?");
         setShowContinue(true);
       });
@@ -262,6 +263,7 @@ export default function PodcastApp() {
               <button
                 onClick={() => {
                 setShowContinue(false);
+                audioRef.current.src = "/podcast.mp3";
                 audioRef.current.currentTime = podcastPositionRef.current;
                 audioRef.current.play();
                 setIsPlaying(true);
