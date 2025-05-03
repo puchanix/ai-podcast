@@ -221,10 +221,8 @@ export default function PodcastApp() {
             onClick={() => {
                 setShowContinue(false);
                 audioRef.current.src = "/podcast.mp3";
-                playAudio("/followup.mp3", () => {
-                  audioRef.current.play();
-                  setIsPlaying(true);
-                });
+                audioRef.current.play();
+                setIsPlaying(true);
               }}
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full text-lg"
           >Start Conversation</button>
@@ -255,8 +253,11 @@ export default function PodcastApp() {
               <button
                 onClick={() => {
                 setShowContinue(false);
-                audioRef.current.play();
-                setIsPlaying(true);
+                playAudio("/followup.mp3", () => {
+                  audioRef.current.src = "/podcast.mp3";
+                  audioRef.current.play();
+                  setIsPlaying(true);
+                });
               }}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm"
               >▶️ Continue Your Story</button>
