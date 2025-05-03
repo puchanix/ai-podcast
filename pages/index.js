@@ -220,8 +220,8 @@ export default function PodcastApp() {
           <button
             onClick={() => {
                 setShowContinue(false);
+                audioRef.current.src = "/podcast.mp3";
                 playAudio("/followup.mp3", () => {
-                  audioRef.current.src = "/podcast.mp3";
                   audioRef.current.play();
                   setIsPlaying(true);
                 });
@@ -253,7 +253,11 @@ export default function PodcastApp() {
           {showContinue && (
             <div className="mt-4">
               <button
-                onClick={handlePlayPause}
+                onClick={() => {
+                setShowContinue(false);
+                audioRef.current.play();
+                setIsPlaying(true);
+              }}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm"
               >▶️ Continue Your Story</button>
             </div>
