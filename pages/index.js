@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
@@ -7,6 +6,7 @@ export default function Home() {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [storyPosition, setStoryPosition] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
   const podcastAudio = useRef(null);
   const responseAudio = useRef(null);
   const promptAudio = useRef(null);
@@ -23,18 +23,23 @@ export default function Home() {
     podcastAudio.current?.pause();
     responseAudio.current?.pause();
     promptAudio.current?.pause();
+    setIsPlaying(false);
   };
 
   const handlePlayPodcast = () => {
     stopAllAudio();
     podcastAudio.current.currentTime = storyPosition;
     podcastAudio.current.play();
+    setIsPlaying(true);
     setStatusMessage('▶️ Playing story...');
   };
 
   const handlePausePodcast = () => {
-    podcastAudio.current.pause();
-    setStoryPosition(podcastAudio.current.currentTime);
+    podcastAudio.current?.pause();
+    responseAudio.current?.pause();
+    promptAudio.current?.pause();
+    setStoryPosition(podcastAudio.current?.currentTime || 0);
+    setIsPlaying(false);
     setStatusMessage('⏸️ Paused');
   };
 
@@ -71,6 +76,47 @@ export default function Home() {
     }
   };
 
+  const handleVoiceQuestion = async () => {
+    stopAllAudio();
+    setStatusMessage('🎤 Listening...');
+    setIsListening(true);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks = [];
+
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        setIsListening(false);
+        setStatusMessage('⏳ Transcribing...');
+
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', blob, 'question.webm');
+
+        const res = await fetch('/api/transcribe', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+
+        if (data.transcript) {
+          handleAsk(data.transcript);
+        } else {
+          setStatusMessage('❌ Could not understand audio');
+        }
+      };
+
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 5000);
+    } catch (err) {
+      console.error(err);
+      setStatusMessage('❌ Microphone error');
+      setIsListening(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center font-sans">
       <h1 className="text-5xl font-bold text-center mb-6 text-indigo-900 drop-shadow-md">
@@ -82,12 +128,15 @@ export default function Home() {
       <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
       <div className="mb-4 flex gap-4">
-        <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
-          ▶️ Start Conversation
-        </button>
-        <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
-          ⏸️ Pause
-        </button>
+        {isPlaying ? (
+          <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+            ⏸️ Pause
+          </button>
+        ) : (
+          <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+            ▶️ Start Conversation
+          </button>
+        )}
       </div>
 
       <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
@@ -101,6 +150,15 @@ export default function Home() {
             {q}
           </button>
         ))}
+      </div>
+
+      <div className="mt-6">
+        <button
+          onClick={handleVoiceQuestion}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+        >
+          🎤 Ask Your Own Question
+        </button>
       </div>
 
       <audio ref={podcastAudio} src="/podcast.mp3" hidden preload="auto" />
