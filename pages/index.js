@@ -68,8 +68,14 @@ export default function PodcastApp() {
 
       recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
       recorder.onstop = async () => {
+        console.log("🔴 recorder.onstop triggered");
         setIsListening(false);
-        setStatusMessage("🧠 Thinking...");
+        setStatusMessage("🧠 Thinking... (0s)");
+        let thinkingStart = Date.now();
+        const thinkingInterval = setInterval(() => {
+          const elapsed = Math.floor((Date.now() - thinkingStart) / 1000);
+          setStatusMessage(`🧠 Thinking... (${elapsed}s)`);
+        }, 1000);
         const blob = new Blob(chunks, { type: 'audio/webm' });
         const formData = new FormData();
         formData.append('audio', blob);
@@ -79,14 +85,26 @@ export default function PodcastApp() {
           const { transcript } = await res.json();
           if (!transcript) throw new Error("No transcript");
           setQuestion(transcript);
+          clearInterval(thinkingInterval);
           askQuestion(transcript);
         } catch (err) {
           console.error("Transcription failed:", err);
+          clearInterval(thinkingInterval);
           setStatusMessage("❌ Error transcribing");
         }
       };
 
       recorder.start();
+      console.log("🎙️ recorder started");
+
+      // Fallback timeout in case onstop never fires
+      setTimeout(() => {
+        if (recorder.state === 'recording') {
+          console.warn("⚠️ Timeout: Forcing recorder to stop");
+          console.log("🔇 Silence detected, stopping recorder");
+            recorder.stop();
+        }
+      }, 10000);
 
       let silenceStart = null;
       const silenceThreshold = 0.01;
