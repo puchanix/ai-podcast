@@ -8,7 +8,7 @@ export default function PodcastApp() {
   const [isListening, setIsListening] = useState(false);
   const audioRef = useRef(null);
   const recognitionRef = useRef(null);
-  const followupRef = useRef(null);
+  const recognitionTimeoutRef = useRef(null);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
@@ -17,6 +17,7 @@ export default function PodcastApp() {
       recognition.interimResults = false;
       recognition.maxAlternatives = 1;
       recognition.onresult = (event) => {
+        clearTimeout(recognitionTimeoutRef.current);
         const transcript = event.results[0][0].transcript;
         setQuestion(transcript);
         setIsListening(false);
@@ -24,6 +25,7 @@ export default function PodcastApp() {
       };
       recognition.onerror = (event) => {
         console.error("Speech recognition error:", event.error);
+        clearTimeout(recognitionTimeoutRef.current);
         setIsListening(false);
       };
       recognitionRef.current = recognition;
@@ -73,8 +75,18 @@ export default function PodcastApp() {
 
   const startListening = () => {
     if (recognitionRef.current) {
-      setIsListening(true);
-      recognitionRef.current.start();
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+        recognitionTimeoutRef.current = setTimeout(() => {
+          console.warn("Speech recognition timeout.");
+          recognitionRef.current.stop();
+          setIsListening(false);
+        }, 10000);
+      } catch (error) {
+        console.error("Failed to start recognition:", error);
+        setIsListening(false);
+      }
     }
   };
 
@@ -82,8 +94,12 @@ export default function PodcastApp() {
     audioRef.current.pause();
     setIsPlaying(false);
     const promptAudio = new Audio("/askprompt.mp3");
-    promptAudio.onended = () => startListening();
     promptAudio.play();
+    promptAudio.onended = () => {
+      // Require a manual tap to start listening after prompt finishes
+      alert("Tap OK and then speak your question.");
+      startListening();
+    };
   };
 
   return (
