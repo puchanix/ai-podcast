@@ -149,15 +149,28 @@ export default function PodcastApp() {
   const askQuestion = async (q) => {
     setIsAsking(true);
     stopAllAudio();
-    setStatusMessage("🧠 Thinking...");
+    let thinkingStart = Date.now();
+    const thinkingInterval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - thinkingStart) / 1000);
+      setStatusMessage(`🧠 Thinking... (${elapsed}s)`);
+    }, 1000);
 
     try {
+      console.log("🧠 Sending question to GPT:", q);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       const gptRes = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: q })
+        body: JSON.stringify({ question: q }),
+        signal: controller.signal
       });
-      const { answerText } = await gptRes.json();
+      clearTimeout(timeoutId);
+
+      const gptData = await gptRes.json();
+      console.log("🤖 GPT response:", gptData);
+      const answerText = gptData?.answerText;
+      if (!answerText) throw new Error("GPT returned no answerText");
 
       const ttsRes = await fetch("/api/speak", {
         method: "POST",
@@ -165,6 +178,7 @@ export default function PodcastApp() {
         body: JSON.stringify({ text: answerText })
       });
       const { audioUrl } = await ttsRes.json();
+      if (!audioUrl) throw new Error("TTS failed to return audio URL");
 
       playAudio(audioUrl, () => {
         playAudio("/followup.mp3", () => {
@@ -175,10 +189,11 @@ export default function PodcastApp() {
       });
     } catch (err) {
       console.error("Ask flow failed:", err);
-      
+      setStatusMessage("❌ Failed to get an answer. Try again.");
+    } finally {
+      clearInterval(thinkingInterval);
+      setIsAsking(false);
     }
-
-    setIsAsking(false);
   };
 
   return (
