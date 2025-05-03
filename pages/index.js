@@ -72,9 +72,9 @@ export default function PodcastApp() {
 
       recorderRef.current = recorder;
       recorder.start();
-      setTimeout(() => recorder.stop(), 5000);
+      // Removed duplicate recorder stop
     });
-    setTimeout(() => recorder.stop(), 5000);
+    
   };
 
   const askQuestion = async (q) => {
@@ -107,7 +107,7 @@ export default function PodcastApp() {
       });
     } catch (err) {
       console.error("Ask flow failed:", err);
-      // setStatusMessage("❌ Error answering");
+      
     }
 
     setIsAsking(false);
