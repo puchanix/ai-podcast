@@ -7,6 +7,7 @@ export const config = {
   import { IncomingForm } from 'formidable';
   import fs from 'fs/promises';
   import FormData from 'form-data';
+  import axios from 'axios';
   
   export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -41,26 +42,17 @@ export const config = {
       });
       formData.append('model', 'whisper-1');
   
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
+      const response = await axios.post('https://api.openai.com/v1/audio/transcriptions', formData, {
         headers: {
           ...formData.getHeaders(),
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-        },
-        body: formData
+        }
       });
   
-      const result = await response.json();
-  
-      if (result.error) {
-        console.error("OpenAI Whisper error:", result.error);
-        return res.status(500).json({ error: result.error.message });
-      }
-  
-      console.log("Whisper transcript result:", result.text);
-      res.status(200).json({ transcript: result.text });
+      console.log("Whisper transcript result:", response.data.text);
+      res.status(200).json({ transcript: response.data.text });
     } catch (err) {
-      console.error("Whisper transcription failed:", err);
+      console.error("Whisper transcription failed:", err.response?.data || err.message);
       res.status(500).json({ error: 'Transcription failed' });
     }
   }
