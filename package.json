@@ -7,13 +7,16 @@
     "start": "next start"
   },
   "dependencies": {
+    "form-data": "^4.0.2",
+    "formidable": "^3.5.4",
     "next": "latest",
+    "openai": "^4.97.0",
     "react": "latest",
     "react-dom": "latest"
   },
   "devDependencies": {
-    "tailwindcss": "^3.3.2",
+    "autoprefixer": "^10.4.14",
     "postcss": "^8.4.21",
-    "autoprefixer": "^10.4.14"
+    "tailwindcss": "^3.3.2"
   }
 }
