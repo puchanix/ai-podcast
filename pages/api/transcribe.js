@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   const form = formidable({
     multiples: false,
     keepExtensions: true,
-    fileWriteStreamHandler: () => null, // prevent writing to disk
+    fileWriteStreamHandler: () => null, // keep in memory
   });
 
   form.parse(req, async (err, fields, files) => {
@@ -22,28 +22,33 @@ export default async function handler(req, res) {
 
     const file = files.audio;
 
-    if (!file || Array.isArray(file) || typeof file.toBuffer !== 'function') {
-      console.error('Invalid audio file');
-      return res.status(400).json({ error: 'Invalid audio input' });
+    if (
+      !file ||
+      Array.isArray(file) ||
+      typeof file.toBuffer !== 'function'
+    ) {
+      console.error('Invalid audio file:', file);
+      return res.status(400).json({ error: 'Invalid or missing audio file' });
     }
 
     try {
       const buffer = await file.toBuffer();
 
-      const response = await openai.audio.transcriptions.create({
+      const transcription = await openai.audio.transcriptions.create({
         file: buffer,
         model: 'whisper-1',
-        filename: 'question.webm',
-        mimetype: 'audio/webm',
+        filename: file.originalFilename || 'question.webm',
+        mimetype: file.mimetype || 'audio/webm',
       });
 
-      return res.status(200).json({ transcript: response.text });
+      return res.status(200).json({ transcript: transcription.text });
     } catch (error) {
-      console.error('Whisper transcription failed:', error);
+      console.error('Whisper error:', error);
       return res.status(500).json({ error: error.message });
     }
   });
 }
+
 
 
 
