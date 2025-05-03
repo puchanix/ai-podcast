@@ -5,7 +5,7 @@ export const config = {
   };
   
   import { IncomingForm } from 'formidable';
-  import { readFile } from 'fs/promises';
+  import fs from 'fs';
   
   export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -14,7 +14,7 @@ export const config = {
   
     const data = await new Promise((resolve, reject) => {
       const form = new IncomingForm({ keepExtensions: true });
-      form.parse(req, async (err, fields, files) => {
+      form.parse(req, (err, fields, files) => {
         if (err) reject(err);
         else resolve({ fields, files });
       });
@@ -25,11 +25,15 @@ export const config = {
       return res.status(400).json({ error: 'No audio file uploaded' });
     }
   
+    console.log("Received audio file:");
+    console.log("Name:", file.originalFilename);
+    console.log("Type:", file.mimetype);
+    console.log("Path:", file.filepath);
+  
     try {
-      const fileBuffer = await readFile(file.filepath);
-      const blob = new Blob([fileBuffer], { type: 'audio/webm' });
+      const fileStream = fs.createReadStream(file.filepath);
       const formData = new FormData();
-      formData.append('file', blob, file.originalFilename);
+      formData.append('file', fileStream, file.originalFilename);
       formData.append('model', 'whisper-1');
   
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -41,11 +45,16 @@ export const config = {
       });
   
       const result = await response.json();
-      if (result.error) throw new Error(result.error.message);
   
+      if (result.error) {
+        console.error("OpenAI Whisper error:", result.error);
+        return res.status(500).json({ error: result.error.message });
+      }
+  
+      console.log("Whisper transcript result:", result.text);
       res.status(200).json({ transcript: result.text });
     } catch (err) {
-      console.error('Transcription error:', err);
+      console.error("Whisper transcription failed:", err);
       res.status(500).json({ error: 'Transcription failed' });
     }
   }
