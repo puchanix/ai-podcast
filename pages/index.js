@@ -97,8 +97,7 @@ export default function PodcastApp() {
       });
       const { audioUrl } = await ttsRes.json();
 
-      playAudio("/question_ack.mp3", () => {
-        playAudio(audioUrl, () => {
+      playAudio(audioUrl, () => {
           playAudio("/followup.mp3", () => {
             audioRef.current.play();
             setIsPlaying(true);
