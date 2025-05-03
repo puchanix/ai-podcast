@@ -47,30 +47,33 @@ export default function PodcastApp() {
     setIsListening(true);
     setStatusMessage("🎙️ Listening...");
 
-    const recorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
-    const chunks = [];
-    recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-    recorder.onstop = async () => {
-      setIsListening(false);
-      setStatusMessage("🧠 Thinking...");
-      const blob = new Blob(chunks, { type: 'audio/webm' });
-      const formData = new FormData();
-      formData.append('audio', blob);
+    playAudio("/question_ack.mp3", () => {
+      const recorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
+      const chunks = [];
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = async () => {
+        setIsListening(false);
+        setStatusMessage("🧠 Thinking...");
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', blob);
 
-      try {
-        const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
-        const { transcript } = await res.json();
-        if (!transcript) throw new Error("No transcript");
-        setQuestion(transcript);
-        askQuestion(transcript);
-      } catch (err) {
-        console.error("Transcription failed:", err);
-        setStatusMessage("❌ Error transcribing");
-      }
-    };
+        try {
+          const res = await fetch('/api/transcribe', { method: 'POST', body: formData });
+          const { transcript } = await res.json();
+          if (!transcript) throw new Error("No transcript");
+          setQuestion(transcript);
+          askQuestion(transcript);
+        } catch (err) {
+          console.error("Transcription failed:", err);
+          setStatusMessage("❌ Error transcribing");
+        }
+      };
 
-    recorderRef.current = recorder;
-    recorder.start();
+      recorderRef.current = recorder;
+      recorder.start();
+      setTimeout(() => recorder.stop(), 5000);
+    });
     setTimeout(() => recorder.stop(), 5000);
   };
 
