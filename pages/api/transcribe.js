@@ -2,9 +2,7 @@ import { OpenAI } from 'openai';
 import formidable from 'formidable';
 
 export const config = {
-  api: {
-    bodyParser: false,
-  },
+  api: { bodyParser: false },
 };
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -13,12 +11,13 @@ export default async function handler(req, res) {
   const form = formidable({
     multiples: false,
     keepExtensions: true,
+    fileWriteStreamHandler: () => null, // prevent writing to disk
   });
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      console.error('Form parsing error:', err);
-      return res.status(500).json({ error: 'Failed to parse form data' });
+      console.error('Form parse error:', err);
+      return res.status(500).json({ error: 'Form parsing failed' });
     }
 
     const file = files.audio;
@@ -40,11 +39,12 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ transcript: response.text });
     } catch (error) {
-      console.error('Transcription error:', error);
+      console.error('Whisper transcription failed:', error);
       return res.status(500).json({ error: error.message });
     }
   });
 }
+
 
 
 
