@@ -216,11 +216,11 @@ export default function PodcastApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center">
+    <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center font-sans">
       <div className="bg-white shadow-2xl border border-gray-200 rounded-2xl p-10 w-full max-w-2xl transition-all duration-300 space-y-6">
-        <h1 className="text-4xl font-extrabold text-center mb-6 text-indigo-800">💬 Talk with the Heroes of History</h1>
+        <h1 className="text-5xl font-bold text-center mb-6 text-indigo-900 drop-shadow-md">💬 Talk with the Heroes of History</h1>
           <div className="flex justify-center mb-4">
-            <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-32 h-32 rounded-full shadow-lg" />
+            <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-40 h-40 rounded-full border-4 border-indigo-300 shadow-xl" />
           </div>
 
         <audio ref={audioRef} src="/podcast.mp3" preload="auto" onEnded={() => setIsPlaying(false)} />
@@ -237,16 +237,16 @@ export default function PodcastApp() {
                 stopAllAudio();
               }
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full text-lg shadow-md transition"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-full text-lg shadow-md transition transform hover:scale-105 active:scale-95"
           >{isPlaying ? "Pause" : "Start Conversation"}</button>
         </div>
 
-        <div className="mb-4 text-center text-gray-700">
+        <div className="mb-4 text-center text-gray-700 animate-pulse">
           {statusMessage && <p className="italic text-lg">{statusMessage}</p>}
         </div>
 
         <div className="mb-6 text-center">
-          <h2 className="text-xl font-semibold mb-2">Suggested Questions</h2>
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
           <div className="grid gap-2">
             {["If you were living today, what would you be doing?",
               "Do you think AI can create true art?",
@@ -257,7 +257,7 @@ export default function PodcastApp() {
                   key={i}
                   onClick={() => { setShowContinue(false); askQuestion(q); }}
                   disabled={isAsking || isListening}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-2 rounded-lg text-sm disabled:opacity-50 shadow-sm transition"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-4 py-2 rounded-lg text-sm disabled:opacity-50 shadow-sm transition transform hover:scale-105 active:scale-95"
                 >{q}</button>
               ))}
           </div>
@@ -271,16 +271,17 @@ export default function PodcastApp() {
                 audioRef.current.play();
                 setIsPlaying(true);
               }}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-full text-sm shadow-md transition"
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-full text-sm shadow-md transition transform hover:scale-105 active:scale-95"
               >▶️ Continue Your Story</button>
             </div>
           )}
         </div>
-        <div className="text-center mt-4">
+        <div className="text-center mt-4 animate-fade-in">
           <button
             onClick={startVoiceQuestion}
             disabled={isAsking || isListening}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-full text-lg shadow-md disabled:opacity-50 transition"
+            className="bg-purple-600 hover:bg-purple-700 text-white px-8 py-3 rounded-full text-lg shadow-md disabled:opacity-50 transition transform hover:scale-105 active:scale-95"
+            title="Click to speak your question aloud"
           >🎤 Ask by Voice</button>
         </div>
       </div>
