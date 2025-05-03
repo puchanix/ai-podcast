@@ -201,6 +201,7 @@ export default function PodcastApp() {
       }
 
       playAudio(audioUrl, () => {
+        podcastPositionRef.current = audioRef.current.currentTime;
         setStatusMessage("🤔 Do you have another question, or should I continue with my story?");
         setShowContinue(true);
       });
