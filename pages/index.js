@@ -9,36 +9,13 @@ export default function PodcastApp() {
   const [recordedChunks, setRecordedChunks] = useState([]);
   const audioRef = useRef(null);
   const currentAudioRef = useRef(null);
+  const streamRef = useRef(null);
 
   useEffect(() => {
     if (navigator.mediaDevices && window.MediaRecorder) {
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
-          const recorder = new MediaRecorder(stream, { mimeType: 'audio/mp4' });
-          setMediaRecorder(recorder);
-
-          recorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-              setRecordedChunks(prev => [...prev, event.data]);
-            }
-          };
-
-          recorder.onstop = async () => {
-            const blob = new Blob(recordedChunks, { type: 'audio/mp4' });
-            setRecordedChunks([]);
-
-            const formData = new FormData();
-            formData.append('audio', blob);
-
-            const response = await fetch('/api/transcribe', {
-              method: 'POST',
-              body: formData
-            });
-
-            const { transcript } = await response.json();
-            setQuestion(transcript);
-            handleAsk(transcript);
-          };
+          streamRef.current = stream;
         })
         .catch(err => console.error("Microphone access error:", err));
     }
@@ -64,44 +41,78 @@ export default function PodcastApp() {
     setIsAsking(true);
     stopAllAudio();
 
-    const gptResponse = await fetch("/api/ask", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: q })
-    });
-    const { answerText } = await gptResponse.json();
+    try {
+      const gptResponse = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: q })
+      });
+      const { answerText } = await gptResponse.json();
 
-    const ttsResponse = await fetch("/api/speak", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: answerText })
-    });
-    const { audioUrl } = await ttsResponse.json();
+      const ttsResponse = await fetch("/api/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: answerText })
+      });
+      const { audioUrl } = await ttsResponse.json();
 
-    const answerAudio = new Audio(audioUrl);
-    currentAudioRef.current = answerAudio;
-    setIsAsking(false);
+      const answerAudio = new Audio(audioUrl);
+      currentAudioRef.current = answerAudio;
+      setIsAsking(false);
 
-    answerAudio.onended = () => {
-      const resumeClip = new Audio("/followup.mp3");
-      resumeClip.onended = () => {
-        audioRef.current.play();
-        setIsPlaying(true);
+      answerAudio.onended = () => {
+        const resumeClip = new Audio("/followup.mp3");
+        resumeClip.onended = () => {
+          audioRef.current.play();
+          setIsPlaying(true);
+        };
+        resumeClip.play();
       };
-      resumeClip.play();
-    };
-    answerAudio.play();
+      answerAudio.play();
+    } catch (err) {
+      console.error("Ask handling failed:", err);
+      setIsAsking(false);
+    }
   };
 
   const startRecordingAndAsk = () => {
-    if (mediaRecorder && mediaRecorder.state === 'inactive') {
-      stopAllAudio();
-      setRecordedChunks([]);
-      mediaRecorder.start();
-      setTimeout(() => {
-        mediaRecorder.stop();
-      }, 5000);
+    if (!streamRef.current) {
+      console.error("No microphone stream available");
+      return;
     }
+
+    const recorder = new MediaRecorder(streamRef.current, { mimeType: 'audio/webm' });
+    setRecordedChunks([]);
+    setMediaRecorder(recorder);
+    stopAllAudio();
+
+    const chunks = [];
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) chunks.push(event.data);
+    };
+
+    recorder.onstop = async () => {
+      const blob = new Blob(chunks, { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append('audio', blob);
+
+      try {
+        const response = await fetch('/api/transcribe', {
+          method: 'POST',
+          body: formData
+        });
+
+        const { transcript } = await response.json();
+        console.log("Transcript:", transcript);
+        setQuestion(transcript);
+        handleAsk(transcript);
+      } catch (err) {
+        console.error("Transcription failed:", err);
+      }
+    };
+
+    recorder.start();
+    setTimeout(() => recorder.stop(), 5000);
   };
 
   return (
