@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
 export default function PodcastApp() {
+  const [showContinue, setShowContinue] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -197,9 +198,8 @@ export default function PodcastApp() {
 
       playAudio(audioUrl, () => {
         playAudio("/followup.mp3", () => {
-          audioRef.current.play();
-          setIsPlaying(true);
-          setStatusMessage("");
+          setStatusMessage("🤔 Do you have another question, or should I continue with my story?");
+          setShowContinue(true);
         });
       });
     } catch (err) {
@@ -239,12 +239,21 @@ export default function PodcastApp() {
               "What is your favorite animal?"].map((q, i) => (
                 <button
                   key={i}
-                  onClick={() => askQuestion(q)}
+                  onClick={() => { setShowContinue(false); askQuestion(q); }}
                   disabled={isAsking || isListening}
                   className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm disabled:opacity-50"
                 >{q}</button>
               ))}
           </div>
+          {showContinue && (
+            <div className="mt-4">
+              <button
+                onClick={handlePlayPause}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full text-sm"
+              >▶️ Continue Your Story</button>
+            </div>
+          )}
+        </div>
         </div>
 
         <div className="text-center">
