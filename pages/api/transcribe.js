@@ -8,7 +8,7 @@ export const config = {
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async function handler(req, res) {
-  const form = formidable({ multiples: false });
+  const form = formidable({ multiples: false, keepExtensions: true });
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
@@ -32,11 +32,12 @@ export default async function handler(req, res) {
 
       return res.status(200).json({ transcript: response.text });
     } catch (err) {
-      console.error('Transcription error:', err);
+      console.error('Whisper transcription failed:', err);
       return res.status(500).json({ error: err.message });
     }
   });
 }
+
 
 
 
