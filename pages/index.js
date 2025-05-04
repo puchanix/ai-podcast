@@ -6,6 +6,7 @@ export default function Home() {
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [storyPosition, setStoryPosition] = useState(0);
+  const playbackMonitor = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const podcastAudio = useRef(null);
@@ -49,7 +50,45 @@ export default function Home() {
       const mediaSource = new MediaSource();
       responseAudio.current.src = URL.createObjectURL(mediaSource);
       responseAudio.current.load();
+      
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    
+    playbackMonitor.current = setInterval(() => {
+      const audio = responseAudio.current;
+      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
+        clearInterval(playbackMonitor.current);
+        setIsThinking(false);
+        setStatusMessage('');
+        setShowOptions(true);
+      }
+    }, 500);
+
+    responseAudio.current.onended = () => {
+      clearInterval(playbackMonitor.current);
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
+    
+      
+    playbackMonitor.current = setInterval(() => {
+      const audio = responseAudio.current;
+      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
+        clearInterval(playbackMonitor.current);
+        setIsThinking(false);
+        setStatusMessage('');
+        setShowOptions(true);
+      }
+    }, 500);
+
+    responseAudio.current.onended = () => {
+      clearInterval(playbackMonitor.current);
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
+    
+    
 
       mediaSource.addEventListener('sourceopen', () => {
         const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
@@ -71,7 +110,7 @@ export default function Home() {
               mediaSource.endOfStream();
               setIsThinking(false);
               setStatusMessage('');
-              setShowOptions(true);
+              // setShowOptions moved to onended
               return;
             }
             if (value) {
@@ -143,11 +182,24 @@ export default function Home() {
       responseAudio.current.src = audioData.audioUrl;
       responseAudio.current.play();
       setStatusMessage('🎙️ Da Vinci replies');
-      responseAudio.current.onended = () => {
+      
+    playbackMonitor.current = setInterval(() => {
+      const audio = responseAudio.current;
+      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
+        clearInterval(playbackMonitor.current);
         setIsThinking(false);
         setStatusMessage('');
         setShowOptions(true);
-      };
+      }
+    }, 500);
+
+    responseAudio.current.onended = () => {
+      clearInterval(playbackMonitor.current);
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
+    
     } catch (err) {
       console.error(err);
       setStatusMessage('❌ Error answering');
@@ -218,7 +270,45 @@ export default function Home() {
       const mediaSource = new MediaSource();
       responseAudio.current.src = URL.createObjectURL(mediaSource);
       responseAudio.current.load();
+      
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    
+    playbackMonitor.current = setInterval(() => {
+      const audio = responseAudio.current;
+      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
+        clearInterval(playbackMonitor.current);
+        setIsThinking(false);
+        setStatusMessage('');
+        setShowOptions(true);
+      }
+    }, 500);
+
+    responseAudio.current.onended = () => {
+      clearInterval(playbackMonitor.current);
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
+    
+      
+    playbackMonitor.current = setInterval(() => {
+      const audio = responseAudio.current;
+      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
+        clearInterval(playbackMonitor.current);
+        setIsThinking(false);
+        setStatusMessage('');
+        setShowOptions(true);
+      }
+    }, 500);
+
+    responseAudio.current.onended = () => {
+      clearInterval(playbackMonitor.current);
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
+    
+    
 
       mediaSource.addEventListener('sourceopen', () => {
         const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
@@ -240,7 +330,7 @@ export default function Home() {
               mediaSource.endOfStream();
               setIsThinking(false);
               setStatusMessage('');
-              setShowOptions(true);
+              // setShowOptions moved to onended
               return;
             }
             if (value) {
@@ -271,15 +361,22 @@ export default function Home() {
       </div>
       <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
+      
       <div className="mb-4 flex gap-4">
-        {!isPlaying ? (
+        {!isPlaying && storyPosition === 0 ? (
           <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
             ▶️ Start Conversation
           </button>
         ) : (
-          <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
-            ⏸️ Pause
-          </button>
+          isPlaying ? (
+            <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+              ⏸️ Pause
+            </button>
+          ) : (
+            <button onClick={handlePlayPodcast} className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+              ▶️ Resume
+            </button>
+          )
         )}
       </div>
 
