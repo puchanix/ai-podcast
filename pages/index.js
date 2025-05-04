@@ -2,6 +2,20 @@
 import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
+  useEffect(() => {
+    if (thinkingTime === null) return;
+    const start = Date.now();
+    let max = 7;
+    let timer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - start) / 1000);
+      if (elapsed <= max) {
+        setStatusMessage(`🤔 Thinking... (${max - elapsed}s)`);
+      } else {
+        setStatusMessage(`⏳ Still thinking... (${elapsed - max}s)`);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [thinkingTime]);
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -40,7 +54,7 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    setStatusMessage('🤔 Thinking (streaming)...');
+    setThinkingTime(Date.now());
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -55,6 +69,8 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    setThinkingTime(null);
+    setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
       setStatusMessage('');
@@ -268,7 +284,7 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    setStatusMessage('🤔 Thinking (streaming)...');
+    setThinkingTime(Date.now());
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -283,6 +299,8 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    setThinkingTime(null);
+    setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
       setStatusMessage('');
