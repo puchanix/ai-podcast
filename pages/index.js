@@ -114,6 +114,7 @@ export default function Home() {
       const mediaSource = new MediaSource();
       responseAudio.current.src = URL.createObjectURL(mediaSource);
       responseAudio.current.load();
+      setStatusMessage('');
       responseAudio.current.play().catch((e) => {
         console.error('Playback error:', e);
         setStatusMessage('❌ Playback error. Tap to resume.');
@@ -127,9 +128,9 @@ export default function Home() {
           reader.read().then(({ done, value }) => {
             if (done) {
               mediaSource.endOfStream();
-              setStatusMessage('🧠 What next?');
               choiceAudio.current.play();
               setShowOptions(true);
+              setIsPlaying(false);
               setIsThinking(false);
               setIsThinking(false);
               return;
@@ -209,15 +210,9 @@ export default function Home() {
       <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
       <div className="mb-4 flex gap-4">
-        {isPlaying ? (
-          <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
-            ⏸️ Pause
-          </button>
-        ) : (
-          <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
-            ▶️ Start Conversation
-          </button>
-        )}
+        <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+          ⏸️ Pause
+        </button>
       </div>
 
       <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
