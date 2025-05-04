@@ -7,7 +7,7 @@ const VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
 
 export const config = {
   api: {
-    responseLimit: false, // allow audio streaming
+    responseLimit: false,
   },
 };
 
@@ -61,7 +61,19 @@ export default async function handler(req, res) {
 
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Transfer-Encoding', 'chunked');
-    ttsRes.body.pipe(res);
+
+    const reader = ttsRes.body.getReader();
+
+    const pump = async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(Buffer.from(value));
+      }
+      res.end();
+    };
+
+    await pump();
   } catch (err) {
     console.error('Stream error:', err);
     res.status(500).end('Internal Server Error');
