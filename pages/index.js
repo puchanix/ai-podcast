@@ -222,22 +222,19 @@ export default function Home() {
       </div>
 
       <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
+      
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
-
         {suggestedQuestions.map((q, i) => (
           <button
             key={i}
             onClick={() => handleAskStream(q)}
-
-          <button
-            key={i}
-            onClick={() => handleAsk(q)}
             className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
           >
             {q}
           </button>
         ))}
       </div>
+
 
       <div className="mt-6">
         <button
