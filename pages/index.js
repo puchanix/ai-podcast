@@ -5,8 +5,8 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const interval = setInterval(() => {
-      if (!thinkingStart.current) return;
-      const elapsed = Math.floor((Date.now() - thinkingStart.current) / 1000);
+      if (!thinkingStartRef.current) return;
+      const elapsed = Math.floor((Date.now() - thinkingStartRef.current) / 1000);
       const max = 7;
       if (elapsed <= max) {
         setStatusMessage(`🤔 Thinking... (${max - elapsed}s)`);
@@ -54,7 +54,7 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    thinkingStart.current = Date.now();
+    thinkingStartRef.current = Date.now();
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -69,7 +69,7 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
-    thinkingStart.current = null;
+    thinkingStartRef.current = null;
     setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
@@ -284,7 +284,7 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    thinkingStart.current = Date.now();
+    thinkingStartRef.current = Date.now();
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -299,7 +299,7 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
-    thinkingStart.current = null;
+    thinkingStartRef.current = null;
     setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
