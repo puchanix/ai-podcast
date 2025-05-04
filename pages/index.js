@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
   useEffect(() => {
-    if (typeof window === 'undefined' || thinkingTime === null) return;
-    const start = thinkingTime;
-    const max = 7;
+    if (typeof window === 'undefined') return;
     const timer = setInterval(() => {
+      const start = thinkingStartRef.current;
+      if (!start) return;
       const elapsed = Math.floor((Date.now() - start) / 1000);
+      const max = 7;
       if (elapsed <= max) {
         setStatusMessage(`🤔 Thinking... (${max - elapsed}s)`);
       } else {
@@ -15,7 +16,7 @@ export default function Home() {
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [thinkingTime]);
+  }, []);
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -54,7 +55,7 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    setThinkingTime(Date.now());
+    thinkingStartRef.current = Date.now();
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -69,7 +70,7 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
-    setThinkingTime(null);
+    thinkingStartRef.current = null;
     setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
@@ -284,7 +285,7 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    setThinkingTime(Date.now());
+    thinkingStartRef.current = Date.now();
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -299,7 +300,7 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
-    setThinkingTime(null);
+    thinkingStartRef.current = null;
     setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
@@ -393,7 +394,7 @@ export default function Home() {
       <div className="flex justify-center mb-4">
         <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-40 h-40 rounded-full border-4 border-indigo-300 shadow-xl" />
       </div>
-      {typeof window !== 'undefined' && (
+      {typeof window !== 'undefined' && statusMessage && (
         <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
       )}
 
