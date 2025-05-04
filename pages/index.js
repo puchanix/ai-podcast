@@ -78,35 +78,50 @@ export default function Home() {
 
   const startRecording = async () => {
     setStatusMessage('Recording...');
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mediaRecorder = new MediaRecorder(stream);
-    mediaRecorderRef.current = mediaRecorder;
-    audioChunksRef.current = [];
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
 
-    mediaRecorder.ondataavailable = (e) => {
-      audioChunksRef.current.push(e.data);
-    };
+      mediaRecorder.ondataavailable = (e) => {
+        audioChunksRef.current.push(e.data);
+      };
 
-    mediaRecorder.onstop = async () => {
-      const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-      const formData = new FormData();
-      formData.append('audio', blob);
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('audio', blob);
 
-      const res = await fetch('/api/transcribe', {
-        method: 'POST',
-        body: formData,
-      });
+        try {
+          const res = await fetch('/api/transcribe', {
+            method: 'POST',
+            body: formData,
+          });
 
-      const json = await res.json();
-      if (json?.question) {
-        startStreaming(json.question);
-      } else {
-        setStatusMessage('Transcription failed');
-      }
-    };
+          if (!res.ok) {
+            setStatusMessage('Transcription failed (bad response)');
+            return;
+          }
 
-    mediaRecorder.start();
-    setTimeout(() => mediaRecorder.stop(), 4000); // Record for 4 seconds
+          const json = await res.json();
+          if (json?.question) {
+            startStreaming(json.question);
+          } else {
+            setStatusMessage('Transcription failed (no question)');
+          }
+        } catch (err) {
+          console.error('Transcription fetch error:', err);
+          setStatusMessage('Transcription error');
+        }
+      };
+
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 4000); // Record for 4 seconds
+    } catch (err) {
+      console.error('Recording error:', err);
+      setStatusMessage('Recording error');
+    }
   };
 
   return (
