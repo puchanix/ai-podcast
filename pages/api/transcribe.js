@@ -1,4 +1,3 @@
-
 import formidable from 'formidable';
 import fs from 'fs';
 import { Readable } from 'stream';
@@ -66,4 +65,3 @@ export default async function handler(req, res) {
     }
   });
 }
-
