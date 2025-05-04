@@ -78,6 +78,7 @@ export default function Home() {
 
       responseAudio.current.src = audioData.audioUrl;
       responseAudio.current.load();
+      responseAudio.current.muted = false;
       const playPromise = responseAudio.current.play();
       setStatusMessage('🎙️ Da Vinci replies');
 
@@ -213,7 +214,7 @@ export default function Home() {
       )}
 
       <audio ref={podcastAudio} src="/podcast.mp3" preload="auto" playsInline />
-      <audio ref={responseAudio} preload="auto" playsInline hidden />
+      <audio ref={responseAudio} preload="auto" playsInline controls style={{ display: 'none' }} />
       <audio ref={promptAudio} src="/acknowledge.mp3" hidden preload="auto" playsInline />
       <audio ref={choiceAudio} src="/choice.mp3" hidden preload="auto" playsInline />
     </div>
