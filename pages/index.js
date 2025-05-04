@@ -31,18 +31,20 @@ export default function Home() {
 
   const handlePlayPodcast = () => {
     stopAllAudio();
-    podcastAudio.current.currentTime = storyPosition;
-    podcastAudio.current.play();
+    if (podcastAudio.current) {
+      podcastAudio.current.currentTime = storyPosition || 0;
+      podcastAudio.current.play();
+    }
     setIsPlaying(true);
     setShowOptions(false);
     setStatusMessage('▶️ Playing story...');
   };
 
   const handlePausePodcast = () => {
-    podcastAudio.current?.pause();
-    responseAudio.current?.pause();
-    promptAudio.current?.pause();
-    setStoryPosition(podcastAudio.current?.currentTime || 0);
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime || 0);
+    }
+    stopAllAudio();
     setIsPlaying(false);
     setStatusMessage('⏸️ Paused');
   };
@@ -97,8 +99,14 @@ export default function Home() {
     setIsListening(true);
 
     try {
+      const mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        setStatusMessage('❌ Your browser does not support required audio format.');
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       const chunks = [];
 
       mediaRecorder.ondataavailable = e => chunks.push(e.data);
@@ -106,7 +114,7 @@ export default function Home() {
         setIsListening(false);
         setStatusMessage('⏳ Transcribing...');
 
-        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const blob = new Blob(chunks, { type: mimeType });
         const formData = new FormData();
         formData.append('audio', blob, 'question.webm');
 
