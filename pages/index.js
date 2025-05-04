@@ -6,6 +6,7 @@ export default function Home() {
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [storyPosition, setStoryPosition] = useState(0);
+  const playbackMonitor = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const podcastAudio = useRef(null);
@@ -52,10 +53,10 @@ export default function Home() {
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
     
-    let playbackMonitor = setInterval(() => {
+    playbackMonitor.current = setInterval(() => {
       const audio = responseAudio.current;
       if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
-        clearInterval(playbackMonitor);
+        clearInterval(playbackMonitor.current);
         setIsThinking(false);
         setStatusMessage('');
         setShowOptions(true);
@@ -63,17 +64,17 @@ export default function Home() {
     }, 500);
 
     responseAudio.current.onended = () => {
-      clearInterval(playbackMonitor);
+      clearInterval(playbackMonitor.current);
       setIsThinking(false);
       setStatusMessage('');
       setShowOptions(true);
     };
     
       
-    let playbackMonitor = setInterval(() => {
+    playbackMonitor.current = setInterval(() => {
       const audio = responseAudio.current;
       if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
-        clearInterval(playbackMonitor);
+        clearInterval(playbackMonitor.current);
         setIsThinking(false);
         setStatusMessage('');
         setShowOptions(true);
@@ -81,7 +82,7 @@ export default function Home() {
     }, 500);
 
     responseAudio.current.onended = () => {
-      clearInterval(playbackMonitor);
+      clearInterval(playbackMonitor.current);
       setIsThinking(false);
       setStatusMessage('');
       setShowOptions(true);
@@ -182,10 +183,10 @@ export default function Home() {
       responseAudio.current.play();
       setStatusMessage('🎙️ Da Vinci replies');
       
-    let playbackMonitor = setInterval(() => {
+    playbackMonitor.current = setInterval(() => {
       const audio = responseAudio.current;
       if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
-        clearInterval(playbackMonitor);
+        clearInterval(playbackMonitor.current);
         setIsThinking(false);
         setStatusMessage('');
         setShowOptions(true);
@@ -193,7 +194,7 @@ export default function Home() {
     }, 500);
 
     responseAudio.current.onended = () => {
-      clearInterval(playbackMonitor);
+      clearInterval(playbackMonitor.current);
       setIsThinking(false);
       setStatusMessage('');
       setShowOptions(true);
@@ -272,10 +273,10 @@ export default function Home() {
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
     
-    let playbackMonitor = setInterval(() => {
+    playbackMonitor.current = setInterval(() => {
       const audio = responseAudio.current;
       if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
-        clearInterval(playbackMonitor);
+        clearInterval(playbackMonitor.current);
         setIsThinking(false);
         setStatusMessage('');
         setShowOptions(true);
@@ -283,17 +284,17 @@ export default function Home() {
     }, 500);
 
     responseAudio.current.onended = () => {
-      clearInterval(playbackMonitor);
+      clearInterval(playbackMonitor.current);
       setIsThinking(false);
       setStatusMessage('');
       setShowOptions(true);
     };
     
       
-    let playbackMonitor = setInterval(() => {
+    playbackMonitor.current = setInterval(() => {
       const audio = responseAudio.current;
       if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
-        clearInterval(playbackMonitor);
+        clearInterval(playbackMonitor.current);
         setIsThinking(false);
         setStatusMessage('');
         setShowOptions(true);
@@ -301,7 +302,7 @@ export default function Home() {
     }, 500);
 
     responseAudio.current.onended = () => {
-      clearInterval(playbackMonitor);
+      clearInterval(playbackMonitor.current);
       setIsThinking(false);
       setStatusMessage('');
       setShowOptions(true);
