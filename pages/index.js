@@ -72,89 +72,55 @@ export default function Home() {
     stopAllAudio();
     setIsThinking(true);
     setShowOptions(false);
-    setStatusMessage('🤔 Thinking...');
 
     try {
-      const res = await fetch('/api/ask', {
+      const response = await fetch('/api/ask-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question }),
       });
 
-      const { answer, audioUrl } = await res.json();
-      if (!audioUrl) throw new Error('No audio received');
-
-      responseAudio.current.src = "";
-      responseAudio.current.src = audioUrl;
-      responseAudio.current.muted = false;
-
-      setStatusMessage('🎙️ Da Vinci replies');
-      try {
-        await responseAudio.current.play();
-      } catch (err) {
-        console.error('Playback error:', err);
-        setStatusMessage('❌ Playback blocked. Tap to play.');
-        responseAudio.current.controls = true;
-        responseAudio.current.style.display = 'block';
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to stream audio response');
       }
 
-      responseAudio.current.onended = () => {
-        setStatusMessage('🧠 What next?');
-        choiceAudio.current.play();
-        setShowOptions(true);
-        setIsThinking(false);
-      };
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Error answering');
-      setIsThinking(false);
-    }
-  };
+      const mediaSource = new MediaSource();
+      responseAudio.current.src = URL.createObjectURL(mediaSource);
+      responseAudio.current.load();
+      responseAudio.current.play().catch((e) => {
+        console.error('Playback error:', e);
+        setStatusMessage('❌ Playback error. Tap to resume.');
+      });
 
-  const handleVoiceQuestion = async () => {
-    stopAllAudio();
-    setStatusMessage('🎤 Listening...');
-    setIsListening(true);
+      setStatusMessage('🎙️ Da Vinci replies...');
 
-    try {
-      const mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        setStatusMessage('❌ Your browser does not support required audio format.');
-        return;
-      }
+      mediaSource.addEventListener('sourceopen', () => {
+        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+        const reader = response.body.getReader();
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      const chunks = [];
-
-      mediaRecorder.ondataavailable = e => chunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        setIsListening(false);
-        setStatusMessage('⏳ Transcribing...');
-
-        const blob = new Blob(chunks, { type: mimeType });
-        const formData = new FormData();
-        formData.append('audio', blob, 'question.webm');
-
-        const res = await fetch('/api/transcribe', {
-          method: 'POST',
-          body: formData,
-        });
-        const data = await res.json();
-
-        if (data.transcript) {
-          handleAsk(data.transcript);
-        } else {
-          setStatusMessage('❌ Could not understand audio');
+        function pump() {
+          reader.read().then(({ done, value }) => {
+            if (done) {
+              mediaSource.endOfStream();
+              setStatusMessage('🧠 What next?');
+              choiceAudio.current.play();
+              setShowOptions(true);
+              setIsThinking(false);
+              return;
+            }
+            if (value) {
+              sourceBuffer.appendBuffer(value);
+            }
+            pump();
+          });
         }
-      };
 
-      mediaRecorder.start();
-      setTimeout(() => mediaRecorder.stop(), 5000);
+        pump();
+      });
     } catch (err) {
       console.error(err);
-      setStatusMessage('❌ Microphone error');
-      setIsListening(false);
+      setStatusMessage('❌ Error streaming answer');
+      setIsThinking(false);
     }
   };
 
@@ -180,53 +146,18 @@ export default function Home() {
         )}
       </div>
 
-      {!showOptions && (
-        <>
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
-            {suggestedQuestions.map((q, i) => (
-              <button
-                key={i}
-                onClick={() => handleAsk(q)}
-                className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-6">
-            <button
-              onClick={handleVoiceQuestion}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
-            >
-              🎤 Ask Your Own Question
-            </button>
-          </div>
-        </>
-      )}
-
-      {showOptions && (
-        <div className="mt-6 flex gap-4">
+      <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
+        {suggestedQuestions.map((q, i) => (
           <button
-            onClick={() => {
-              podcastAudio.current.currentTime = storyPosition || 0;
-              podcastAudio.current.play();
-              setIsPlaying(true);
-              setStatusMessage('▶️ Resumed Story');
-            }}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+            key={i}
+            onClick={() => handleAsk(q)}
+            className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
           >
-            ▶️ Continue the Story
+            {q}
           </button>
-          <button
-            onClick={() => setShowOptions(false)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
-          >
-            ❓ Ask Another Question
-          </button>
-        </div>
-      )}
+        ))}
+      </div>
 
       <audio ref={podcastAudio} src="/podcast.mp3" preload="auto" playsInline />
       <audio ref={responseAudio} preload="auto" playsInline controls style={{ display: 'none' }} />
