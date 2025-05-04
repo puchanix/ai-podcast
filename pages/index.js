@@ -55,6 +55,11 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    responseAudio.current.onended = () => {
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
     
     playbackMonitor.current = setInterval(() => {
       const audio = responseAudio.current;
@@ -278,6 +283,11 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    responseAudio.current.onended = () => {
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
     
     playbackMonitor.current = setInterval(() => {
       const audio = responseAudio.current;
