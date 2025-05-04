@@ -2,6 +2,8 @@
 import formidable from 'formidable';
 import fs from 'fs';
 import { Readable } from 'stream';
+import FormData from 'form-data';
+import fetch from 'node-fetch'; // Add this if not globally available
 
 export const config = {
   api: {
@@ -36,18 +38,19 @@ export default async function handler(req, res) {
       }
 
       const fileData = fs.readFileSync(file.filepath);
+      const formData = new FormData();
+      formData.append('file', fileData, {
+        filename: 'recording.webm',
+        contentType: 'audio/webm',
+      });
+      formData.append('model', 'whisper-1');
 
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         },
-        body: (() => {
-          const formData = new FormData();
-          formData.append('file', new Blob([fileData]), 'recording.webm');
-          formData.append('model', 'whisper-1');
-          return formData;
-        })(),
+        body: formData,
       });
 
       if (!response.ok) {
@@ -63,3 +66,4 @@ export default async function handler(req, res) {
     }
   });
 }
+
