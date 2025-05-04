@@ -60,6 +60,64 @@ export default function Home() {
   };
 
   const handleAsk = async (question) => {
+
+  const handleAskStream = async (question) => {
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime);
+    }
+    stopAllAudio();
+    setIsThinking(true);
+    setStatusMessage('🤔 Thinking...');
+
+    try {
+      const response = await fetch('/api/ask-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error('Failed to stream audio response');
+      }
+
+      const mediaSource = new MediaSource();
+      responseAudio.current.src = URL.createObjectURL(mediaSource);
+      responseAudio.current.load();
+      responseAudio.current.play().catch(err => {
+        console.error('Audio playback failed', err);
+      });
+
+      setStatusMessage('🎙️ Da Vinci replies');
+
+      mediaSource.addEventListener('sourceopen', () => {
+        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+        const reader = response.body.getReader();
+
+        const pump = () => {
+          reader.read().then(({ done, value }) => {
+            if (done) {
+              mediaSource.endOfStream();
+              setIsThinking(false);
+              setStatusMessage('');
+              setShowOptions(true);
+              return;
+            }
+            if (value) {
+              sourceBuffer.appendBuffer(value);
+              pump();
+            }
+          });
+        };
+
+        pump();
+      });
+    } catch (err) {
+      console.error(err);
+      setStatusMessage('❌ Error answering');
+      setIsThinking(false);
+    }
+  };
+
   const handleAskStream = async (question) => {
     if (podcastAudio.current && !podcastAudio.current.paused) {
       setStoryPosition(podcastAudio.current.currentTime);
