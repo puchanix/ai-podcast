@@ -91,6 +91,7 @@ export default function Home() {
     }
   };
 
+  }
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center font-sans">
       <h1 className="text-5xl font-bold text-center mb-6 text-indigo-900 drop-shadow-md">
