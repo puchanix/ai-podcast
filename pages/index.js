@@ -5,7 +5,6 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [storyPosition, setStoryPosition] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
@@ -24,18 +23,6 @@ export default function Home() {
     "What is your favorite animal?"
   ];
 
-  useEffect(() => {
-    const unlock = () => {
-      if (!audioUnlocked && unlockAudio.current) {
-        unlockAudio.current.play().catch(() => {});
-        setAudioUnlocked(true);
-      }
-      document.removeEventListener('click', unlock);
-    };
-    document.addEventListener('click', unlock);
-    return () => document.removeEventListener('click', unlock);
-  }, [audioUnlocked]);
-
   const stopAllAudio = () => {
     podcastAudio.current?.pause();
     responseAudio.current?.pause();
@@ -47,7 +34,7 @@ export default function Home() {
   const handlePlayPodcast = () => {
     stopAllAudio();
     if (podcastAudio.current) {
-      podcastAudio.current.currentTime = storyPosition || 0;
+      podcastAudio.current.currentTime = storyPosition;
       podcastAudio.current.play();
     }
     setIsPlaying(true);
@@ -57,7 +44,7 @@ export default function Home() {
 
   const handlePausePodcast = () => {
     if (podcastAudio.current && !podcastAudio.current.paused) {
-      setStoryPosition(podcastAudio.current.currentTime || 0);
+      setStoryPosition(podcastAudio.current.currentTime);
     }
     stopAllAudio();
     setIsPlaying(false);
@@ -65,9 +52,15 @@ export default function Home() {
   };
 
   const handleAsk = async (question) => {
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime);
+    }
+
     stopAllAudio();
     setIsThinking(true);
     setStatusMessage('🤔 Thinking...');
+    setShowOptions(false);
+
     try {
       const res = await fetch('/api/ask', {
         method: 'POST',
@@ -106,32 +99,61 @@ export default function Home() {
       <div className="flex justify-center mb-4">
         <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-40 h-40 rounded-full border-4 border-indigo-300 shadow-xl" />
       </div>
-      {statusMessage && <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>}
+      <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
       <div className="mb-4 flex gap-4">
-        {!isPlaying ? (
-          <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
-            ▶️ Start Conversation
-          </button>
-        ) : (
+        {isPlaying ? (
           <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
             ⏸️ Pause
+          </button>
+        ) : (
+          <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+            ▶️ Start Conversation
           </button>
         )}
       </div>
 
-      <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
-        {suggestedQuestions.map((q, i) => (
+      {!showOptions && (
+        <>
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
+            {suggestedQuestions.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => handleAsk(q)}
+                className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+          <div className="mt-6">
+            <button
+              onClick={() => handleAsk(prompt('Ask your question:'))}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+            >
+              🎤 Ask Your Own Question
+            </button>
+          </div>
+        </>
+      )}
+
+      {showOptions && (
+        <div className="mt-6 flex gap-4">
           <button
-            key={i}
-            onClick={() => handleAsk(q)}
-            className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
+            onClick={handlePlayPodcast}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
           >
-            {q}
+            ▶️ Continue the Story
           </button>
-        ))}
-      </div>
+          <button
+            onClick={() => setShowOptions(false)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+          >
+            ❓ Ask Another Question
+          </button>
+        </div>
+      )}
 
       <audio ref={podcastAudio} src="/podcast.mp3" preload="auto" playsInline />
       <audio ref={responseAudio} preload="auto" playsInline controls style={{ display: 'none' }} />
