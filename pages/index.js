@@ -48,10 +48,15 @@ export default function Home() {
   };
 
   const handleAsk = async (question) => {
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime);
+    }
+
     stopAllAudio();
     setIsThinking(true);
     setShowOptions(false);
     setStatusMessage('🤔 Thinking...');
+
     try {
       const res = await fetch('/api/ask', {
         method: 'POST',
@@ -59,11 +64,13 @@ export default function Home() {
         body: JSON.stringify({ question }),
       });
       const data = await res.json();
+
       const speakRes = await fetch('/api/speak', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: data.answer }),
       });
+
       const audioData = await speakRes.json();
       if (!audioData.audioUrl) throw new Error('No audio response');
 
