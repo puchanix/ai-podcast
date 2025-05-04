@@ -33,113 +33,7 @@ export default function Home() {
       document.removeEventListener('click', unlock);
     };
     document.addEventListener('click', unlock);
-    
-  const handleAskStream = async (question) => {
-    if (podcastAudio.current && !podcastAudio.current.paused) {
-      setStoryPosition(podcastAudio.current.currentTime);
-    }
-    stopAllAudio();
-    setIsThinking(true);
-    setShowOptions(false);
-    setStatusMessage('🤔 Thinking (streaming)...');
-    try {
-      const res = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
-      });
-      const data = await res.json();
-      await playStreamedAudio(data.answer);
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Error answering');
-      setIsThinking(false);
-    }
-  };
-
-  const playStreamedAudio = async (text) => {
-    try {
-      const response = await fetch('/api/speak-stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-
-      if (!response.ok || !response.body) throw new Error('Stream failed');
-
-      const mediaSource = new MediaSource();
-      responseAudio.current.src = URL.createObjectURL(mediaSource);
-
-      mediaSource.addEventListener('sourceopen', () => {
-        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-        const reader = response.body.getReader();
-
-        const pump = () => {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              mediaSource.endOfStream();
-              return;
-            }
-            sourceBuffer.appendBuffer(value);
-            pump();
-          });
-        };
-
-        pump();
-      });
-
-      responseAudio.current.play();
-      responseAudio.current.onended = () => {
-        setStatusMessage('🧠 What next?');
-        choiceAudio.current.play();
-        setShowOptions(true);
-        setIsThinking(false);
-      };
-    } catch (err) {
-      console.error('Stream playback error:', err);
-      setStatusMessage('❌ Error during audio streaming');
-      setIsThinking(false);
-    }
-  };
-
-
-  
-  const handleAsk = async (question) => {
-    stopAllAudio();
-    setIsThinking(true);
-    setStatusMessage('🤔 Thinking...');
-    try {
-      const res = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
-      });
-      const data = await res.json();
-      const speakRes = await fetch('/api/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: data.answer }),
-      });
-      const audioData = await speakRes.json();
-      if (!audioData.audioUrl) throw new Error('No audio response');
-
-      responseAudio.current.src = audioData.audioUrl;
-      responseAudio.current.play();
-      setStatusMessage('🎙️ Da Vinci replies');
-      responseAudio.current.onended = () => {
-        setIsThinking(false);
-        setStatusMessage('');
-        setShowOptions(true);
-      };
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Error answering');
-      setIsThinking(false);
-    }
-  };
-
-
-  return () => document.removeEventListener('click', unlock);
+    return () => document.removeEventListener('click', unlock);
   }, [audioUnlocked]);
 
   const stopAllAudio = () => {
@@ -150,71 +44,22 @@ export default function Home() {
     setIsPlaying(false);
   };
 
-const handleAskStream = async (question) => {
-  if (podcastAudio.current && !podcastAudio.current.paused) {
-    setStoryPosition(podcastAudio.current.currentTime);
-  }
-  stopAllAudio();
-  setIsThinking(true);
-  setStatusMessage('🤔 Thinking (streaming)...');
-  try {
-    const res = await fetch('/api/ask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
-    });
-    const data = await res.json();
-    await playStreamedAudio(data.answer);
-  } catch (err) {
-    console.error(err);
-    setStatusMessage('❌ Error answering');
-    setIsThinking(false);
-  }
-};
+  const handlePlayPodcast = () => {
+    stopAllAudio();
+    if (podcastAudio.current) {
+      podcastAudio.current.currentTime = storyPosition || 0;
+      podcastAudio.current.play();
+    }
+    setIsPlaying(true);
+    setShowOptions(false);
+    setStatusMessage('▶️ Playing story...');
+  };
 
-const playStreamedAudio = async (text) => {
-  try {
-    const response = await fetch('/api/speak-stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-
-    if (!response.ok || !response.body) throw new Error('Stream failed');
-
-    const mediaSource = new MediaSource();
-    responseAudio.current.src = URL.createObjectURL(mediaSource);
-
-    mediaSource.addEventListener('sourceopen', () => {
-      const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-      const reader = response.body.getReader();
-
-      const pump = () => {
-        reader.read().then(({ done, value }) => {
-          if (done) {
-            mediaSource.endOfStream();
-            return;
-          }
-          sourceBuffer.appendBuffer(value);
-          pump();
-        });
-      };
-
-      pump();
-    });
-
-    responseAudio.current.play();
-    responseAudio.current.onended = () => {
-      setIsThinking(false);
-      setStatusMessage('');
-      setShowOptions(true);
-    };
-  } catch (err) {
-    console.error('Stream playback error:', err);
-    setStatusMessage('❌ Error during audio streaming');
-    setIsThinking(false);
-  }
-};
-
-  return null;
-}
+  const handlePausePodcast = () => {
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime || 0);
+    }
+    stopAllAudio();
+    setIsPlaying(false);
+    setStatusMessage('⏸️ Paused');
+  };
