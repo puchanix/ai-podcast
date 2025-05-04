@@ -1,7 +1,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-// ✅ Streaming version — patched by ChatGPT
 export default function Home() {
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
@@ -33,76 +32,7 @@ export default function Home() {
       document.removeEventListener('click', unlock);
     };
     document.addEventListener('click', unlock);
-    
-  const handleAskStream = async (question) => {
-    if (podcastAudio.current && !podcastAudio.current.paused) {
-      setStoryPosition(podcastAudio.current.currentTime);
-    }
-    stopAllAudio();
-    setIsThinking(true);
-    setStatusMessage('🤔 Thinking...');
-
-    try {
-      const response = await fetch('/api/ask-stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to stream audio response');
-      }
-
-      const mediaSource = new MediaSource();
-      const audioUrl = URL.createObjectURL(mediaSource);
-      responseAudio.current.src = audioUrl;
-      responseAudio.current.load();
-      responseAudio.current.play().catch(err => {
-        console.error('Audio playback failed', err);
-      });
-
-      mediaSource.addEventListener('sourceopen', () => {
-        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-        const reader = response.body.getReader();
-        const queue = [];
-
-        const pump = () => {
-          if (queue.length && !sourceBuffer.updating) {
-            sourceBuffer.appendBuffer(queue.shift());
-          }
-        };
-
-        sourceBuffer.addEventListener('updateend', pump);
-
-        const readLoop = () => {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              sourceBuffer.removeEventListener('updateend', pump);
-              mediaSource.endOfStream();
-              setIsThinking(false);
-              setStatusMessage('');
-              setShowOptions(true);
-              return;
-            }
-            if (value) {
-              queue.push(value);
-              pump();
-            }
-            readLoop();
-          });
-        };
-
-        readLoop();
-      });
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Error answering');
-      setIsThinking(false);
-    }
-  };
-
-
-  return () => document.removeEventListener('click', unlock);
+    return () => document.removeEventListener('click', unlock);
   }, [audioUnlocked]);
 
   const stopAllAudio = () => {
@@ -128,116 +58,7 @@ export default function Home() {
     setStatusMessage('⏸️ Paused');
   };
 
-  
   const handleAsk = async (question) => {
-    // Default handler for custom voice input (non-streamed)
-    if (podcastAudio.current && !podcastAudio.current.paused) {
-      setStoryPosition(podcastAudio.current.currentTime);
-    }
-    stopAllAudio();
-    setIsThinking(true);
-    setStatusMessage('🤔 Thinking...');
-    try {
-      const res = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
-      });
-      const data = await res.json();
-      const speakRes = await fetch('/api/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: data.answer }),
-      });
-      const audioData = await speakRes.json();
-      if (!audioData.audioUrl) throw new Error('No audio response');
-
-      responseAudio.current.src = audioData.audioUrl;
-      responseAudio.current.play();
-      setStatusMessage('🎙️ Da Vinci replies');
-      responseAudio.current.onended = () => {
-        setIsThinking(false);
-        setStatusMessage('');
-        setShowOptions(true);
-      };
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Error answering');
-      setIsThinking(false);
-    }
-  };
-
-
-        sourceBuffer.addEventListener('updateend', () => {
-          pumping = false;
-          pump();
-        });
-
-        const readLoop = () => {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              mediaSource.endOfStream();
-              setIsThinking(false);
-              setStatusMessage('');
-              setShowOptions(true);
-              return;
-            }
-            if (value) {
-              queue.push(value);
-              pump();
-            }
-            readLoop();
-          });
-        };
-
-        readLoop();
-    
-
-        pump();
-      });
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Error answering');
-      setIsThinking(false);
-    }
-  };
-
-  
-
-        sourceBuffer.addEventListener('updateend', () => {
-          pumping = false;
-          pump();
-        });
-
-        const readLoop = () => {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              mediaSource.endOfStream();
-              setIsThinking(false);
-              setStatusMessage('');
-              setShowOptions(true);
-              return;
-            }
-            if (value) {
-              queue.push(value);
-              pump();
-            }
-            readLoop();
-          });
-        };
-
-        readLoop();
-    
-
-        pump();
-      });
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Error answering');
-      setIsThinking(false);
-    }
-  };
-
     if (podcastAudio.current && !podcastAudio.current.paused) {
       setStoryPosition(podcastAudio.current.currentTime);
     }
@@ -320,75 +141,6 @@ export default function Home() {
     }
   };
 
-  
-  const handleAskStream = async (question) => {
-    if (podcastAudio.current && !podcastAudio.current.paused) {
-      setStoryPosition(podcastAudio.current.currentTime);
-    }
-    stopAllAudio();
-    setIsThinking(true);
-    setStatusMessage('🤔 Thinking...');
-
-    try {
-      const response = await fetch('/api/ask-stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to stream audio response');
-      }
-
-      const mediaSource = new MediaSource();
-      const audioUrl = URL.createObjectURL(mediaSource);
-      responseAudio.current.src = audioUrl;
-      responseAudio.current.load();
-      responseAudio.current.play().catch(err => {
-        console.error('Audio playback failed', err);
-      });
-
-      mediaSource.addEventListener('sourceopen', () => {
-        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-        const reader = response.body.getReader();
-        const queue = [];
-
-        const pump = () => {
-          if (queue.length && !sourceBuffer.updating) {
-            sourceBuffer.appendBuffer(queue.shift());
-          }
-        };
-
-        sourceBuffer.addEventListener('updateend', pump);
-
-        const readLoop = () => {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              sourceBuffer.removeEventListener('updateend', pump);
-              mediaSource.endOfStream();
-              setIsThinking(false);
-              setStatusMessage('');
-              setShowOptions(true);
-              return;
-            }
-            if (value) {
-              queue.push(value);
-              pump();
-            }
-            readLoop();
-          });
-        };
-
-        readLoop();
-      });
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Error answering');
-      setIsThinking(false);
-    }
-  };
-
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center font-sans">
       <h1 className="text-5xl font-bold text-center mb-6 text-indigo-900 drop-shadow-md">
@@ -412,19 +164,17 @@ export default function Home() {
       </div>
 
       <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
-      
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
         {suggestedQuestions.map((q, i) => (
           <button
             key={i}
-            onClick={() => handleAskStream(q)}
+            onClick={() => handleAsk(q)}
             className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
           >
             {q}
           </button>
         ))}
       </div>
-
 
       <div className="mt-6">
         <button
