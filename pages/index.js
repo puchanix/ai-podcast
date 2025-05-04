@@ -209,10 +209,18 @@ export default function Home() {
       </div>
       <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
+
       <div className="mb-4 flex gap-4">
-        <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
-          ⏸️ Pause
-        </button>
+        {!isPlaying && storyPosition === 0 && (
+          <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+            ▶️ Start Conversation
+          </button>
+        )}
+        {isPlaying && (
+          <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+            ⏸️ Pause
+          </button>
+        )}
       </div>
 
       <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
@@ -236,6 +244,24 @@ export default function Home() {
           🎤 Ask Your Own Question
         </button>
       </div>
+
+      
+      {showOptions && (
+        <div className="mt-6 flex flex-col gap-4 items-center">
+          <button
+            onClick={handlePlayPodcast}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+          >
+            ▶️ Back to Story
+          </button>
+          <button
+            onClick={handleVoiceQuestion}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+          >
+            🎤 Ask Another Question
+          </button>
+        </div>
+      )}
 
       <audio ref={podcastAudio} src="/podcast.mp3" preload="auto" playsInline />
       <audio ref={responseAudio} preload="auto" playsInline controls style={{ display: 'none' }} />
