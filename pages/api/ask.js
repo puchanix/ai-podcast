@@ -1,4 +1,5 @@
 
+// ask.js
 import { OpenAI } from 'openai';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -19,8 +20,6 @@ export default async function handler(req, res) {
 
   try {
     let fullText = '';
-    let elevenResponse = null;
-    let firstChunk = '';
 
     const stream = await openai.chat.completions.create({
       model: 'gpt-4',
@@ -39,27 +38,24 @@ export default async function handler(req, res) {
       const delta = chunk.choices?.[0]?.delta?.content;
       if (delta) {
         fullText += delta;
-        if (!elevenResponse && fullText.split(' ').length > 30) {
-          firstChunk = fullText.trim();
-          // Send to ElevenLabs
-          elevenResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
-            method: 'POST',
-            headers: {
-              'xi-api-key': ELEVENLABS_API_KEY,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              text: firstChunk,
-              model_id: 'eleven_monolingual_v1',
-              voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-            }),
-          });
-        }
       }
     }
 
+    const elevenResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: fullText,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+      }),
+    });
+
     let audioUrl = null;
-    if (elevenResponse?.ok) {
+    if (elevenResponse.ok) {
       const buffer = await elevenResponse.arrayBuffer();
       const base64 = Buffer.from(buffer).toString('base64');
       audioUrl = `data:audio/mpeg;base64,${base64}`;
@@ -71,3 +67,4 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to generate response' });
   }
 }
+

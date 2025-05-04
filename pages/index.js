@@ -209,7 +209,12 @@ export default function Home() {
       {showOptions && (
         <div className="mt-6 flex gap-4">
           <button
-            onClick={handlePlayPodcast}
+            onClick={() => {
+              podcastAudio.current.currentTime = storyPosition || 0;
+              podcastAudio.current.play();
+              setIsPlaying(true);
+              setStatusMessage('▶️ Resumed Story');
+            }}
             className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
           >
             ▶️ Continue the Story
