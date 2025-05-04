@@ -133,6 +133,7 @@ export default function Home() {
 
       
       {!showOptions && (<>
+
   
   <div className="mb-4 flex gap-4">
         {!isPlaying && storyPosition === 0 ? (
