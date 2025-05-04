@@ -51,16 +51,42 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    
+    let playbackMonitor = setInterval(() => {
+      const audio = responseAudio.current;
+      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
+        clearInterval(playbackMonitor);
+        setIsThinking(false);
+        setStatusMessage('');
+        setShowOptions(true);
+      }
+    }, 500);
+
     responseAudio.current.onended = () => {
+      clearInterval(playbackMonitor);
       setIsThinking(false);
       setStatusMessage('');
       setShowOptions(true);
     };
-      responseAudio.current.onended = () => {
+    
+      
+    let playbackMonitor = setInterval(() => {
+      const audio = responseAudio.current;
+      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
+        clearInterval(playbackMonitor);
         setIsThinking(false);
         setStatusMessage('');
-        // showOptions now only triggered on responseAudio.current.onended
-      };
+        setShowOptions(true);
+      }
+    }, 500);
+
+    responseAudio.current.onended = () => {
+      clearInterval(playbackMonitor);
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
+    
     
 
       mediaSource.addEventListener('sourceopen', () => {
@@ -155,11 +181,24 @@ export default function Home() {
       responseAudio.current.src = audioData.audioUrl;
       responseAudio.current.play();
       setStatusMessage('🎙️ Da Vinci replies');
-      responseAudio.current.onended = () => {
+      
+    let playbackMonitor = setInterval(() => {
+      const audio = responseAudio.current;
+      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
+        clearInterval(playbackMonitor);
         setIsThinking(false);
         setStatusMessage('');
-        // setShowOptions moved to onended
-      };
+        setShowOptions(true);
+      }
+    }, 500);
+
+    responseAudio.current.onended = () => {
+      clearInterval(playbackMonitor);
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
+    
     } catch (err) {
       console.error(err);
       setStatusMessage('❌ Error answering');
@@ -232,16 +271,42 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    
+    let playbackMonitor = setInterval(() => {
+      const audio = responseAudio.current;
+      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
+        clearInterval(playbackMonitor);
+        setIsThinking(false);
+        setStatusMessage('');
+        setShowOptions(true);
+      }
+    }, 500);
+
     responseAudio.current.onended = () => {
+      clearInterval(playbackMonitor);
       setIsThinking(false);
       setStatusMessage('');
       setShowOptions(true);
     };
-      responseAudio.current.onended = () => {
+    
+      
+    let playbackMonitor = setInterval(() => {
+      const audio = responseAudio.current;
+      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
+        clearInterval(playbackMonitor);
         setIsThinking(false);
         setStatusMessage('');
-        // showOptions now only triggered on responseAudio.current.onended
-      };
+        setShowOptions(true);
+      }
+    }, 500);
+
+    responseAudio.current.onended = () => {
+      clearInterval(playbackMonitor);
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
+    
     
 
       mediaSource.addEventListener('sourceopen', () => {
