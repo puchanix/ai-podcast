@@ -362,7 +362,8 @@ export default function Home() {
       <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
       
-      {!showOptions && (
+      {!showOptions && (<>
+  
   <div className="mb-4 flex gap-4">
         {!isPlaying && storyPosition === 0 ? (
           <button onClick={() => { setShowOptions(false); handlePlayPodcast(); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
@@ -381,7 +382,8 @@ export default function Home() {
         )}
       </div>
 
-      <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
+      
+  <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
         {suggestedQuestions.map((q, i) => (
