@@ -362,9 +362,10 @@ export default function Home() {
       <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
       
-      <div className="mb-4 flex gap-4">
+      {!showOptions && (
+  <div className="mb-4 flex gap-4">
         {!isPlaying && storyPosition === 0 ? (
-          <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+          <button onClick={() => { setShowOptions(false); handlePlayPodcast(); }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
             ▶️ Start Conversation
           </button>
         ) : (
@@ -373,7 +374,7 @@ export default function Home() {
               ⏸️ Pause
             </button>
           ) : (
-            <button onClick={handlePlayPodcast} className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+            <button onClick={() => { setShowOptions(false); handlePlayPodcast(); }} className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
               ▶️ Resume
             </button>
           )
@@ -415,7 +416,7 @@ export default function Home() {
       {showOptions && (
         <div className="mt-6 flex flex-col gap-4 items-center">
           <button
-            onClick={handlePlayPodcast}
+            onClick={() => { setShowOptions(false); handlePlayPodcast(); }}
             className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
           >
             ▶️ Back to Story
