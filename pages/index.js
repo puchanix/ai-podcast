@@ -12,6 +12,8 @@ export default function Home() {
   const responseAudio = useRef(null);
   const promptAudio = useRef(null);
   const choiceAudio = useRef(null);
+  const unlockAudio = useRef(null);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   const suggestedQuestions = [
     "If you were living today, what would you be doing?",
@@ -20,6 +22,18 @@ export default function Home() {
     "What inspired you to paint the Mona Lisa?",
     "What is your favorite animal?"
   ];
+
+  useEffect(() => {
+    const unlock = () => {
+      if (!audioUnlocked && unlockAudio.current) {
+        unlockAudio.current.play().catch(() => {});
+        setAudioUnlocked(true);
+      }
+      document.removeEventListener('click', unlock);
+    };
+    document.addEventListener('click', unlock);
+    return () => document.removeEventListener('click', unlock);
+  }, [audioUnlocked]);
 
   const stopAllAudio = () => {
     podcastAudio.current?.pause();
@@ -220,6 +234,7 @@ export default function Home() {
       <audio ref={responseAudio} preload="auto" playsInline controls style={{ display: 'none' }} />
       <audio ref={promptAudio} src="/acknowledge.mp3" hidden preload="auto" playsInline />
       <audio ref={choiceAudio} src="/choice.mp3" hidden preload="auto" playsInline />
+      <audio ref={unlockAudio} src="/unlock.mp3" hidden preload="auto" playsInline />
     </div>
   );
 }
