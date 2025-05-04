@@ -2,31 +2,6 @@
 import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
-  useEffect(() => {
-    let timer;
-    if (countdown === null) return;
-    if (statusStep === 'countdown') {
-      timer = setInterval(() => {
-        setCountdown((c) => {
-          if (c > 0) return c - 1;
-          clearInterval(timer);
-          setStatusStep('countup');
-          return 0;
-        });
-      }, 1000);
-    } else if (statusStep === 'countup') {
-      timer = setInterval(() => {
-        setCountdown((c) => c + 1);
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [statusStep, countdown]);
-  
-  useEffect(() => {
-    if (countdown !== null) {
-      setStatusMessage(`${stepText[statusStep]}... (${countdown}s)`);
-    }
-  }, [countdown, statusStep]);
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -65,8 +40,7 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    setCountdown(7);
-    setStatusStep('countdown');
+    setStatusMessage('🤔 Thinking (streaming)...');
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -81,8 +55,6 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
-    setCountdown(null);
-    setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
       setStatusMessage('');
@@ -296,8 +268,7 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    setCountdown(7);
-    setStatusStep('countdown');
+    setStatusMessage('🤔 Thinking (streaming)...');
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -312,8 +283,6 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
-    setCountdown(null);
-    setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
       setStatusMessage('');
@@ -406,7 +375,7 @@ export default function Home() {
       <div className="flex justify-center mb-4">
         <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-40 h-40 rounded-full border-4 border-indigo-300 shadow-xl" />
       </div>
-      {statusMessage && <p className="mb-4 text-gray-700 font-medium text-lg\">{statusMessage}</p>}
+      <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
       
       <div className="mb-4 flex gap-4">
