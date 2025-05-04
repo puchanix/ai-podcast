@@ -32,7 +32,67 @@ export default function Home() {
       document.removeEventListener('click', unlock);
     };
     document.addEventListener('click', unlock);
-    return () => document.removeEventListener('click', unlock);
+    
+  const handleAskStream = async (question) => {
+    stopAllAudio();
+    setIsThinking(true);
+    setStatusMessage('🤔 Thinking (streaming)...');
+    try {
+      const response = await fetch('/api/ask-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+
+      if (!response.ok || !response.body) throw new Error('Stream failed');
+
+      const mediaSource = new MediaSource();
+      responseAudio.current.src = URL.createObjectURL(mediaSource);
+      responseAudio.current.load();
+      responseAudio.current.play().catch(err => console.error('Playback failed', err));
+
+      mediaSource.addEventListener('sourceopen', () => {
+        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+        const reader = response.body.getReader();
+        const queue = [];
+
+        const pump = () => {
+          if (queue.length && !sourceBuffer.updating) {
+            sourceBuffer.appendBuffer(queue.shift());
+          }
+        };
+
+        sourceBuffer.addEventListener('updateend', pump);
+
+        const readLoop = () => {
+          reader.read().then(({ done, value }) => {
+            if (done) {
+              sourceBuffer.removeEventListener('updateend', pump);
+              mediaSource.endOfStream();
+              setIsThinking(false);
+              setStatusMessage('');
+              setShowOptions(true);
+              return;
+            }
+            if (value) {
+              queue.push(value);
+              pump();
+            }
+            readLoop();
+          });
+        };
+
+        readLoop();
+      });
+    } catch (err) {
+      console.error(err);
+      setStatusMessage('❌ Streaming error');
+      setIsThinking(false);
+    }
+  };
+
+
+  return () => document.removeEventListener('click', unlock);
   }, [audioUnlocked]);
 
   const stopAllAudio = () => {
@@ -141,6 +201,66 @@ export default function Home() {
     }
   };
 
+  
+  const handleAskStream = async (question) => {
+    stopAllAudio();
+    setIsThinking(true);
+    setStatusMessage('🤔 Thinking (streaming)...');
+    try {
+      const response = await fetch('/api/ask-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+
+      if (!response.ok || !response.body) throw new Error('Stream failed');
+
+      const mediaSource = new MediaSource();
+      responseAudio.current.src = URL.createObjectURL(mediaSource);
+      responseAudio.current.load();
+      responseAudio.current.play().catch(err => console.error('Playback failed', err));
+
+      mediaSource.addEventListener('sourceopen', () => {
+        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+        const reader = response.body.getReader();
+        const queue = [];
+
+        const pump = () => {
+          if (queue.length && !sourceBuffer.updating) {
+            sourceBuffer.appendBuffer(queue.shift());
+          }
+        };
+
+        sourceBuffer.addEventListener('updateend', pump);
+
+        const readLoop = () => {
+          reader.read().then(({ done, value }) => {
+            if (done) {
+              sourceBuffer.removeEventListener('updateend', pump);
+              mediaSource.endOfStream();
+              setIsThinking(false);
+              setStatusMessage('');
+              setShowOptions(true);
+              return;
+            }
+            if (value) {
+              queue.push(value);
+              pump();
+            }
+            readLoop();
+          });
+        };
+
+        readLoop();
+      });
+    } catch (err) {
+      console.error(err);
+      setStatusMessage('❌ Streaming error');
+      setIsThinking(false);
+    }
+  };
+
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center font-sans">
       <h1 className="text-5xl font-bold text-center mb-6 text-indigo-900 drop-shadow-md">
@@ -176,7 +296,15 @@ export default function Home() {
         ))}
       </div>
 
+      
       <div className="mt-6">
+        <button
+          onClick={() => handleAskStream("What is your greatest invention?")}
+          className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+        >
+          🧪 Test Streaming (Hardcoded)
+        </button>
+    
         <button
           onClick={handleVoiceQuestion}
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
