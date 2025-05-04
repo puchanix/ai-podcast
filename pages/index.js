@@ -59,10 +59,44 @@ export default function Home() {
     setStatusMessage('⏸️ Paused');
   };
 
+  
   const handleAsk = async (question) => {
-// handleAsk logic (not used for suggested questions anymore)
-};
+    // Default handler for custom voice input (non-streamed)
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime);
+    }
+    stopAllAudio();
+    setIsThinking(true);
+    setStatusMessage('🤔 Thinking...');
+    try {
+      const res = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question }),
+      });
+      const data = await res.json();
+      const speakRes = await fetch('/api/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: data.answer }),
+      });
+      const audioData = await speakRes.json();
+      if (!audioData.audioUrl) throw new Error('No audio response');
 
+      responseAudio.current.src = audioData.audioUrl;
+      responseAudio.current.play();
+      setStatusMessage('🎙️ Da Vinci replies');
+      responseAudio.current.onended = () => {
+        setIsThinking(false);
+        setStatusMessage('');
+        setShowOptions(true);
+      };
+    } catch (err) {
+      console.error(err);
+      setStatusMessage('❌ Error answering');
+      setIsThinking(false);
+    }
+  };
 const handleAskStream = async (question) => {
     if (podcastAudio.current && !podcastAudio.current.paused) {
       setStoryPosition(podcastAudio.current.currentTime);
