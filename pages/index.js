@@ -27,10 +27,7 @@ export default function Home() {
 
   useEffect(() => {
     if (countdown === null) return;
-    const timer = setInterval(() => {
-      setCountdown(c => c + 1);
-    }, 1000);
-    return () => clearInterval(timer);
+  
     const timer = setInterval(() => {
       setCountdown(c => (c > 0 ? c - 1 : 0));
     }, 1000);
