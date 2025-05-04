@@ -60,8 +60,10 @@ export default function Home() {
   };
 
   const handleAsk = async (question) => {
+// handleAsk logic (not used for suggested questions anymore)
+};
 
-  const handleAskStream = async (question) => {
+const handleAskStream = async (question) => {
     if (podcastAudio.current && !podcastAudio.current.paused) {
       setStoryPosition(podcastAudio.current.currentTime);
     }
