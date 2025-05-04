@@ -1,6 +1,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+// ✅ Streaming version — patched by ChatGPT
 export default function Home() {
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
