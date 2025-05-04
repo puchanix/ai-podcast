@@ -3,8 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
   const [statusMessage, setStatusMessage] = useState('');
-  const [statusStep, setStatusStep] = useState('');
-  const [countdown, setCountdown] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [storyPosition, setStoryPosition] = useState(0);
@@ -24,27 +22,6 @@ export default function Home() {
     "What inspired you to paint the Mona Lisa?",
     "What is your favorite animal?"
   ];
-
-  useEffect(() => {
-    if (countdown === null) return;
-  
-    const timer = setInterval(() => {
-      setCountdown(c => (c > 0 ? c - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [countdown]);
-
-  useEffect(() => {
-    if (!statusStep) return;
-    const stepText = {
-      transcribing: '⏳ Transcribing',
-      thinking: '🧠 Thinking',
-      buffering: '📡 Buffering audio',
-    };
-    if (countdown != null) {
-      setStatusMessage(`${stepText[statusStep]}... (${countdown}s)`);
-    }
-  }, [statusStep, countdown]);
 
   useEffect(() => {
     const unlock = () => {
@@ -68,20 +45,15 @@ export default function Home() {
 
   const handlePlayPodcast = () => {
     stopAllAudio();
-    if (podcastAudio.current) {
-      podcastAudio.current.currentTime = storyPosition || 0;
-      podcastAudio.current.play();
-    }
+    podcastAudio.current.currentTime = storyPosition || 0;
+    podcastAudio.current.play();
     setIsPlaying(true);
-    setShowOptions(false);
     setStatusMessage('▶️ Playing story...');
   };
 
   const handlePausePodcast = () => {
-    if (podcastAudio.current && !podcastAudio.current.paused) {
-      setStoryPosition(podcastAudio.current.currentTime || 0);
-    }
-    stopAllAudio();
+    podcastAudio.current.pause();
+    setStoryPosition(podcastAudio.current.currentTime);
     setIsPlaying(false);
     setStatusMessage('⏸️ Paused');
   };
@@ -90,63 +62,35 @@ export default function Home() {
     if (podcastAudio.current && !podcastAudio.current.paused) {
       setStoryPosition(podcastAudio.current.currentTime);
     }
-
     stopAllAudio();
     setIsThinking(true);
-    setShowOptions(false);
-
+    setStatusMessage('🤔 Thinking...');
     try {
-      setStatusStep('thinking');
-      setCountdown(6);
-
-      const response = await fetch('/api/ask-stream', {
+      const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question }),
       });
-
-      if (!response.ok || !response.body) {
-        throw new Error('Failed to stream audio response');
-      }
-
-      
-
-      const mediaSource = new MediaSource();
-      responseAudio.current.src = URL.createObjectURL(mediaSource);
-      responseAudio.current.load();
-      setStatusMessage('');
-      responseAudio.current.play().catch((e) => {
-        console.error('Playback error:', e);
-        setStatusMessage('❌ Playback error. Tap to resume.');
+      const data = await res.json();
+      const speakRes = await fetch('/api/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: data.answer }),
       });
+      const audioData = await speakRes.json();
+      if (!audioData.audioUrl) throw new Error('No audio response');
 
-      mediaSource.addEventListener('sourceopen', () => {
-        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-        const reader = response.body.getReader();
-
-        function pump() {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              mediaSource.endOfStream();
-              choiceAudio.current.play();
-              setShowOptions(true);
-              setIsPlaying(false);
-              setIsThinking(false);
-              setIsThinking(false);
-              return;
-            }
-            if (value) {
-              sourceBuffer.appendBuffer(value);
-            }
-            pump();
-          });
-        }
-
-        pump();
-      });
+      responseAudio.current.src = audioData.audioUrl;
+      responseAudio.current.play();
+      setStatusMessage('🎙️ Da Vinci replies');
+      responseAudio.current.onended = () => {
+        setIsThinking(false);
+        setStatusMessage('');
+        setShowOptions(true);
+      };
     } catch (err) {
       console.error(err);
-      setStatusMessage('❌ Error streaming answer');
+      setStatusMessage('❌ Error answering');
       setIsThinking(false);
     }
   };
@@ -170,9 +114,7 @@ export default function Home() {
       mediaRecorder.ondataavailable = e => chunks.push(e.data);
       mediaRecorder.onstop = async () => {
         setIsListening(false);
-        setStatusStep('transcribing');
-        setCountdown(3);
-
+        setStatusMessage('⏳ Transcribing...');
         const blob = new Blob(chunks, { type: mimeType });
         const formData = new FormData();
         formData.append('audio', blob, 'question.webm');
@@ -209,14 +151,12 @@ export default function Home() {
       </div>
       <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
-
       <div className="mb-4 flex gap-4">
-        {!isPlaying && storyPosition === 0 && (
+        {!isPlaying ? (
           <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
             ▶️ Start Conversation
           </button>
-        )}
-        {isPlaying && (
+        ) : (
           <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
             ⏸️ Pause
           </button>
@@ -245,7 +185,6 @@ export default function Home() {
         </button>
       </div>
 
-      
       {showOptions && (
         <div className="mt-6 flex flex-col gap-4 items-center">
           <button
