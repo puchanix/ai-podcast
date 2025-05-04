@@ -238,7 +238,7 @@ export default function Home() {
         const data = await res.json();
 
         if (data.transcript) {
-          handleAsk(data.transcript);
+          handleAskStream(data.transcript);
         } else {
           setStatusMessage('❌ Could not understand audio');
         }
