@@ -7,9 +7,11 @@ export default function Home() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [storyPosition, setStoryPosition] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
   const podcastAudio = useRef(null);
   const responseAudio = useRef(null);
   const promptAudio = useRef(null);
+  const choiceAudio = useRef(null);
 
   const suggestedQuestions = [
     "If you were living today, what would you be doing?",
@@ -23,6 +25,7 @@ export default function Home() {
     podcastAudio.current?.pause();
     responseAudio.current?.pause();
     promptAudio.current?.pause();
+    choiceAudio.current?.pause();
     setIsPlaying(false);
   };
 
@@ -31,6 +34,7 @@ export default function Home() {
     podcastAudio.current.currentTime = storyPosition;
     podcastAudio.current.play();
     setIsPlaying(true);
+    setShowOptions(false);
     setStatusMessage('▶️ Playing story...');
   };
 
@@ -46,6 +50,7 @@ export default function Home() {
   const handleAsk = async (question) => {
     stopAllAudio();
     setIsThinking(true);
+    setShowOptions(false);
     setStatusMessage('🤔 Thinking...');
     try {
       const res = await fetch('/api/ask', {
@@ -65,9 +70,12 @@ export default function Home() {
       responseAudio.current.src = audioData.audioUrl;
       responseAudio.current.play();
       setStatusMessage('🎙️ Da Vinci replies');
+
       responseAudio.current.onended = () => {
+        setStatusMessage('🧠 What next?');
+        choiceAudio.current.play();
+        setShowOptions(true);
         setIsThinking(false);
-        setStatusMessage('✅ Answer complete');
       };
     } catch (err) {
       console.error(err);
@@ -139,31 +147,53 @@ export default function Home() {
         )}
       </div>
 
-      <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
-        {suggestedQuestions.map((q, i) => (
-          <button
-            key={i}
-            onClick={() => handleAsk(q)}
-            className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
-          >
-            {q}
-          </button>
-        ))}
-      </div>
+      {!showOptions && (
+        <>
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
+            {suggestedQuestions.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => handleAsk(q)}
+                className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
 
-      <div className="mt-6">
-        <button
-          onClick={handleVoiceQuestion}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
-        >
-          🎤 Ask Your Own Question
-        </button>
-      </div>
+          <div className="mt-6">
+            <button
+              onClick={handleVoiceQuestion}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+            >
+              🎤 Ask Your Own Question
+            </button>
+          </div>
+        </>
+      )}
+
+      {showOptions && (
+        <div className="mt-6 flex gap-4">
+          <button
+            onClick={handlePlayPodcast}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+          >
+            ▶️ Continue the Story
+          </button>
+          <button
+            onClick={() => setShowOptions(false)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+          >
+            ❓ Ask Another Question
+          </button>
+        </div>
+      )}
 
       <audio ref={podcastAudio} src="/podcast.mp3" hidden preload="auto" />
       <audio ref={responseAudio} hidden preload="auto" />
       <audio ref={promptAudio} src="/acknowledge.mp3" hidden preload="auto" />
+      <audio ref={choiceAudio} src="/choice.mp3" hidden preload="auto" />
     </div>
   );
 }
