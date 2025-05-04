@@ -27,7 +27,10 @@ export default function Home() {
 
   useEffect(() => {
     if (countdown === null) return;
-    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown(c => c + 1);
+    }, 1000);
+    return () => clearInterval(timer);
     const timer = setInterval(() => {
       setCountdown(c => (c > 0 ? c - 1 : 0));
     }, 1000);
@@ -97,7 +100,7 @@ export default function Home() {
 
     try {
       setStatusStep('thinking');
-      setCountdown(4);
+      setCountdown(6);
 
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -109,8 +112,7 @@ export default function Home() {
         throw new Error('Failed to stream audio response');
       }
 
-      setStatusStep('buffering');
-      setCountdown(2);
+      
 
       const mediaSource = new MediaSource();
       responseAudio.current.src = URL.createObjectURL(mediaSource);
@@ -131,6 +133,7 @@ export default function Home() {
               setStatusMessage('🧠 What next?');
               choiceAudio.current.play();
               setShowOptions(true);
+              setIsThinking(false);
               setIsThinking(false);
               return;
             }
