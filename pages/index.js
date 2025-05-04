@@ -2,20 +2,6 @@
 import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const interval = setInterval(() => {
-      if (!thinkingStartRef.current) return;
-      const elapsed = Math.floor((Date.now() - thinkingStartRef.current) / 1000);
-      const max = 7;
-      if (elapsed <= max) {
-        setStatusMessage(`🤔 Thinking... (${max - elapsed}s)`);
-      } else {
-        setStatusMessage(`⏳ Still thinking... (${elapsed - max}s)`);
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -54,7 +40,7 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    thinkingStartRef.current = Date.now();
+    setStatusMessage('🤔 Thinking (streaming)...');
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -69,8 +55,6 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
-    thinkingStartRef.current = null;
-    setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
       setStatusMessage('');
@@ -284,7 +268,7 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    thinkingStartRef.current = Date.now();
+    setStatusMessage('🤔 Thinking (streaming)...');
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -299,8 +283,6 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
-    thinkingStartRef.current = null;
-    setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
       setStatusMessage('');
@@ -393,9 +375,7 @@ export default function Home() {
       <div className="flex justify-center mb-4">
         <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-40 h-40 rounded-full border-4 border-indigo-300 shadow-xl" />
       </div>
-      {typeof window !== 'undefined' && statusMessage && (
-        <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
-      )}
+      <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
       
       <div className="mb-4 flex gap-4">
