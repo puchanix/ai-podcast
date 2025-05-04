@@ -8,6 +8,8 @@ export default function Home() {
   const audioRef = useRef(null);
   const sourceBufferRef = useRef(null);
   const queue = useRef([]);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   const suggestedQuestions = [
     "If you were living today, what would you be doing?",
@@ -74,15 +76,53 @@ export default function Home() {
     sourceBufferRef.current.appendBuffer(queue.current.shift());
   };
 
+  const startRecording = async () => {
+    setStatusMessage('Recording...');
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mediaRecorder = new MediaRecorder(stream);
+    mediaRecorderRef.current = mediaRecorder;
+    audioChunksRef.current = [];
+
+    mediaRecorder.ondataavailable = (e) => {
+      audioChunksRef.current.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append('audio', blob);
+
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (json?.question) {
+        startStreaming(json.question);
+      } else {
+        setStatusMessage('Transcription failed');
+      }
+    };
+
+    mediaRecorder.start();
+    setTimeout(() => mediaRecorder.stop(), 4000); // Record for 4 seconds
+  };
+
   return (
     <div>
       <h1>🎙️ AI Podcast - Streaming</h1>
       <p>Status: {statusMessage}</p>
+      <h3>Prewritten Questions</h3>
       {suggestedQuestions.map((q, i) => (
         <button key={i} disabled={isThinking} onClick={() => startStreaming(q)}>
           {q}
         </button>
       ))}
+      <h3>Custom Question</h3>
+      <button disabled={isThinking} onClick={startRecording}>
+        🎤 Ask with Microphone
+      </button>
       <audio ref={audioRef} controls></audio>
     </div>
   );
