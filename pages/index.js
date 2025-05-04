@@ -2,6 +2,31 @@
 import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
+  useEffect(() => {
+    let timer;
+    if (countdown === null) return;
+    if (statusStep === 'countdown') {
+      timer = setInterval(() => {
+        setCountdown((c) => {
+          if (c > 0) return c - 1;
+          clearInterval(timer);
+          setStatusStep('countup');
+          return 0;
+        });
+      }, 1000);
+    } else if (statusStep === 'countup') {
+      timer = setInterval(() => {
+        setCountdown((c) => c + 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [statusStep, countdown]);
+  
+  useEffect(() => {
+    if (countdown !== null) {
+      setStatusMessage(`${stepText[statusStep]}... (${countdown}s)`);
+    }
+  }, [countdown, statusStep]);
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -40,7 +65,8 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    setStatusMessage('🤔 Thinking (streaming)...');
+    setCountdown(7);
+    setStatusStep('countdown');
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -55,6 +81,8 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    setCountdown(null);
+    setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
       setStatusMessage('');
@@ -268,7 +296,8 @@ export default function Home() {
     }
     stopAllAudio();
     setIsThinking(true);
-    setStatusMessage('🤔 Thinking (streaming)...');
+    setCountdown(7);
+    setStatusStep('countdown');
     try {
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
@@ -283,6 +312,8 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    setCountdown(null);
+    setStatusMessage('🎙️ Da Vinci replies');
     responseAudio.current.onended = () => {
       setIsThinking(false);
       setStatusMessage('');
