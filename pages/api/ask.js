@@ -27,7 +27,7 @@ export default async function handler(req, res) {
       messages: [
         {
           role: 'system',
-          content: \`You are Leonardo da Vinci. Respond to each question as he would, in first person, with poetic curiosity, scientific depth, and Renaissance flair. Keep your answers under 100 words.\`,
+          content: 'You are Leonardo da Vinci. Respond to each question as he would, in first person, with poetic curiosity, scientific depth, and Renaissance flair. Keep your answers under 100 words.',
         },
         { role: 'user', content: question },
       ],
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
         if (!elevenResponse && fullText.split(' ').length > 30) {
           firstChunk = fullText.trim();
           // Send to ElevenLabs
-          elevenResponse = await fetch(\`https://api.elevenlabs.io/v1/text-to-speech/\${VOICE_ID}\`, {
+          elevenResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
             method: 'POST',
             headers: {
               'xi-api-key': ELEVENLABS_API_KEY,
@@ -62,7 +62,7 @@ export default async function handler(req, res) {
     if (elevenResponse?.ok) {
       const buffer = await elevenResponse.arrayBuffer();
       const base64 = Buffer.from(buffer).toString('base64');
-      audioUrl = \`data:audio/mpeg;base64,\${base64}\`;
+      audioUrl = `data:audio/mpeg;base64,${base64}`;
     }
 
     return res.status(200).json({ answer: fullText.trim(), audioUrl });
