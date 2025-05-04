@@ -65,6 +65,10 @@ export default function Home() {
   };
 
   const handleAsk = async (question) => {
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime);
+    }
+
     stopAllAudio();
     setIsThinking(true);
     setShowOptions(false);
@@ -107,6 +111,53 @@ export default function Home() {
     }
   };
 
+  const handleVoiceQuestion = async () => {
+    stopAllAudio();
+    setStatusMessage('🎤 Listening...');
+    setIsListening(true);
+
+    try {
+      const mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        setStatusMessage('❌ Your browser does not support required audio format.');
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      const chunks = [];
+
+      mediaRecorder.ondataavailable = e => chunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        setIsListening(false);
+        setStatusMessage('⏳ Transcribing...');
+
+        const blob = new Blob(chunks, { type: mimeType });
+        const formData = new FormData();
+        formData.append('audio', blob, 'question.webm');
+
+        const res = await fetch('/api/transcribe', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+
+        if (data.transcript) {
+          handleAsk(data.transcript);
+        } else {
+          setStatusMessage('❌ Could not understand audio');
+        }
+      };
+
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 5000);
+    } catch (err) {
+      console.error(err);
+      setStatusMessage('❌ Microphone error');
+      setIsListening(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center font-sans">
       <h1 className="text-5xl font-bold text-center mb-6 text-indigo-900 drop-shadow-md">
@@ -142,6 +193,15 @@ export default function Home() {
                 {q}
               </button>
             ))}
+          </div>
+
+          <div className="mt-6">
+            <button
+              onClick={handleVoiceQuestion}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+            >
+              🎤 Ask Your Own Question
+            </button>
           </div>
         </>
       )}
