@@ -393,7 +393,7 @@ export default function Home() {
       <div className="flex justify-center mb-4">
         <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-40 h-40 rounded-full border-4 border-indigo-300 shadow-xl" />
       </div>
-      <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
+      {typeof window !== 'undefined' && statusMessage && (<p className=\"mb-4 text-gray-700 font-medium text-lg\">{statusMessage}</p>)}
 
       
       <div className="mb-4 flex gap-4">
