@@ -42,7 +42,7 @@ export default function Home() {
       buffering: '📡 Buffering audio',
     };
     if (countdown != null) {
-      setStatusMessage(\`\${stepText[statusStep]}... (\${countdown}s)\`);
+      setStatusMessage(`${stepText[statusStep]}... (${countdown}s)`);
     }
   }, [statusStep, countdown]);
 
