@@ -77,8 +77,15 @@ export default function Home() {
       if (!audioData.audioUrl) throw new Error('No audio response');
 
       responseAudio.current.src = audioData.audioUrl;
-      responseAudio.current.play();
+      responseAudio.current.load();
+      const playPromise = responseAudio.current.play();
       setStatusMessage('🎙️ Da Vinci replies');
+
+      if (playPromise !== undefined) {
+        playPromise.catch((e) => {
+          console.error('Autoplay failed:', e);
+        });
+      }
 
       responseAudio.current.onended = () => {
         setStatusMessage('🧠 What next?');
@@ -205,8 +212,8 @@ export default function Home() {
         </div>
       )}
 
-      <audio ref={podcastAudio} src="/podcast.mp3" hidden preload="auto" />
-      <audio ref={responseAudio} hidden preload="auto" />
+      <audio ref={podcastAudio} src="/podcast.mp3" preload="auto" />
+      <audio ref={responseAudio} preload="auto" controls style={{ display: 'none' }} />
       <audio ref={promptAudio} src="/acknowledge.mp3" hidden preload="auto" />
       <audio ref={choiceAudio} src="/choice.mp3" hidden preload="auto" />
     </div>
