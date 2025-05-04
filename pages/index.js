@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 
 export default function Home() {
   const [statusMessage, setStatusMessage] = useState('');
+  const [statusStep, setStatusStep] = useState('');
+  const [countdown, setCountdown] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [storyPosition, setStoryPosition] = useState(0);
@@ -22,6 +24,27 @@ export default function Home() {
     "What inspired you to paint the Mona Lisa?",
     "What is your favorite animal?"
   ];
+
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown(c => (c > 0 ? c - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
+  useEffect(() => {
+    if (!statusStep) return;
+    const stepText = {
+      transcribing: '⏳ Transcribing',
+      thinking: '🧠 Thinking',
+      buffering: '📡 Buffering audio',
+    };
+    if (countdown != null) {
+      setStatusMessage(\`\${stepText[statusStep]}... (\${countdown}s)\`);
+    }
+  }, [statusStep, countdown]);
 
   useEffect(() => {
     const unlock = () => {
@@ -73,6 +96,9 @@ export default function Home() {
     setShowOptions(false);
 
     try {
+      setStatusStep('thinking');
+      setCountdown(4);
+
       const response = await fetch('/api/ask-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,6 +109,9 @@ export default function Home() {
         throw new Error('Failed to stream audio response');
       }
 
+      setStatusStep('buffering');
+      setCountdown(2);
+
       const mediaSource = new MediaSource();
       responseAudio.current.src = URL.createObjectURL(mediaSource);
       responseAudio.current.load();
@@ -90,8 +119,6 @@ export default function Home() {
         console.error('Playback error:', e);
         setStatusMessage('❌ Playback error. Tap to resume.');
       });
-
-      setStatusMessage('🎙️ Da Vinci replies...');
 
       mediaSource.addEventListener('sourceopen', () => {
         const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
@@ -142,7 +169,8 @@ export default function Home() {
       mediaRecorder.ondataavailable = e => chunks.push(e.data);
       mediaRecorder.onstop = async () => {
         setIsListening(false);
-        setStatusMessage('⏳ Transcribing...');
+        setStatusStep('transcribing');
+        setCountdown(3);
 
         const blob = new Blob(chunks, { type: mimeType });
         const formData = new FormData();
