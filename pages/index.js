@@ -93,7 +93,22 @@ export default function Home() {
         const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
         const reader = response.body.getReader();
 
+        
+        let queue = [];
+        let pumping = false;
+
         const pump = () => {
+          if (pumping || !queue.length || sourceBuffer.updating) return;
+          pumping = true;
+          sourceBuffer.appendBuffer(queue.shift());
+        };
+
+        sourceBuffer.addEventListener('updateend', () => {
+          pumping = false;
+          pump();
+        });
+
+        const readLoop = () => {
           reader.read().then(({ done, value }) => {
             if (done) {
               mediaSource.endOfStream();
@@ -103,11 +118,15 @@ export default function Home() {
               return;
             }
             if (value) {
-              sourceBuffer.appendBuffer(value);
+              queue.push(value);
               pump();
             }
+            readLoop();
           });
         };
+
+        readLoop();
+    
 
         pump();
       });
@@ -150,7 +169,22 @@ export default function Home() {
         const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
         const reader = response.body.getReader();
 
+        
+        let queue = [];
+        let pumping = false;
+
         const pump = () => {
+          if (pumping || !queue.length || sourceBuffer.updating) return;
+          pumping = true;
+          sourceBuffer.appendBuffer(queue.shift());
+        };
+
+        sourceBuffer.addEventListener('updateend', () => {
+          pumping = false;
+          pump();
+        });
+
+        const readLoop = () => {
           reader.read().then(({ done, value }) => {
             if (done) {
               mediaSource.endOfStream();
@@ -160,11 +194,15 @@ export default function Home() {
               return;
             }
             if (value) {
-              sourceBuffer.appendBuffer(value);
+              queue.push(value);
               pump();
             }
+            readLoop();
           });
         };
+
+        readLoop();
+    
 
         pump();
       });
