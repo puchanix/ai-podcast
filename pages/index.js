@@ -212,10 +212,10 @@ export default function Home() {
         </div>
       )}
 
-      <audio ref={podcastAudio} src="/podcast.mp3" preload="auto" />
-      <audio ref={responseAudio} preload="auto" controls style={{ display: 'none' }} />
-      <audio ref={promptAudio} src="/acknowledge.mp3" hidden preload="auto" />
-      <audio ref={choiceAudio} src="/choice.mp3" hidden preload="auto" />
+      <audio ref={podcastAudio} src="/podcast.mp3" preload="auto" playsInline />
+      <audio ref={responseAudio} preload="auto" playsInline hidden />
+      <audio ref={promptAudio} src="/acknowledge.mp3" hidden preload="auto" playsInline />
+      <audio ref={choiceAudio} src="/choice.mp3" hidden preload="auto" playsInline />
     </div>
   );
 }
