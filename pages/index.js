@@ -51,10 +51,15 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    responseAudio.current.onended = () => {
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
       responseAudio.current.onended = () => {
         setIsThinking(false);
         setStatusMessage('');
-        setShowOptions(true);
+        // showOptions now only triggered on responseAudio.current.onended
       };
     
 
@@ -227,10 +232,15 @@ export default function Home() {
       responseAudio.current.load();
       
       responseAudio.current.play().catch(err => console.error('Playback failed', err));
+    responseAudio.current.onended = () => {
+      setIsThinking(false);
+      setStatusMessage('');
+      setShowOptions(true);
+    };
       responseAudio.current.onended = () => {
         setIsThinking(false);
         setStatusMessage('');
-        setShowOptions(true);
+        // showOptions now only triggered on responseAudio.current.onended
       };
     
 
