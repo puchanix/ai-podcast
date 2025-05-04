@@ -129,15 +129,6 @@ export default function Home() {
       setIsThinking(false);
     }
   };
-
-
-  "min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center font-sans">
-      <h1 className="text-5xl font-bold text-center mb-6 text-indigo-900 drop-shadow-md">
-        💬 Talk with the Heroes of History
-      </h1>
-      <div className="flex justify-center mb-4">
-        <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-40 h-40 rounded-full border-4 border-indigo-300 shadow-xl" />
-      </div>
       <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
       
