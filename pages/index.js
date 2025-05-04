@@ -76,16 +76,19 @@ export default function Home() {
       const audioData = await speakRes.json();
       if (!audioData.audioUrl) throw new Error('No audio response');
 
+      responseAudio.current.src = ""; // reset source
       responseAudio.current.src = audioData.audioUrl;
-      responseAudio.current.load();
       responseAudio.current.muted = false;
-      const playPromise = responseAudio.current.play();
+
       setStatusMessage('🎙️ Da Vinci replies');
 
-      if (playPromise !== undefined) {
-        playPromise.catch((e) => {
-          console.error('Autoplay failed:', e);
-        });
+      try {
+        await responseAudio.current.play();
+      } catch (err) {
+        console.error('Mobile playback error:', err);
+        setStatusMessage('❌ Playback blocked. Tap to play.');
+        responseAudio.current.controls = true;
+        responseAudio.current.style.display = 'block';
       }
 
       responseAudio.current.onended = () => {
