@@ -15,8 +15,6 @@ export default function Home() {
   const unlockAudio = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const audioRef = useRef(null);
-  const streamingRef = useRef({ mediaSource: null, sourceBuffer: null, queue: [] });
 
   const suggestedQuestions = [
     "If you were living today, what would you be doing?",
@@ -64,51 +62,15 @@ export default function Home() {
     setStatusMessage('⏸️ Paused');
   };
 
-  const appendToBuffer = () => {
-    const { sourceBuffer, queue } = streamingRef.current;
-    if (!sourceBuffer || !queue.length || sourceBuffer.updating) return;
-    sourceBuffer.appendBuffer(queue.shift());
-  };
-
   const handleAsk = async (question) => {
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime);
+    }
+
     stopAllAudio();
     setIsThinking(true);
     setStatusMessage('🤔 Thinking...');
     setShowOptions(false);
-
-    if (suggestedQuestions.includes(question)) {
-      const mediaSource = new MediaSource();
-      responseAudio.current.src = URL.createObjectURL(mediaSource);
-
-      mediaSource.addEventListener('sourceopen', async () => {
-        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-        streamingRef.current.sourceBuffer = sourceBuffer;
-        streamingRef.current.queue = [];
-        sourceBuffer.mode = 'sequence';
-        sourceBuffer.addEventListener('updateend', appendToBuffer);
-
-        const res = await fetch('/api/ask-stream', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question })
-        });
-
-        const reader = res.body.getReader();
-        const pump = async () => {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            streamingRef.current.queue.push(value);
-            appendToBuffer();
-          }
-          setIsThinking(false);
-        };
-        pump();
-      });
-
-      responseAudio.current.play();
-      return;
-    }
 
     try {
       const res = await fetch('/api/ask', {
@@ -124,6 +86,7 @@ export default function Home() {
       });
       const audioData = await speakRes.json();
       if (!audioData.audioUrl) throw new Error('No audio response');
+
       responseAudio.current.src = audioData.audioUrl;
       responseAudio.current.play();
       setStatusMessage('🎙️ Da Vinci Responds');
@@ -173,32 +136,25 @@ export default function Home() {
       <h1>🎧 AI Podcast</h1>
       <p style={{ fontStyle: 'italic', marginBottom: '1rem' }}>{statusMessage}</p>
 
-      <section style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>🎙️ Podcast Playback</h2>
-        <button onClick={handlePlayPodcast} disabled={isPlaying} style={{ marginRight: 10 }}>▶️ Play</button>
+      <div style={{ marginBottom: '1rem' }}>
+        <button onClick={handlePlayPodcast} disabled={isPlaying}>▶️ Play</button>
         <button onClick={handlePausePodcast}>⏸️ Pause</button>
-      </section>
+      </div>
 
-      <section style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>💬 Suggested Questions</h2>
+      <div style={{ marginBottom: '1rem' }}>
         {suggestedQuestions.map((q, i) => (
-          <button
-            key={i}
-            onClick={() => handleAsk(q)}
-            disabled={isThinking}
-            style={{ display: 'block', width: '100%', marginBottom: 8, padding: '0.5rem', fontSize: '1rem' }}>
+          <button key={i} onClick={() => handleAsk(q)} disabled={isThinking} style={{ display: 'block', marginBottom: 6 }}>
             {q}
           </button>
         ))}
-      </section>
+      </div>
 
-      <section style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>🎤 Ask a Custom Question</h2>
-        <button onClick={startRecording} disabled={isThinking} style={{ padding: '0.75rem 1.25rem', fontSize: '1rem' }}>Record</button>
-      </section>
+      <div>
+        <button onClick={startRecording} disabled={isThinking}>🎤 Ask with Microphone</button>
+      </div>
 
       <audio ref={podcastAudio} hidden preload="auto" src="/intro.mp3"></audio>
-      <audio ref={responseAudio} controls style={{ width: '100%', marginTop: '1rem' }}></audio>
+      <audio ref={responseAudio} controls style={{ width: '100%' }}></audio>
       <audio ref={promptAudio} hidden preload="auto"></audio>
       <audio ref={choiceAudio} hidden preload="auto"></audio>
       <audio ref={unlockAudio} hidden preload="auto" src="/silent.mp3"></audio>
