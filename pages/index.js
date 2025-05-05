@@ -35,6 +35,9 @@ export default function Home() {
     document.addEventListener('click', unlock);
     
   const handleAskStream = async (question) => {
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime);
+    }
     stopAllAudio();
     setIsThinking(true);
     setStatusMessage('🤔 Thinking (streaming)...');
@@ -238,7 +241,7 @@ export default function Home() {
         const data = await res.json();
 
         if (data.transcript) {
-          handleAsk(data.transcript);
+          handleAskStream(data.transcript);
         } else {
           setStatusMessage('❌ Could not understand audio');
         }
@@ -255,6 +258,9 @@ export default function Home() {
 
   
   const handleAskStream = async (question) => {
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime);
+    }
     stopAllAudio();
     setIsThinking(true);
     setStatusMessage('🤔 Thinking (streaming)...');
