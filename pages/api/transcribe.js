@@ -7,7 +7,10 @@ export const config = {
 };
 
 export default async function handler(req, res) {
+  console.log('🚀 Hit /api/transcribe');
+
   if (req.method !== 'POST') {
+    console.log('⛔ Method not allowed');
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -15,13 +18,16 @@ export default async function handler(req, res) {
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      console.error('Error parsing form:', err);
-      return res.status(500).json({ error: 'Parse error' });
+      console.error('❌ Error parsing form:', err);
+      return res.status(500).json({ error: 'Form parse error' });
     }
+
+    console.log('✅ Form parsed:', Object.keys(files));
 
     try {
       const file = files.audio;
       if (!file) {
+        console.log('❌ No audio file provided');
         return res.status(400).json({ error: 'No audio file' });
       }
 
@@ -45,16 +51,18 @@ export default async function handler(req, res) {
 
       if (!response.ok) {
         const msg = await response.text();
-        console.error('OpenAI error:', msg);
-        return res.status(500).json({ error: 'OpenAI Whisper failed' });
+        console.error('❌ Whisper error:', msg);
+        return res.status(500).json({ error: 'Whisper API error' });
       }
 
       const result = await response.json();
+      console.log('✅ Whisper result:', result);
       return res.status(200).json({ question: result.text });
     } catch (err) {
-      console.error('Transcription error:', err);
-      return res.status(500).json({ error: 'Transcription error' });
+      console.error('❌ Catch block error:', err);
+      return res.status(500).json({ error: 'Server error' });
     }
   });
 }
+
 
