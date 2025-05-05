@@ -11,13 +11,14 @@ export default function Home() {
   const [storyMode, setStoryMode] = useState(false);
   const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [podcastWasPlaying, setPodcastWasPlaying] = useState(false); // Track pause by Da Vinci
 
   const promptAudio = useRef(null);
   const choiceAudio = useRef(null);
   const unlockAudio = useRef(null);
   const storyAudio = useRef(null);
   const podcastAudio = useRef(null);
-  const daVinciAudio = useRef(null); // holds Da Vinci's answer playback
+  const daVinciAudio = useRef(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -42,7 +43,21 @@ export default function Home() {
   };
 
   const handleAsk = async (question) => {
-    stopAllAudio();
+    const podcast = podcastAudio.current;
+
+    // Pause podcast if playing, but remember to not resume automatically
+    if (podcast && !podcast.paused) {
+      podcast.pause();
+      setIsPodcastPlaying(false);
+      setPodcastWasPlaying(true);
+    }
+
+    // Stop current Da Vinci answer
+    if (daVinciAudio.current) {
+      daVinciAudio.current.pause();
+      daVinciAudio.current.currentTime = 0;
+    }
+
     setIsThinking(true);
     setStatusMessage("🤖 Thinking...");
     setShowOptions(false);
@@ -51,11 +66,14 @@ export default function Home() {
       const audio = new Audio("/api/ask-stream?question=" + encodeURIComponent(question));
       daVinciAudio.current = audio;
       audio.play();
+
       audio.onended = () => {
         setIsThinking(false);
         setStatusMessage("");
         setShowOptions(true);
+        // Podcast resumes ONLY on manual resume
       };
+
       audio.onerror = (err) => {
         console.error("Audio playback failed:", err);
         setIsThinking(false);
@@ -110,12 +128,15 @@ export default function Home() {
 
     if (podcast.paused) {
       podcast.play();
-      if (answer && answer.paused) answer.play();
       setIsPodcastPlaying(true);
+      setPodcastWasPlaying(false);
     } else {
       podcast.pause();
-      if (answer && !answer.paused) answer.pause();
       setIsPodcastPlaying(false);
+    }
+
+    if (answer && !answer.paused) {
+      answer.pause();
     }
   };
 
@@ -185,6 +206,7 @@ export default function Home() {
                 audio.play();
                 setIsPodcastPlaying(true);
                 setHasStarted(true);
+                setPodcastWasPlaying(false);
               }
             }}
             className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded shadow"
