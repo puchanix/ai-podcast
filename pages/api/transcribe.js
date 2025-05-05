@@ -18,13 +18,14 @@ export default async function handler(req, res) {
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      console.error('Formidable parse error:', err);
+      console.error('❌ Formidable parse error:', err);
       return res.status(500).json({ error: 'Failed to parse form data' });
     }
 
     try {
       const file = files.audio;
       if (!file) {
+        console.error('❌ No audio file found in request');
         return res.status(400).json({ error: 'No audio file provided' });
       }
 
@@ -35,7 +36,7 @@ export default async function handler(req, res) {
       });
       formData.append('model', 'whisper-1');
 
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      const openaiRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -44,18 +45,29 @@ export default async function handler(req, res) {
         body: formData,
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`OpenAI API error: ${errorText}`);
+      const raw = await openaiRes.text();
+      let result;
+
+      try {
+        result = JSON.parse(raw);
+      } catch (jsonErr) {
+        console.error('❌ Failed to parse OpenAI JSON:', raw);
+        throw new Error('OpenAI did not return valid JSON');
       }
 
-      const result = await response.json();
+      if (!openaiRes.ok) {
+        console.error('❌ OpenAI API error:', result);
+        return res.status(openaiRes.status).json({ error: result.error || 'OpenAI API error' });
+      }
+
+      console.log('✅ OpenAI Whisper success:', result);
       res.status(200).json({ text: result.text });
     } catch (error) {
-      console.error('Transcription error:', error);
+      console.error('❌ Transcription error (outer catch):', error);
       res.status(500).json({ error: 'Failed to transcribe audio' });
     }
   });
 }
+
 
 
