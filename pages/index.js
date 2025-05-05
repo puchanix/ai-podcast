@@ -4,10 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 export default function Home() {
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
-  const mediaSourceRef = useRef(null);
-  const audioRef = useRef(null);
-  const sourceBufferRef = useRef(null);
-  const queue = useRef([]);
+  const [storyPosition, setStoryPosition] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const podcastAudio = useRef(null);
+  const responseAudio = useRef(null);
+  const promptAudio = useRef(null);
+  const choiceAudio = useRef(null);
+  const unlockAudio = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
@@ -20,68 +25,91 @@ export default function Home() {
   ];
 
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.addEventListener('ended', () => {
-        setStatusMessage('Ready');
-        setIsThinking(false);
-      });
+    const unlock = () => {
+      if (!audioUnlocked && unlockAudio.current) {
+        unlockAudio.current.play().catch(() => {});
+        setAudioUnlocked(true);
+      }
+      document.removeEventListener('click', unlock);
+    };
+    document.addEventListener('click', unlock);
+    return () => document.removeEventListener('click', unlock);
+  }, [audioUnlocked]);
+
+  const stopAllAudio = () => {
+    podcastAudio.current?.pause();
+    responseAudio.current?.pause();
+    promptAudio.current?.pause();
+    choiceAudio.current?.pause();
+    setIsPlaying(false);
+  };
+
+  const handlePlayPodcast = () => {
+    stopAllAudio();
+    podcastAudio.current.currentTime = storyPosition;
+    podcastAudio.current.play();
+    setIsPlaying(true);
+    setShowOptions(false);
+    setStatusMessage('▶️ Playing story...');
+  };
+
+  const handlePausePodcast = () => {
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime);
     }
-  }, []);
+    stopAllAudio();
+    setIsPlaying(false);
+    setStatusMessage('⏸️ Paused');
+  };
 
-  const startStreaming = async (question) => {
-    setStatusMessage('Thinking...');
+  const handleAsk = async (question) => {
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      setStoryPosition(podcastAudio.current.currentTime);
+    }
+
+    stopAllAudio();
     setIsThinking(true);
+    setStatusMessage('🤔 Thinking...');
+    setShowOptions(false);
 
-    if (!audioRef.current) return;
-    const mediaSource = new MediaSource();
-    mediaSourceRef.current = mediaSource;
-    audioRef.current.src = URL.createObjectURL(mediaSource);
-
-    mediaSource.addEventListener('sourceopen', async () => {
-      const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-      sourceBufferRef.current = sourceBuffer;
-      sourceBuffer.mode = 'sequence';
-
-      const res = await fetch('/api/ask-stream', {
+    try {
+      const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question }),
       });
+      const data = await res.json();
+      const speakRes = await fetch('/api/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: data.answer }),
+      });
+      const audioData = await speakRes.json();
+      if (!audioData.audioUrl) throw new Error('No audio response');
 
-      if (!res.body) {
-        setStatusMessage('Stream error');
+      responseAudio.current.src = audioData.audioUrl;
+      responseAudio.current.play();
+      setStatusMessage('🎙️ Da Vinci replies');
+      responseAudio.current.onended = () => {
         setIsThinking(false);
-        return;
-      }
-
-      const reader = res.body.getReader();
-
-      const pump = async () => {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          queue.current.push(value);
-          appendToBuffer();
-        }
+        setStatusMessage('');
+        setShowOptions(true);
       };
-
-      pump();
-    });
-
-    audioRef.current.play();
+    } catch (err) {
+      console.error(err);
+      setStatusMessage('❌ Error answering');
+      setIsThinking(false);
+    }
   };
 
-  const appendToBuffer = () => {
-    if (!sourceBufferRef.current || !queue.current.length || sourceBufferRef.current.updating) return;
-    sourceBufferRef.current.appendBuffer(queue.current.shift());
-  };
+  const handleCustomQuestion = async () => {
+    stopAllAudio();
+    setIsThinking(true);
+    setStatusMessage('🎙️ Listening...');
 
-  const startRecording = async () => {
-    setStatusMessage('Recording...');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (e) => {
@@ -89,70 +117,107 @@ export default function Home() {
       };
 
       mediaRecorder.onstop = async () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const formData = new FormData();
-        formData.append('audio', blob);
+        formData.append('audio', audioBlob);
 
-        try {
-          const res = await fetch('/api/transcribe', {
-            method: 'POST',
-            body: formData,
-          });
-
-          const json = await res.json();
-          if (json?.question) {
-            startStreaming(json.question);
-          } else {
-            setStatusMessage('Transcription failed');
-          }
-        } catch (err) {
-          console.error('Transcription fetch error:', err);
-          setStatusMessage('Transcription error');
+        setStatusMessage('🧠 Transcribing...');
+        const transcriptRes = await fetch('/api/transcribe', {
+          method: 'POST',
+          body: formData,
+        });
+        const { question } = await transcriptRes.json();
+        if (question) {
+          handleAsk(question);
+        } else {
+          setStatusMessage('❌ Could not understand. Please try again.');
+          setIsThinking(false);
         }
       };
 
       mediaRecorder.start();
-      setTimeout(() => mediaRecorder.stop(), 4000);
+      promptAudio.current?.play();
+
+      setTimeout(() => {
+        mediaRecorder.stop();
+        stream.getTracks().forEach(track => track.stop());
+      }, 4000);
     } catch (err) {
-      console.error('Mic error:', err);
-      setStatusMessage('Mic permission error');
+      console.error(err);
+      setStatusMessage('❌ Mic error');
+      setIsThinking(false);
     }
   };
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', maxWidth: 600, margin: '2rem auto', padding: '1rem' }}>
-      <h1 style={{ fontSize: '1.8rem' }}>🎙️ AI Podcast</h1>
+    <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center font-sans">
+      <h1 className="text-5xl font-bold text-center mb-6 text-indigo-900 drop-shadow-md">
+        💬 Talk with the Heroes of History
+      </h1>
+      <div className="flex justify-center mb-4">
+        <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-40 h-40 rounded-full border-4 border-indigo-300 shadow-xl" />
+      </div>
+      <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
 
-      <p style={{ fontStyle: 'italic', marginBottom: '1.5rem' }}>Status: {statusMessage}</p>
+      <div className="mb-4 flex gap-4">
+        {isPlaying ? (
+          <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+            ⏸️ Pause
+          </button>
+        ) : (
+          <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
+            ▶️ Start Conversation
+          </button>
+        )}
+      </div>
 
-      <section style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Prewritten Questions</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {suggestedQuestions.map((q, i) => (
+      {!showOptions && (
+        <>
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
+            {suggestedQuestions.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => handleAsk(q)}
+                className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+          <div className="mt-6">
             <button
-              key={i}
-              disabled={isThinking}
-              onClick={() => startStreaming(q)}
-              style={{ padding: '0.75rem', fontSize: '1rem', borderRadius: 6, border: '1px solid #ccc', background: '#f2f2f2' }}
+              onClick={handleCustomQuestion}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
             >
-              {q}
+              🎤 Ask Your Own Question
             </button>
-          ))}
+          </div>
+        </>
+      )}
+
+      {showOptions && (
+        <div className="mt-6 flex gap-4">
+          <button
+            onClick={handlePlayPodcast}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+          >
+            ▶️ Continue the Story
+          </button>
+          <button
+            onClick={() => setShowOptions(false)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
+          >
+            ❓ Ask Another Question
+          </button>
         </div>
-      </section>
+      )}
 
-      <section style={{ marginBottom: '2rem' }}>
-        <h2 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Custom Question</h2>
-        <button
-          disabled={isThinking}
-          onClick={startRecording}
-          style={{ padding: '0.75rem 1rem', fontSize: '1rem', borderRadius: 6, background: '#0088cc', color: 'white', border: 'none' }}
-        >
-          🎤 Ask with Microphone
-        </button>
-      </section>
-
-      <audio ref={audioRef} controls style={{ width: '100%' }}></audio>
+      <audio ref={podcastAudio} src="/podcast.mp3" preload="auto" playsInline />
+      <audio ref={responseAudio} preload="auto" playsInline controls style={{ display: 'none' }} />
+      <audio ref={promptAudio} src="/acknowledge.mp3" hidden preload="auto" playsInline />
+      <audio ref={choiceAudio} src="/choice.mp3" hidden preload="auto" playsInline />
+      <audio ref={unlockAudio} src="/unlock.mp3" hidden preload="auto" playsInline />
     </div>
   );
 }
