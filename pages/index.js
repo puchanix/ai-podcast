@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 export default function Home() {
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
+  const mediaSourceRef = useRef(null);
   const audioRef = useRef(null);
+  const sourceBufferRef = useRef(null);
+  const queue = useRef([]);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
@@ -25,30 +28,52 @@ export default function Home() {
     }
   }, []);
 
-  const askPrewritten = async (question) => {
+  const startStreaming = async (question) => {
     setStatusMessage('Thinking...');
     setIsThinking(true);
 
-    try {
-      const res = await fetch('/api/ask', {
+    if (!audioRef.current) return;
+    const mediaSource = new MediaSource();
+    mediaSourceRef.current = mediaSource;
+    audioRef.current.src = URL.createObjectURL(mediaSource);
+
+    mediaSource.addEventListener('sourceopen', async () => {
+      const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+      sourceBufferRef.current = sourceBuffer;
+      sourceBuffer.mode = 'sequence';
+
+      const res = await fetch('/api/ask-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question }),
       });
 
-      const data = await res.json();
-      if (data?.audioUrl) {
-        audioRef.current.src = data.audioUrl;
-        audioRef.current.play();
-      } else {
-        setStatusMessage('No audio returned');
+      if (!res.body) {
+        setStatusMessage('Stream error');
         setIsThinking(false);
+        return;
       }
-    } catch (err) {
-      console.error('Ask error:', err);
-      setStatusMessage('Request failed');
-      setIsThinking(false);
-    }
+
+      const reader = res.body.getReader();
+
+      const pump = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          queue.current.push(value);
+          appendToBuffer();
+        }
+      };
+
+      pump();
+    });
+
+    audioRef.current.play();
+  };
+
+  const appendToBuffer = () => {
+    if (!sourceBufferRef.current || !queue.current.length || sourceBufferRef.current.updating) return;
+    sourceBufferRef.current.appendBuffer(queue.current.shift());
   };
 
   const startRecording = async () => {
@@ -76,7 +101,7 @@ export default function Home() {
 
           const json = await res.json();
           if (json?.question) {
-            askPrewritten(json.question);
+            startStreaming(json.question);
           } else {
             setStatusMessage('Transcription failed');
           }
@@ -87,7 +112,7 @@ export default function Home() {
       };
 
       mediaRecorder.start();
-      setTimeout(() => mediaRecorder.stop(), 4000); // 4s recording
+      setTimeout(() => mediaRecorder.stop(), 4000);
     } catch (err) {
       console.error('Mic error:', err);
       setStatusMessage('Mic permission error');
@@ -101,7 +126,7 @@ export default function Home() {
 
       <h3>Prewritten Questions</h3>
       {suggestedQuestions.map((q, i) => (
-        <button key={i} disabled={isThinking} onClick={() => askPrewritten(q)}>
+        <button key={i} disabled={isThinking} onClick={() => startStreaming(q)}>
           {q}
         </button>
       ))}
