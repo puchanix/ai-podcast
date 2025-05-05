@@ -10,13 +10,18 @@ export const config = {
 };
 
 export default async function handler(req, res) {
+  console.log('⚡ Incoming /api/transcribe request');
+
   if (req.method !== 'POST') {
+    console.warn('⚠️ Rejected non-POST method');
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const form = new formidable.IncomingForm({ multiples: false });
 
   form.parse(req, async (err, fields, files) => {
+    console.log('📥 Inside form.parse');
+
     if (err) {
       console.error('❌ Formidable parse error:', err);
       return res.status(500).json({ error: 'Failed to parse form data' });
@@ -81,6 +86,7 @@ export default async function handler(req, res) {
     }
   });
 }
+
 
 
 
