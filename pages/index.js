@@ -4,19 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 export default function Home() {
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [storyPosition, setStoryPosition] = useState(0);
-  const playbackMonitor = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [showOptions, setShowOptions] = useState(false);
-  const podcastAudio = useRef(null);
-  const responseAudio = useRef(null);
-  const promptAudio = useRef(null);
-  const choiceAudio = useRef(null);
-  const unlockAudio = useRef(null);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [responseAudio, setResponseAudio] = useState(null);
+  const [promptAudio, setPromptAudio] = useState(null);
+  const [question, setQuestion] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const audioRef = useRef(null);
+  const streamingRef = useRef({ mediaSource: null, sourceBuffer: null, queue: [] });
 
-  const suggestedQuestions = [
+  const questions = [
     "If you were living today, what would you be doing?",
     "Do you think AI can create true art?",
     "Do you think we will ever have a colony on Mars?",
@@ -24,416 +21,121 @@ export default function Home() {
     "What is your favorite animal?"
   ];
 
-  useEffect(() => {
-    const unlock = () => {
-      if (!audioUnlocked && unlockAudio.current) {
-        unlockAudio.current.play().catch(() => {});
-        setAudioUnlocked(true);
-      }
-      document.removeEventListener('click', unlock);
-    };
-    document.addEventListener('click', unlock);
-    
-  const handleAskStream = async (question) => {
-    stopAllAudio();
+  const playAudio = (url) => {
+    if (audioRef.current) {
+      audioRef.current.src = url;
+      audioRef.current.play();
+    }
+  };
+
+  const appendToBuffer = () => {
+    const { sourceBuffer, queue } = streamingRef.current;
+    if (!sourceBuffer || !queue.length || sourceBuffer.updating) return;
+    sourceBuffer.appendBuffer(queue.shift());
+  };
+
+  const handlePrewritten = async (q) => {
+    setStatusMessage('Thinking...');
     setIsThinking(true);
-    setStatusMessage('🤔 Thinking (streaming)...');
-    try {
-      const response = await fetch('/api/ask-stream', {
+    setQuestion(q);
+
+    const audio = audioRef.current;
+    const mediaSource = new MediaSource();
+    audio.src = URL.createObjectURL(mediaSource);
+
+    mediaSource.addEventListener('sourceopen', async () => {
+      const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
+      streamingRef.current.sourceBuffer = sourceBuffer;
+      streamingRef.current.queue = [];
+      sourceBuffer.mode = 'sequence';
+      sourceBuffer.addEventListener('updateend', appendToBuffer);
+
+      const res = await fetch('/api/ask-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question: q })
       });
 
-      if (!response.ok || !response.body) throw new Error('Stream failed');
-
-      const mediaSource = new MediaSource();
-      responseAudio.current.src = URL.createObjectURL(mediaSource);
-      responseAudio.current.load();
-      
-      responseAudio.current.play().catch(err => console.error('Playback failed', err));
-    
-    playbackMonitor.current = setInterval(() => {
-      const audio = responseAudio.current;
-      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
-        clearInterval(playbackMonitor.current);
-        setIsThinking(false);
-        setStatusMessage('');
-        setShowOptions(true);
-      }
-    }, 500);
-
-    responseAudio.current.onended = () => {
-      clearInterval(playbackMonitor.current);
-      setIsThinking(false);
-      setStatusMessage('');
-      setShowOptions(true);
-    };
-    
-      
-    playbackMonitor.current = setInterval(() => {
-      const audio = responseAudio.current;
-      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
-        clearInterval(playbackMonitor.current);
-        setIsThinking(false);
-        setStatusMessage('');
-        setShowOptions(true);
-      }
-    }, 500);
-
-    responseAudio.current.onended = () => {
-      clearInterval(playbackMonitor.current);
-      setIsThinking(false);
-      setStatusMessage('');
-      setShowOptions(true);
-    };
-    
-    
-
-      mediaSource.addEventListener('sourceopen', () => {
-        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-        const reader = response.body.getReader();
-        const queue = [];
-
-        const pump = () => {
-          if (queue.length && !sourceBuffer.updating) {
-            sourceBuffer.appendBuffer(queue.shift());
-          }
-        };
-
-        sourceBuffer.addEventListener('updateend', pump);
-
-        const readLoop = () => {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              sourceBuffer.removeEventListener('updateend', pump);
-              mediaSource.endOfStream();
-              setIsThinking(false);
-              setStatusMessage('');
-              // setShowOptions moved to onended
-              return;
-            }
-            if (value) {
-              queue.push(value);
-              pump();
-            }
-            readLoop();
-          });
-        };
-
-        readLoop();
-      });
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Streaming error');
-      setIsThinking(false);
-    }
-  };
-
-
-  return () => document.removeEventListener('click', unlock);
-  }, [audioUnlocked]);
-
-  const stopAllAudio = () => {
-    podcastAudio.current?.pause();
-    responseAudio.current?.pause();
-    promptAudio.current?.pause();
-    choiceAudio.current?.pause();
-    setIsPlaying(false);
-  };
-
-  const handlePlayPodcast = () => {
-    stopAllAudio();
-    podcastAudio.current.currentTime = storyPosition || 0;
-    podcastAudio.current.play();
-    setIsPlaying(true);
-    setStatusMessage('▶️ Playing story...');
-  };
-
-  const handlePausePodcast = () => {
-    podcastAudio.current.pause();
-    setStoryPosition(podcastAudio.current.currentTime);
-    setIsPlaying(false);
-    setStatusMessage('⏸️ Paused');
-  };
-
-  const handleAsk = async (question) => {
-    if (podcastAudio.current && !podcastAudio.current.paused) {
-      setStoryPosition(podcastAudio.current.currentTime);
-    }
-    stopAllAudio();
-    setIsThinking(true);
-    setStatusMessage('🤔 Thinking...');
-    try {
-      const res = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
-      });
-      const data = await res.json();
-      const speakRes = await fetch('/api/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: data.answer }),
-      });
-      const audioData = await speakRes.json();
-      if (!audioData.audioUrl) throw new Error('No audio response');
-
-      responseAudio.current.src = audioData.audioUrl;
-      responseAudio.current.play();
-      setStatusMessage('🎙️ Da Vinci replies');
-      
-    playbackMonitor.current = setInterval(() => {
-      const audio = responseAudio.current;
-      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
-        clearInterval(playbackMonitor.current);
-        setIsThinking(false);
-        setStatusMessage('');
-        setShowOptions(true);
-      }
-    }, 500);
-
-    responseAudio.current.onended = () => {
-      clearInterval(playbackMonitor.current);
-      setIsThinking(false);
-      setStatusMessage('');
-      setShowOptions(true);
-    };
-    
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Error answering');
-      setIsThinking(false);
-    }
-  };
-
-  const handleVoiceQuestion = async () => {
-    stopAllAudio();
-    setStatusMessage('🎤 Listening...');
-    setIsListening(true);
-
-    try {
-      const mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        setStatusMessage('❌ Your browser does not support required audio format.');
-        return;
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      const chunks = [];
-
-      mediaRecorder.ondataavailable = e => chunks.push(e.data);
-      mediaRecorder.onstop = async () => {
-        setIsListening(false);
-        setStatusMessage('⏳ Transcribing...');
-        const blob = new Blob(chunks, { type: mimeType });
-        const formData = new FormData();
-        formData.append('audio', blob, 'question.webm');
-
-        const res = await fetch('/api/transcribe', {
-          method: 'POST',
-          body: formData,
-        });
-        const data = await res.json();
-
-        if (data.transcript) {
-          handleAsk(data.transcript);
-        } else {
-          setStatusMessage('❌ Could not understand audio');
+      const reader = res.body.getReader();
+      const pump = async () => {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          streamingRef.current.queue.push(value);
+          appendToBuffer();
         }
+        setIsThinking(false);
       };
+      pump();
+    });
 
-      mediaRecorder.start();
-      setTimeout(() => mediaRecorder.stop(), 5000);
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Microphone error');
-      setIsListening(false);
-    }
+    audio.play();
   };
 
-  
-  const handleAskStream = async (question) => {
-    stopAllAudio();
-    setIsThinking(true);
-    setStatusMessage('🤔 Thinking (streaming)...');
-    try {
-      const response = await fetch('/api/ask-stream', {
+  const startRecording = async () => {
+    setIsRecording(true);
+    setStatusMessage('Recording...');
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mediaRecorder = new MediaRecorder(stream);
+    mediaRecorderRef.current = mediaRecorder;
+    audioChunksRef.current = [];
+
+    mediaRecorder.ondataavailable = (e) => {
+      audioChunksRef.current.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      const formData = new FormData();
+      formData.append('audio', blob);
+
+      const res = await fetch('/api/transcribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question }),
+        body: formData,
       });
 
-      if (!response.ok || !response.body) throw new Error('Stream failed');
-
-      const mediaSource = new MediaSource();
-      responseAudio.current.src = URL.createObjectURL(mediaSource);
-      responseAudio.current.load();
-      
-      responseAudio.current.play().catch(err => console.error('Playback failed', err));
-    
-    playbackMonitor.current = setInterval(() => {
-      const audio = responseAudio.current;
-      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
-        clearInterval(playbackMonitor.current);
-        setIsThinking(false);
-        setStatusMessage('');
-        setShowOptions(true);
+      const json = await res.json();
+      if (json?.question) {
+        setQuestion(json.question);
+        setStatusMessage('Thinking...');
+        const r = await fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: json.question })
+        });
+        const data = await r.json();
+        setPromptAudio(data.promptUrl);
+        setResponseAudio(data.audioUrl);
+        setStatusMessage('Playing');
+        playAudio(data.audioUrl);
+      } else {
+        setStatusMessage('Transcription failed');
       }
-    }, 500);
-
-    responseAudio.current.onended = () => {
-      clearInterval(playbackMonitor.current);
-      setIsThinking(false);
-      setStatusMessage('');
-      setShowOptions(true);
+      setIsRecording(false);
     };
-    
-      
-    playbackMonitor.current = setInterval(() => {
-      const audio = responseAudio.current;
-      if (audio && audio.paused && !audio.ended && !audio.seeking && audio.currentTime > 0) {
-        clearInterval(playbackMonitor.current);
-        setIsThinking(false);
-        setStatusMessage('');
-        setShowOptions(true);
-      }
-    }, 500);
 
-    responseAudio.current.onended = () => {
-      clearInterval(playbackMonitor.current);
-      setIsThinking(false);
-      setStatusMessage('');
-      setShowOptions(true);
-    };
-    
-    
-
-      mediaSource.addEventListener('sourceopen', () => {
-        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-        const reader = response.body.getReader();
-        const queue = [];
-
-        const pump = () => {
-          if (queue.length && !sourceBuffer.updating) {
-            sourceBuffer.appendBuffer(queue.shift());
-          }
-        };
-
-        sourceBuffer.addEventListener('updateend', pump);
-
-        const readLoop = () => {
-          reader.read().then(({ done, value }) => {
-            if (done) {
-              sourceBuffer.removeEventListener('updateend', pump);
-              mediaSource.endOfStream();
-              setIsThinking(false);
-              setStatusMessage('');
-              // setShowOptions moved to onended
-              return;
-            }
-            if (value) {
-              queue.push(value);
-              pump();
-            }
-            readLoop();
-          });
-        };
-
-        readLoop();
-      });
-    } catch (err) {
-      console.error(err);
-      setStatusMessage('❌ Streaming error');
-      setIsThinking(false);
-    }
+    mediaRecorder.start();
+    setTimeout(() => mediaRecorder.stop(), 4000);
   };
-
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-100 via-white to-indigo-50 px-4 py-8 flex flex-col items-center font-sans">
-      <h1 className="text-5xl font-bold text-center mb-6 text-indigo-900 drop-shadow-md">
-        💬 Talk with the Heroes of History
-      </h1>
-      <div className="flex justify-center mb-4">
-        <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-40 h-40 rounded-full border-4 border-indigo-300 shadow-xl" />
-      </div>
-      <p className="mb-4 text-gray-700 font-medium text-lg">{statusMessage}</p>
+    <div style={{ fontFamily: 'Arial, sans-serif', maxWidth: 600, margin: '2rem auto', padding: '1rem' }}>
+      <h1>🎙️ AI Podcast</h1>
+      <p><em>Status:</em> {statusMessage}</p>
 
-      
-      <div className="mb-4 flex gap-4">
-        {!isPlaying && storyPosition === 0 ? (
-          <button onClick={handlePlayPodcast} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
-            ▶️ Start Conversation
-          </button>
-        ) : (
-          isPlaying ? (
-            <button onClick={handlePausePodcast} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
-              ⏸️ Pause
-            </button>
-          ) : (
-            <button onClick={handlePlayPodcast} className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-semibold shadow-md transition transform hover:scale-105 active:scale-95">
-              ▶️ Resume
-            </button>
-          )
-        )}
-      </div>
-
-      <h2 className="text-xl font-semibold mb-4 text-gray-800">💡 Suggested Questions</h2>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 justify-items-center">
-        {suggestedQuestions.map((q, i) => (
-          <button
-            key={i}
-            onClick={() => handleAskStream(q)}
-            className="bg-white hover:bg-indigo-100 text-indigo-800 px-6 py-3 rounded-xl text-sm font-medium shadow transition transform hover:scale-105 active:scale-95 border border-indigo-300"
-          >
-            {q}
-          </button>
-        ))}
-      </div>
-
-
-      
-      <div className="mt-6">
-        <button
-          onClick={() => handleAskStream("What is your greatest invention?")}
-          className="bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
-        >
-          🧪 Test Streaming (Hardcoded)
+      <h3>Suggested Questions</h3>
+      {questions.map((q, i) => (
+        <button key={i} onClick={() => handlePrewritten(q)} disabled={isThinking} style={{ marginBottom: '0.5rem', display: 'block' }}>
+          {q}
         </button>
-    
-        <button
-          onClick={handleVoiceQuestion}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
-        >
-          🎤 Ask Your Own Question
-        </button>
-      </div>
+      ))}
 
-      {showOptions && (
-        <div className="mt-6 flex flex-col gap-4 items-center">
-          <button
-            onClick={handlePlayPodcast}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
-          >
-            ▶️ Back to Story
-          </button>
-          <button
-            onClick={handleVoiceQuestion}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-full shadow font-medium transition transform hover:scale-105 active:scale-95"
-          >
-            🎤 Ask Another Question
-          </button>
-        </div>
-      )}
+      <h3>Custom Question</h3>
+      <button onClick={startRecording} disabled={isThinking || isRecording}>
+        🎤 Record Your Question
+      </button>
 
-      <audio ref={podcastAudio} src="/podcast.mp3" preload="auto" playsInline />
-      <audio ref={responseAudio} preload="auto" playsInline controls style={{ display: 'none' }} />
-      <audio ref={promptAudio} src="/acknowledge.mp3" hidden preload="auto" playsInline />
-      <audio ref={choiceAudio} src="/choice.mp3" hidden preload="auto" playsInline />
-      <audio ref={unlockAudio} src="/unlock.mp3" hidden preload="auto" playsInline />
+      <audio ref={audioRef} controls style={{ width: '100%', marginTop: '2rem' }}></audio>
     </div>
   );
 }
