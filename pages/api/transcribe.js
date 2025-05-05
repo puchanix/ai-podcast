@@ -1,5 +1,5 @@
 
-import formidable from 'formidable';
+import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import FormData from 'form-data';
 
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const form = new formidable.IncomingForm({ multiples: false });
+  const form = new IncomingForm({ multiples: false });
 
   form.parse(req, async (err, fields, files) => {
     console.log('📥 Inside form.parse');
