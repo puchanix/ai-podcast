@@ -4,10 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 export default function Home() {
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
-  const mediaSourceRef = useRef(null);
   const audioRef = useRef(null);
-  const sourceBufferRef = useRef(null);
-  const queue = useRef([]);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
 
@@ -28,52 +25,30 @@ export default function Home() {
     }
   }, []);
 
-  const startStreaming = async (question) => {
+  const askPrewritten = async (question) => {
     setStatusMessage('Thinking...');
     setIsThinking(true);
 
-    if (!audioRef.current) return;
-    const mediaSource = new MediaSource();
-    mediaSourceRef.current = mediaSource;
-    audioRef.current.src = URL.createObjectURL(mediaSource);
-
-    mediaSource.addEventListener('sourceopen', async () => {
-      const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg');
-      sourceBufferRef.current = sourceBuffer;
-      sourceBuffer.mode = 'sequence';
-
-      const res = await fetch('/api/ask-stream', {
+    try {
+      const res = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question }),
       });
 
-      if (!res.body) {
-        setStatusMessage('Stream error');
+      const data = await res.json();
+      if (data?.audioUrl) {
+        audioRef.current.src = data.audioUrl;
+        audioRef.current.play();
+      } else {
+        setStatusMessage('No audio returned');
         setIsThinking(false);
-        return;
       }
-
-      const reader = res.body.getReader();
-
-      const pump = async () => {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          queue.current.push(value);
-          appendToBuffer();
-        }
-      };
-
-      pump();
-    });
-
-    audioRef.current.play();
-  };
-
-  const appendToBuffer = () => {
-    if (!sourceBufferRef.current || !queue.current.length || sourceBufferRef.current.updating) return;
-    sourceBufferRef.current.appendBuffer(queue.current.shift());
+    } catch (err) {
+      console.error('Ask error:', err);
+      setStatusMessage('Request failed');
+      setIsThinking(false);
+    }
   };
 
   const startRecording = async () => {
@@ -99,16 +74,11 @@ export default function Home() {
             body: formData,
           });
 
-          if (!res.ok) {
-            setStatusMessage('Transcription failed (bad response)');
-            return;
-          }
-
           const json = await res.json();
           if (json?.question) {
-            startStreaming(json.question);
+            askPrewritten(json.question);
           } else {
-            setStatusMessage('Transcription failed (no question)');
+            setStatusMessage('Transcription failed');
           }
         } catch (err) {
           console.error('Transcription fetch error:', err);
@@ -117,27 +87,28 @@ export default function Home() {
       };
 
       mediaRecorder.start();
-      setTimeout(() => mediaRecorder.stop(), 4000); // Record for 4 seconds
+      setTimeout(() => mediaRecorder.stop(), 4000); // 4s recording
     } catch (err) {
-      console.error('Recording error:', err);
-      setStatusMessage('Recording error');
+      console.error('Mic error:', err);
+      setStatusMessage('Mic permission error');
     }
   };
 
   return (
     <div>
-      <h1>🎙️ AI Podcast - Streaming</h1>
+      <h1>🎙️ AI Podcast</h1>
       <p>Status: {statusMessage}</p>
+
       <h3>Prewritten Questions</h3>
       {suggestedQuestions.map((q, i) => (
-        <button key={i} disabled={isThinking} onClick={() => startStreaming(q)}>
+        <button key={i} disabled={isThinking} onClick={() => askPrewritten(q)}>
           {q}
         </button>
       ))}
+
       <h3>Custom Question</h3>
-      <button disabled={isThinking} onClick={startRecording}>
-        🎤 Ask with Microphone
-      </button>
+      <button disabled={isThinking} onClick={startRecording}>🎤 Ask with Microphone</button>
+
       <audio ref={audioRef} controls></audio>
     </div>
   );
