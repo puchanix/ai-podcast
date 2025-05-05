@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Step 1: Get GPT response
+    // Step 1: Call GPT-4 without streaming
     const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -39,10 +39,10 @@ export default async function handler(req, res) {
     const gptData = await gptRes.json();
     const answer = gptData.choices?.[0]?.message?.content;
 
-    if (!answer) throw new Error("GPT response failed");
+    if (!answer) throw new Error("GPT-4 response missing");
 
-    // Step 2: Pipe ElevenLabs stream response
-    const elevenRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
+    // Step 2: Call ElevenLabs stream endpoint
+    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
       method: "POST",
       headers: {
         "xi-api-key": ELEVENLABS_API_KEY,
@@ -58,14 +58,12 @@ export default async function handler(req, res) {
       })
     });
 
-    if (!elevenRes.ok || !elevenRes.body) {
-      throw new Error("Failed to get audio stream");
-    }
+    if (!ttsRes.ok || !ttsRes.body) throw new Error("ElevenLabs streaming failed");
 
     res.setHeader("Content-Type", "audio/mpeg");
-    elevenRes.body.pipe(res);
+    ttsRes.body.pipe(res);
   } catch (err) {
-    console.error("ask-stream error:", err);
+    console.error("fast-stream error:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 }
