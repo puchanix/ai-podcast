@@ -22,26 +22,36 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Step 1: Call GPT-4 without streaming
+    const prompt = [
+      {
+        role: "system",
+        content: "You are Leonardo da Vinci hosting a podcast. Answer briefly, with charm and wit, in 1–2 sentences."
+      },
+      {
+        role: "user",
+        content: question
+      }
+    ];
+
     const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         model: "gpt-4",
-        messages: [{ role: "user", content: question }],
+        messages: prompt,
+        max_tokens: 100,
         temperature: 0.7
       }),
     });
 
     const gptData = await gptRes.json();
-    const answer = gptData.choices?.[0]?.message?.content;
+    const answer = gptData.choices?.[0]?.message?.content?.trim();
 
-    if (!answer) throw new Error("GPT-4 response missing");
+    if (!answer) throw new Error("GPT response missing");
 
-    // Step 2: Call ElevenLabs stream endpoint
     const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
       method: "POST",
       headers: {
@@ -55,15 +65,15 @@ export default async function handler(req, res) {
           stability: 0.4,
           similarity_boost: 0.8
         }
-      })
+      }),
     });
 
-    if (!ttsRes.ok || !ttsRes.body) throw new Error("ElevenLabs streaming failed");
+    if (!ttsRes.ok || !ttsRes.body) throw new Error("ElevenLabs stream failed");
 
     res.setHeader("Content-Type", "audio/mpeg");
     ttsRes.body.pipe(res);
   } catch (err) {
-    console.error("fast-stream error:", err);
+    console.error("ask-stream error:", err);
     res.status(500).json({ error: "Internal Server Error" });
   }
 }
