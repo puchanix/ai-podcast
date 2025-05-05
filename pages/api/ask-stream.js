@@ -1,88 +1,55 @@
 
-export const config = {
-  runtime: 'nodejs',
-};
-
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const ELEVENLABS_API_KEY = "sk_800f5bb72970df24eaf8b2d3c8c125ba4e5b3980078bc7c0";
-const VOICE_ID = "AZnmrjjEOG9CofMyOxaA";
-
 export default async function handler(req, res) {
-  const { question } = req.method === 'POST'
-    ? await new Promise((resolve, reject) => {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', () => resolve(JSON.parse(body)));
-        req.on('error', reject);
-      })
-    : req.query;
+  const question = req.query.question;
+  console.log("🤖 Da Vinci received question:", question); // ✅
 
   if (!question) {
-    console.error("Missing question");
-    return res.status(400).json({ error: 'Missing question' });
+    return res.status(400).send("No question provided");
   }
 
-  console.log("Received question:", question);
+  const prompt = `
+You are Leonardo da Vinci. Answer the following question as if you were him. Be curious, poetic, and insightful. Keep it under 100 words.
 
-  try {
-    const prompt = [
-      {
-        role: "system",
-        content: "You are Leonardo da Vinci hosting a podcast. Answer briefly, with charm and wit, in 1–2 sentences."
-      },
-      {
-        role: "user",
-        content: question
-      }
-    ];
+Q: ${question}
+A:`;
 
-    const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages: prompt,
-        max_tokens: 100,
-        temperature: 0.7
-      }),
-    });
+  const response = await fetch("https://api.openai.com/v1/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "text-davinci-003",
+      prompt,
+      temperature: 0.7,
+      max_tokens: 200,
+    }),
+  });
 
-    const gptData = await gptRes.json();
-    console.log("GPT raw response:", JSON.stringify(gptData));
+  const data = await response.json();
+  const answer = data.choices?.[0]?.text?.trim();
 
-    const answer = gptData.choices?.[0]?.message?.content?.trim();
-    console.log("GPT answer:", answer);
-
-    if (!answer) throw new Error("GPT response missing");
-
-    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
-      method: "POST",
-      headers: {
-        "xi-api-key": ELEVENLABS_API_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        text: answer,
-        model_id: "eleven_monolingual_v1",
-        voice_settings: {
-          stability: 0.4,
-          similarity_boost: 0.8
-        }
-      }),
-    });
-
-    console.log("ElevenLabs status:", ttsRes.status);
-
-    if (!ttsRes.ok || !ttsRes.body) throw new Error("ElevenLabs stream failed");
-
-    const audioBuffer = await ttsRes.arrayBuffer();
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.send(Buffer.from(audioBuffer));
-  } catch (err) {
-    console.error("ask-stream error:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+  if (!answer) {
+    console.error("❌ No answer returned by GPT");
+    return res.status(500).send("No answer");
   }
+
+  console.log("🎯 Da Vinci answer:", answer);
+
+  const ttsRes = await fetch("https://api.elevenlabs.io/v1/text-to-speech/YOUR_VOICE_ID/stream", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "xi-api-key": process.env.ELEVENLABS_API_KEY,
+    },
+    body: JSON.stringify({
+      text: answer,
+      voice_settings: { stability: 0.3, similarity_boost: 0.8 },
+    }),
+  });
+
+  res.setHeader("Content-Type", "audio/mpeg");
+  ttsRes.body.pipe(res);
 }
+
