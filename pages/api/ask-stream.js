@@ -18,8 +18,11 @@ export default async function handler(req, res) {
     : req.query;
 
   if (!question) {
+    console.error("Missing question");
     return res.status(400).json({ error: 'Missing question' });
   }
+
+  console.log("Received question:", question);
 
   try {
     const prompt = [
@@ -48,7 +51,10 @@ export default async function handler(req, res) {
     });
 
     const gptData = await gptRes.json();
+    console.log("GPT raw response:", JSON.stringify(gptData));
+
     const answer = gptData.choices?.[0]?.message?.content?.trim();
+    console.log("GPT answer:", answer);
 
     if (!answer) throw new Error("GPT response missing");
 
@@ -67,6 +73,8 @@ export default async function handler(req, res) {
         }
       }),
     });
+
+    console.log("ElevenLabs status:", ttsRes.status);
 
     if (!ttsRes.ok || !ttsRes.body) throw new Error("ElevenLabs stream failed");
 
