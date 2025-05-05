@@ -76,7 +76,6 @@ export default function Home() {
     setStatusMessage('🤔 Thinking...');
     setShowOptions(false);
 
-    // STREAMING VERSION for suggested questions only
     if (suggestedQuestions.includes(question)) {
       const mediaSource = new MediaSource();
       responseAudio.current.src = URL.createObjectURL(mediaSource);
@@ -186,8 +185,10 @@ export default function Home() {
         ))}
       </div>
       <audio ref={podcastAudio} hidden preload="auto" src="/intro.mp3"></audio>
-      <audio ref={responseAudio} controls style={{ width: '100%' }} />
-      <audio ref={promptAudio} hidden preload="auto" />
-      <audio ref={choiceAudio} hidden preload="auto" />
-      <audio ref={unlockAudio} hidden preload="auto" src="/silent.mp3" />
+      <audio ref={responseAudio} controls style={{ width: '100%' }}></audio>
+      <audio ref={promptAudio} hidden preload="auto"></audio>
+      <audio ref={choiceAudio} hidden preload="auto"></audio>
+      <audio ref={unlockAudio} hidden preload="auto" src="/silent.mp3"></audio>
     </div>
+  );
+}
