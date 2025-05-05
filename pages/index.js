@@ -120,21 +120,39 @@ export default function Home() {
   };
 
   return (
-    <div>
-      <h1>🎙️ AI Podcast</h1>
-      <p>Status: {statusMessage}</p>
+    <div style={{ fontFamily: 'Arial, sans-serif', maxWidth: 600, margin: '2rem auto', padding: '1rem' }}>
+      <h1 style={{ fontSize: '1.8rem' }}>🎙️ AI Podcast</h1>
 
-      <h3>Prewritten Questions</h3>
-      {suggestedQuestions.map((q, i) => (
-        <button key={i} disabled={isThinking} onClick={() => startStreaming(q)}>
-          {q}
+      <p style={{ fontStyle: 'italic', marginBottom: '1.5rem' }}>Status: {statusMessage}</p>
+
+      <section style={{ marginBottom: '2rem' }}>
+        <h2 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Prewritten Questions</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {suggestedQuestions.map((q, i) => (
+            <button
+              key={i}
+              disabled={isThinking}
+              onClick={() => startStreaming(q)}
+              style={{ padding: '0.75rem', fontSize: '1rem', borderRadius: 6, border: '1px solid #ccc', background: '#f2f2f2' }}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section style={{ marginBottom: '2rem' }}>
+        <h2 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Custom Question</h2>
+        <button
+          disabled={isThinking}
+          onClick={startRecording}
+          style={{ padding: '0.75rem 1rem', fontSize: '1rem', borderRadius: 6, background: '#0088cc', color: 'white', border: 'none' }}
+        >
+          🎤 Ask with Microphone
         </button>
-      ))}
+      </section>
 
-      <h3>Custom Question</h3>
-      <button disabled={isThinking} onClick={startRecording}>🎤 Ask with Microphone</button>
-
-      <audio ref={audioRef} controls></audio>
+      <audio ref={audioRef} controls style={{ width: '100%' }}></audio>
     </div>
   );
 }
