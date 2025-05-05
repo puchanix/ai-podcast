@@ -1,10 +1,12 @@
 
 export default async function handler(req, res) {
   const question = req.query.question;
-  console.log("🤖 Da Vinci received question:", question); // ✅
 
-  if (!question) {
-    return res.status(400).send("No question provided");
+  console.log("🤖 Da Vinci received question:", question);
+
+  if (!question || question.trim() === "undefined") {
+    console.warn("⚠️ Missing or empty question, aborting GPT call");
+    return res.status(400).send("Missing question");
   }
 
   const prompt = `
