@@ -1,12 +1,20 @@
 
 import formidable from 'formidable';
 import fs from 'fs';
+import { Readable } from 'stream';
 
 export const config = {
   api: {
     bodyParser: false,
   },
 };
+
+function bufferToStream(buffer) {
+  const stream = new Readable();
+  stream.push(buffer);
+  stream.push(null);
+  return stream;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -28,6 +36,7 @@ export default async function handler(req, res) {
       }
 
       const fileData = fs.readFileSync(file.filepath);
+
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
@@ -46,8 +55,8 @@ export default async function handler(req, res) {
         throw new Error(`OpenAI API error: ${errorText}`);
       }
 
-      const transcription = await response.json();
-      res.status(200).json({ transcript: transcription.text });
+      const result = await response.json();
+      res.status(200).json({ question: result.text });
     } catch (error) {
       console.error('Transcription error:', error);
       res.status(500).json({ error: 'Failed to transcribe audio' });
