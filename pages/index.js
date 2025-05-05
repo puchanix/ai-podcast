@@ -213,6 +213,9 @@ export default function Home() {
             🎤 Ask with your voice
           </button>
         )}
+        {isRecording && (
+          <div className="text-red-600 font-semibold animate-pulse">🔴 Recording...</div>
+        )}
       </div>
 
       {/* 🎧 Podcast Controls */}
@@ -256,6 +259,7 @@ export default function Home() {
     </div>
   );
 }
+
 
 
 
