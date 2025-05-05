@@ -78,8 +78,9 @@ export default async function handler(req, res) {
 
     if (!ttsRes.ok || !ttsRes.body) throw new Error("ElevenLabs stream failed");
 
+    const audioBuffer = await ttsRes.arrayBuffer();
     res.setHeader("Content-Type", "audio/mpeg");
-    ttsRes.body.pipe(res);
+    res.send(Buffer.from(audioBuffer));
   } catch (err) {
     console.error("ask-stream error:", err);
     res.status(500).json({ error: "Internal Server Error" });
