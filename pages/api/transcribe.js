@@ -56,10 +56,13 @@ export default async function handler(req, res) {
       }
 
       const result = await response.json();
-      res.status(200).json({ question: result.text });
+
+      // ✅ Fixed line: match frontend expectation
+      res.status(200).json({ text: result.text });
     } catch (error) {
       console.error('Transcription error:', error);
       res.status(500).json({ error: 'Failed to transcribe audio' });
     }
   });
 }
+
