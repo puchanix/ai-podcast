@@ -1,7 +1,7 @@
 
-const formidable = require("formidable");
-const fs = require("fs");
-const FormData = require("form-data");
+import { IncomingForm } from "formidable";
+import fs from "fs";
+import FormData from "form-data";
 
 export const config = {
   api: {
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const form = new formidable.IncomingForm();
+  const form = new IncomingForm();
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
@@ -24,14 +24,14 @@ export default async function handler(req, res) {
 
     const file = files.audio;
 
-    if (!file || !file.path) {
+    if (!file || !file.filepath) {
       console.error("❌ File missing or invalid:", file);
       return res.status(400).json({ error: "Invalid file input" });
     }
 
     try {
       const formData = new FormData();
-      formData.append("file", fs.createReadStream(file.path), {
+      formData.append("file", fs.createReadStream(file.filepath), {
         filename: "input.webm",
         contentType: "audio/webm",
       });
