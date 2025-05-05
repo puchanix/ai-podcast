@@ -1,81 +1,71 @@
 
-import { OpenAI } from 'openai';
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const VOICE_ID = process.env.ELEVENLABS_VOICE_ID;
-
 export const config = {
-  api: {
-    responseLimit: false,
-  },
+  runtime: 'nodejs',
 };
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).end('Method Not Allowed');
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ELEVENLABS_API_KEY = "sk_800f5bb72970df24eaf8b2d3c8c125ba4e5b3980078bc7c0";
+const VOICE_ID = "AZnmrjjEOG9CofMyOxaA";
 
-  const { question } = req.body;
-  if (!question) return res.status(400).end('Missing question');
+export default async function handler(req, res) {
+  const { question } = req.method === 'POST'
+    ? await new Promise((resolve, reject) => {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => resolve(JSON.parse(body)));
+        req.on('error', reject);
+      })
+    : req.query;
+
+  if (!question) {
+    return res.status(400).json({ error: 'Missing question' });
+  }
 
   try {
-    let fullText = '';
-
-    const stream = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are Leonardo da Vinci. Respond to each question as he would, in first person, with poetic curiosity, scientific depth, and Renaissance flair. Keep your answers under 100 words.',
-        },
-        { role: 'user', content: question },
-      ],
-      temperature: 0.8,
-      stream: true,
-    });
-
-    for await (const chunk of stream) {
-      const delta = chunk.choices?.[0]?.delta?.content;
-      if (delta) {
-        fullText += delta;
-      }
-    }
-
-    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
-      method: 'POST',
+    // Step 1: Get GPT response
+    const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
       headers: {
-        'xi-api-key': ELEVENLABS_API_KEY,
-        'Content-Type': 'application/json',
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        text: fullText,
-        model_id: 'eleven_monolingual_v1',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: question }],
+        temperature: 0.7
       }),
     });
 
-    if (!ttsRes.ok || !ttsRes.body) {
-      const error = await ttsRes.text();
-      console.error('TTS streaming error:', error);
-      return res.status(500).end('TTS streaming failed');
+    const gptData = await gptRes.json();
+    const answer = gptData.choices?.[0]?.message?.content;
+
+    if (!answer) throw new Error("GPT response failed");
+
+    // Step 2: Pipe ElevenLabs stream response
+    const elevenRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
+      method: "POST",
+      headers: {
+        "xi-api-key": ELEVENLABS_API_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        text: answer,
+        model_id: "eleven_monolingual_v1",
+        voice_settings: {
+          stability: 0.4,
+          similarity_boost: 0.8
+        }
+      })
+    });
+
+    if (!elevenRes.ok || !elevenRes.body) {
+      throw new Error("Failed to get audio stream");
     }
 
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Transfer-Encoding', 'chunked');
-
-    const reader = ttsRes.body.getReader();
-
-    const pump = async () => {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        res.write(Buffer.from(value));
-      }
-      res.end();
-    };
-
-    await pump();
+    res.setHeader("Content-Type", "audio/mpeg");
+    elevenRes.body.pipe(res);
   } catch (err) {
-    console.error('Stream error:', err);
-    res.status(500).end('Internal Server Error');
+    console.error("ask-stream error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 }
