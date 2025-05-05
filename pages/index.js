@@ -125,7 +125,7 @@ export default function Home() {
       if (!audioData.audioUrl) throw new Error('No audio response');
 
       responseAudio.current.src = audioData.audioUrl;
-      playAudioFromAskStream(statusMessage);
+      playAudioFromAskStream(question);
       setStatusMessage('🎙️ Da Vinci replies');
       responseAudio.current.onended = () => {
         setIsThinking(false);
