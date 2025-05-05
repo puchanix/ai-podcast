@@ -171,21 +171,34 @@ export default function Home() {
   return (
     <div style={{ fontFamily: 'Arial', maxWidth: 600, margin: 'auto', padding: 20 }}>
       <h1>🎧 AI Podcast</h1>
-      <p>{statusMessage}</p>
-      <div style={{ margin: '1rem 0' }}>
-        <button onClick={handlePlayPodcast} disabled={isPlaying}>▶️ Play</button>
+      <p style={{ fontStyle: 'italic', marginBottom: '1rem' }}>{statusMessage}</p>
+
+      <section style={{ marginBottom: '2rem' }}>
+        <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>🎙️ Podcast Playback</h2>
+        <button onClick={handlePlayPodcast} disabled={isPlaying} style={{ marginRight: 10 }}>▶️ Play</button>
         <button onClick={handlePausePodcast}>⏸️ Pause</button>
-        <button onClick={startRecording} disabled={isThinking}>🎤 Ask with Microphone</button>
-      </div>
-      <div style={{ margin: '1rem 0' }}>
+      </section>
+
+      <section style={{ marginBottom: '2rem' }}>
+        <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>💬 Suggested Questions</h2>
         {suggestedQuestions.map((q, i) => (
-          <button key={i} onClick={() => handleAsk(q)} disabled={isThinking} style={{ display: 'block', marginBottom: 8 }}>
+          <button
+            key={i}
+            onClick={() => handleAsk(q)}
+            disabled={isThinking}
+            style={{ display: 'block', width: '100%', marginBottom: 8, padding: '0.5rem', fontSize: '1rem' }}>
             {q}
           </button>
         ))}
-      </div>
+      </section>
+
+      <section style={{ marginBottom: '2rem' }}>
+        <h2 style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>🎤 Ask a Custom Question</h2>
+        <button onClick={startRecording} disabled={isThinking} style={{ padding: '0.75rem 1.25rem', fontSize: '1rem' }}>Record</button>
+      </section>
+
       <audio ref={podcastAudio} hidden preload="auto" src="/intro.mp3"></audio>
-      <audio ref={responseAudio} controls style={{ width: '100%' }}></audio>
+      <audio ref={responseAudio} controls style={{ width: '100%', marginTop: '1rem' }}></audio>
       <audio ref={promptAudio} hidden preload="auto"></audio>
       <audio ref={choiceAudio} hidden preload="auto"></audio>
       <audio ref={unlockAudio} hidden preload="auto" src="/silent.mp3"></audio>
