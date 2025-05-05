@@ -9,11 +9,13 @@ export default function Home() {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [transcript, setTranscript] = useState("");
   const [storyMode, setStoryMode] = useState(false);
+  const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
 
   const promptAudio = useRef(null);
   const choiceAudio = useRef(null);
   const unlockAudio = useRef(null);
   const storyAudio = useRef(null);
+  const podcastAudio = useRef(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -97,6 +99,19 @@ export default function Home() {
     setMediaRecorder(null);
   };
 
+  const togglePodcast = () => {
+    const audio = podcastAudio.current;
+    if (!audio) return;
+
+    if (audio.paused) {
+      audio.play();
+      setIsPodcastPlaying(true);
+    } else {
+      audio.pause();
+      setIsPodcastPlaying(false);
+    }
+  };
+
   const cannedQuestions = [
     "What is creativity?",
     "How do you stay inspired?",
@@ -151,9 +166,35 @@ export default function Home() {
           </button>
         )}
       </div>
+
+      {/* 🎧 Podcast Controls */}
+      <div className="mt-4 space-y-2">
+        <button
+          onClick={() => {
+            const audio = podcastAudio.current;
+            if (audio) {
+              audio.currentTime = 0;
+              audio.play();
+              setIsPodcastPlaying(true);
+            }
+          }}
+          className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded shadow"
+        >
+          ▶️ Start Podcast
+        </button>
+        <button
+          onClick={togglePodcast}
+          className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded shadow"
+        >
+          {isPodcastPlaying ? "⏸️ Pause" : "⏯️ Resume"}
+        </button>
+        <audio ref={podcastAudio} hidden preload="auto" src="/podcast.mp3" />
+      </div>
+
       <audio ref={promptAudio} hidden preload="auto" />
       <audio ref={choiceAudio} hidden preload="auto" />
       <audio ref={unlockAudio} hidden preload="auto" src="/silent.mp3" />
     </div>
   );
 }
+
