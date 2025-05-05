@@ -11,7 +11,7 @@ export default function Home() {
   const [storyMode, setStoryMode] = useState(false);
   const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
-  const [podcastWasPlaying, setPodcastWasPlaying] = useState(false); // Track pause by Da Vinci
+  const [podcastWasPlaying, setPodcastWasPlaying] = useState(false);
 
   const promptAudio = useRef(null);
   const choiceAudio = useRef(null);
@@ -45,14 +45,12 @@ export default function Home() {
   const handleAsk = async (question) => {
     const podcast = podcastAudio.current;
 
-    // Pause podcast if playing, but remember to not resume automatically
     if (podcast && !podcast.paused) {
       podcast.pause();
       setIsPodcastPlaying(false);
       setPodcastWasPlaying(true);
     }
 
-    // Stop current Da Vinci answer
     if (daVinciAudio.current) {
       daVinciAudio.current.pause();
       daVinciAudio.current.currentTime = 0;
@@ -71,7 +69,6 @@ export default function Home() {
         setIsThinking(false);
         setStatusMessage("");
         setShowOptions(true);
-        // Podcast resumes ONLY on manual resume
       };
 
       audio.onerror = (err) => {
@@ -200,6 +197,12 @@ export default function Home() {
         {!hasStarted && (
           <button
             onClick={() => {
+              // Interrupt Da Vinci if speaking
+              if (daVinciAudio.current) {
+                daVinciAudio.current.pause();
+                daVinciAudio.current.currentTime = 0;
+              }
+
               const audio = podcastAudio.current;
               if (audio) {
                 audio.currentTime = 0;
@@ -231,4 +234,5 @@ export default function Home() {
     </div>
   );
 }
+
 
