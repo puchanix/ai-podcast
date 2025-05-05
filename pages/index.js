@@ -10,12 +10,14 @@ export default function Home() {
   const [transcript, setTranscript] = useState("");
   const [storyMode, setStoryMode] = useState(false);
   const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
 
   const promptAudio = useRef(null);
   const choiceAudio = useRef(null);
   const unlockAudio = useRef(null);
   const storyAudio = useRef(null);
   const podcastAudio = useRef(null);
+  const daVinciAudio = useRef(null); // holds Da Vinci's answer playback
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -29,7 +31,7 @@ export default function Home() {
   }, []);
 
   const stopAllAudio = () => {
-    [storyAudio.current, promptAudio.current, choiceAudio.current, unlockAudio.current].forEach(
+    [storyAudio.current, promptAudio.current, choiceAudio.current, unlockAudio.current, daVinciAudio.current].forEach(
       (audio) => {
         if (audio) {
           audio.pause();
@@ -47,6 +49,7 @@ export default function Home() {
 
     try {
       const audio = new Audio("/api/ask-stream?question=" + encodeURIComponent(question));
+      daVinciAudio.current = audio;
       audio.play();
       audio.onended = () => {
         setIsThinking(false);
@@ -100,14 +103,18 @@ export default function Home() {
   };
 
   const togglePodcast = () => {
-    const audio = podcastAudio.current;
-    if (!audio) return;
+    const podcast = podcastAudio.current;
+    const answer = daVinciAudio.current;
 
-    if (audio.paused) {
-      audio.play();
+    if (!podcast) return;
+
+    if (podcast.paused) {
+      podcast.play();
+      if (answer && answer.paused) answer.play();
       setIsPodcastPlaying(true);
     } else {
-      audio.pause();
+      podcast.pause();
+      if (answer && !answer.paused) answer.pause();
       setIsPodcastPlaying(false);
     }
   };
@@ -120,8 +127,8 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-100 to-yellow-300 flex flex-col items-center justify-center text-center p-4 space-y-6">
-      <h1 className="text-4xl font-bold text-gray-800">🎙️ Talk to Da Vinci</h1>
-      <img src="/davinci.png" alt="Da Vinci" className="w-48 h-48 rounded-full shadow-lg" />
+      <h1 className="text-4xl font-bold text-gray-800">🎙️ Talk to Leonardo</h1>
+      <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-48 h-48 rounded-full shadow-lg" />
       {isThinking && <p className="text-blue-600 font-medium">{statusMessage}</p>}
       {storyMode && (
         <div>
@@ -169,25 +176,30 @@ export default function Home() {
 
       {/* 🎧 Podcast Controls */}
       <div className="mt-4 space-y-2">
-        <button
-          onClick={() => {
-            const audio = podcastAudio.current;
-            if (audio) {
-              audio.currentTime = 0;
-              audio.play();
-              setIsPodcastPlaying(true);
-            }
-          }}
-          className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded shadow"
-        >
-          ▶️ Start Podcast
-        </button>
-        <button
-          onClick={togglePodcast}
-          className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded shadow"
-        >
-          {isPodcastPlaying ? "⏸️ Pause" : "⏯️ Resume"}
-        </button>
+        {!hasStarted && (
+          <button
+            onClick={() => {
+              const audio = podcastAudio.current;
+              if (audio) {
+                audio.currentTime = 0;
+                audio.play();
+                setIsPodcastPlaying(true);
+                setHasStarted(true);
+              }
+            }}
+            className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded shadow"
+          >
+            ▶️ Start
+          </button>
+        )}
+        {hasStarted && (
+          <button
+            onClick={togglePodcast}
+            className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded shadow"
+          >
+            {isPodcastPlaying ? "⏸️ Pause" : "⏯️ Resume"}
+          </button>
+        )}
         <audio ref={podcastAudio} hidden preload="auto" src="/podcast.mp3" />
       </div>
 
