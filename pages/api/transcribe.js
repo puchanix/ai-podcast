@@ -29,14 +29,26 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'No audio file provided' });
       }
 
+      console.log('🔍 Received audio file:', {
+        originalFilename: file.originalFilename,
+        mimetype: file.mimetype,
+        size: file.size,
+        filepath: file.filepath,
+      });
+
       const formData = new FormData();
-      formData.append('file', fs.createReadStream(file.filepath), {
+      const fileStream = fs.createReadStream(file.filepath);
+
+      formData.append('file', fileStream, {
         filename: 'recording.webm',
         contentType: 'audio/webm',
       });
       formData.append('model', 'whisper-1');
 
-      const openaiRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      console.log('📤 Sending to OpenAI...');
+      console.log('📦 Headers:', formData.getHeaders());
+
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -45,19 +57,20 @@ export default async function handler(req, res) {
         body: formData,
       });
 
-      const raw = await openaiRes.text();
-      let result;
+      const raw = await response.text();
+      console.log('📥 Raw response from OpenAI:', raw);
 
+      let result;
       try {
         result = JSON.parse(raw);
       } catch (jsonErr) {
         console.error('❌ Failed to parse OpenAI JSON:', raw);
-        throw new Error('OpenAI did not return valid JSON');
+        return res.status(502).json({ error: 'Invalid response from OpenAI Whisper API' });
       }
 
-      if (!openaiRes.ok) {
+      if (!response.ok) {
         console.error('❌ OpenAI API error:', result);
-        return res.status(openaiRes.status).json({ error: result.error || 'OpenAI API error' });
+        return res.status(response.status).json({ error: result.error || 'OpenAI API error' });
       }
 
       console.log('✅ OpenAI Whisper success:', result);
