@@ -31,9 +31,9 @@ export default async function handler(req, res) {
 
     const file = files.audio;
 
-    if (!file || !file.filepath) {
-      console.error("❌ Missing or invalid file:", file);
-      return res.status(400).json({ error: "No valid audio file or path provided" });
+    if (!file?.filepath || typeof file.filepath !== "string") {
+      console.error("❌ Filepath missing or invalid:", file);
+      return res.status(400).json({ error: "Invalid file path" });
     }
 
     try {
@@ -73,6 +73,11 @@ export default async function handler(req, res) {
         return res.status(response.status).json({ error: result.error || "OpenAI API error" });
       }
 
+      if (!result.text) {
+        console.error("❌ Whisper returned no transcription text:", result);
+        return res.status(502).json({ error: "No text returned from Whisper" });
+      }
+
       console.log("✅ Transcription successful:", result.text);
       res.status(200).json({ text: result.text });
     } catch (error) {
@@ -81,6 +86,7 @@ export default async function handler(req, res) {
     }
   });
 }
+
 
 
 
