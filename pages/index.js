@@ -20,12 +20,9 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const prompt = new Audio("/prompt.mp3");
-      const choice = new Audio("/choice.mp3");
-      const unlock = new Audio("/unlock.mp3");
-      promptAudio.current = prompt;
-      choiceAudio.current = choice;
-      unlockAudio.current = unlock;
+      promptAudio.current = new Audio("/prompt.mp3");
+      choiceAudio.current = new Audio("/choice.mp3");
+      unlockAudio.current = new Audio("/unlock.mp3");
     }
   }, []);
 
@@ -41,8 +38,12 @@ export default function Home() {
   };
 
   const handleAsk = async (question) => {
-    const podcast = podcastAudio.current;
+    if (!question || question.trim() === "") {
+      setStatusMessage("⚠️ Could not understand your voice.");
+      return;
+    }
 
+    const podcast = podcastAudio.current;
     if (podcast && !podcast.paused) {
       podcast.pause();
       setIsPodcastPlaying(false);
@@ -58,7 +59,8 @@ export default function Home() {
     setStatusMessage("🤖 Thinking...");
 
     try {
-      const audio = new Audio("/api/ask-stream?question=" + encodeURIComponent(question));
+      const encoded = encodeURIComponent(question);
+      const audio = new Audio("/api/ask-stream?question=" + encoded);
       daVinciAudio.current = audio;
       audio.play();
 
@@ -81,36 +83,69 @@ export default function Home() {
 
   const startRecording = async () => {
     setIsRecording(true);
+    setStatusMessage("🎤 Recording...");
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const recorder = new MediaRecorder(stream);
     let chunks = [];
 
     recorder.ondataavailable = (e) => chunks.push(e.data);
+
     recorder.onstop = async () => {
+      setStatusMessage("📝 Transcribing...");
       const blob = new Blob(chunks, { type: "audio/webm" });
       const formData = new FormData();
       formData.append("audio", blob, "input.webm");
 
-      setStatusMessage("📝 Transcribing...");
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      });
+      try {
+        const response = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await response.json();
+        const transcribed = data.text?.trim();
+        console.log("🎤 Transcribed question:", transcribed);
 
-      const data = await response.json();
-      const transcribed = data.text?.trim();
-      setTranscript(transcribed || "");
-      setIsRecording(false);
-      handleAsk(transcribed);
+        setTranscript(transcribed || "");
+        setIsRecording(false);
+        setStatusMessage("");
+        handleAsk(transcribed);
+      } catch (err) {
+        console.error("❌ Transcription failed:", err);
+        setIsRecording(false);
+        setStatusMessage("❌ Transcription failed");
+      }
     };
 
     recorder.start();
     setMediaRecorder(recorder);
-  };
 
-  const stopRecording = () => {
-    mediaRecorder.stop();
-    setMediaRecorder(null);
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser();
+    source.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let silenceStart = null;
+
+    const checkSilence = () => {
+      analyser.getByteFrequencyData(data);
+      const volume = data.reduce((a, b) => a + b) / data.length;
+
+      if (volume < 5) {
+        if (!silenceStart) silenceStart = Date.now();
+        else if (Date.now() - silenceStart > 1500) {
+          recorder.stop();
+          audioCtx.close();
+          return;
+        }
+      } else {
+        silenceStart = null;
+      }
+
+      requestAnimationFrame(checkSilence);
+    };
+
+    requestAnimationFrame(checkSilence);
   };
 
   const togglePodcast = () => {
@@ -143,22 +178,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-b from-yellow-100 to-yellow-300 flex flex-col items-center justify-center text-center p-4 space-y-6">
       <h1 className="text-4xl font-bold text-gray-800">🎙️ Talk to Leonardo</h1>
       <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-48 h-48 rounded-full shadow-lg" />
-      {isThinking && <p className="text-blue-600 font-medium">{statusMessage}</p>}
-      {storyMode && (
-        <div>
-          <button
-            onClick={() => {
-              stopAllAudio();
-              const audio = new Audio("/story.mp3");
-              storyAudio.current = audio;
-              audio.play();
-            }}
-            className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded shadow"
-          >
-            ▶️ Play Story
-          </button>
-        </div>
-      )}
+      {statusMessage && <p className="text-blue-600 font-medium">{statusMessage}</p>}
       <div className="space-y-4">
         {cannedQuestions.map((q, index) => (
           <button
@@ -170,25 +190,18 @@ export default function Home() {
           </button>
         ))}
       </div>
+
       <div className="mt-6">
-        {!isRecording ? (
+        {!isRecording && !isThinking && (
           <button
             onClick={startRecording}
             className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow"
           >
             🎤 Ask with your voice
           </button>
-        ) : (
-          <button
-            onClick={stopRecording}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow"
-          >
-            ⏹️ Stop Recording
-          </button>
         )}
       </div>
 
-      {/* 🎧 Podcast Controls */}
       <div className="mt-4 space-y-2">
         {!hasStarted && (
           <button
