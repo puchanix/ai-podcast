@@ -82,36 +82,69 @@ export default function Home() {
 
   const startRecording = async () => {
     setIsRecording(true);
+    setStatusMessage("");
+
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const recorder = new MediaRecorder(stream);
     let chunks = [];
 
     recorder.ondataavailable = (e) => chunks.push(e.data);
+
     recorder.onstop = async () => {
       const blob = new Blob(chunks, { type: "audio/webm" });
       const formData = new FormData();
       formData.append("audio", blob, "input.webm");
 
       setStatusMessage("📝 Transcribing...");
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      });
+      try {
+        const response = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        });
 
-      const data = await response.json();
-      const transcribed = data.text?.trim();
-      setTranscript(transcribed || "");
-      setIsRecording(false);
-      handleAsk(transcribed);
+        const data = await response.json();
+        const transcribed = data.text?.trim();
+        setTranscript(transcribed || "");
+        setIsRecording(false);
+        setStatusMessage("");
+        handleAsk(transcribed);
+      } catch (err) {
+        console.error("Transcription failed", err);
+        setIsRecording(false);
+        setStatusMessage("❌ Transcription failed");
+      }
     };
 
     recorder.start();
     setMediaRecorder(recorder);
-  };
 
-  const stopRecording = () => {
-    mediaRecorder.stop();
-    setMediaRecorder(null);
+    // 🔇 Silence detection
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser();
+    source.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let silenceStart = null;
+
+    const checkSilence = () => {
+      analyser.getByteFrequencyData(data);
+      const volume = data.reduce((a, b) => a + b) / data.length;
+
+      if (volume < 5) {
+        if (!silenceStart) silenceStart = Date.now();
+        else if (Date.now() - silenceStart > 1500) {
+          recorder.stop();
+          audioCtx.close();
+          return;
+        }
+      } else {
+        silenceStart = null;
+      }
+
+      requestAnimationFrame(checkSilence);
+    };
+
+    requestAnimationFrame(checkSilence);
   };
 
   const togglePodcast = () => {
@@ -144,7 +177,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-b from-yellow-100 to-yellow-300 flex flex-col items-center justify-center text-center p-4 space-y-6">
       <h1 className="text-4xl font-bold text-gray-800">🎙️ Talk to Leonardo</h1>
       <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-48 h-48 rounded-full shadow-lg" />
-      {isThinking && <p className="text-blue-600 font-medium">{statusMessage}</p>}
+      {statusMessage && <p className="text-blue-600 font-medium">{statusMessage}</p>}
       {storyMode && (
         <div>
           <button
@@ -172,19 +205,12 @@ export default function Home() {
         ))}
       </div>
       <div className="mt-6">
-        {!isRecording ? (
+        {!isRecording && !isThinking && (
           <button
             onClick={startRecording}
             className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow"
           >
             🎤 Ask with your voice
-          </button>
-        ) : (
-          <button
-            onClick={stopRecording}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow"
-          >
-            ⏹️ Stop Recording
           </button>
         )}
       </div>
@@ -230,5 +256,6 @@ export default function Home() {
     </div>
   );
 }
+
 
 
