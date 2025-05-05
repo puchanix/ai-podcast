@@ -1,6 +1,41 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+
+async function playElevenLabsStream(text) {
+  try {
+    const response = await fetch('/api/stream-audio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+
+    if (!response.ok || !response.body) throw new Error("Stream fetch failed");
+
+    const audioContext = new AudioContext();
+    const source = audioContext.createBufferSource();
+    const reader = response.body.getReader();
+    const chunks = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    const blob = new Blob(chunks, { type: 'audio/mpeg' });
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    source.buffer = audioBuffer;
+    source.connect(audioContext.destination);
+    source.start();
+  } catch (error) {
+    console.error("Streaming playback failed", error);
+  }
+}
+
+
 export default function Home() {
   const [statusMessage, setStatusMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
@@ -88,7 +123,7 @@ export default function Home() {
       if (!audioData.audioUrl) throw new Error('No audio response');
 
       responseAudio.current.src = audioData.audioUrl;
-      responseAudio.current.play();
+      playElevenLabsStream(statusMessage);
       setStatusMessage('🎙️ Da Vinci replies');
       responseAudio.current.onended = () => {
         setIsThinking(false);
