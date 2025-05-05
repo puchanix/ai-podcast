@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 export default function Home() {
   const [isThinking, setIsThinking] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  const [showOptions, setShowOptions] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [transcript, setTranscript] = useState("");
@@ -58,7 +57,6 @@ export default function Home() {
 
     setIsThinking(true);
     setStatusMessage("🤖 Thinking...");
-    setShowOptions(false);
 
     try {
       const audio = new Audio("/api/ask-stream?question=" + encodeURIComponent(question));
@@ -68,7 +66,6 @@ export default function Home() {
       audio.onended = () => {
         setIsThinking(false);
         setStatusMessage("");
-        setShowOptions(true);
       };
 
       audio.onerror = (err) => {
@@ -164,7 +161,7 @@ export default function Home() {
         </div>
       )}
       <div className="space-y-4">
-        {showOptions && cannedQuestions.map((q, index) => (
+        {cannedQuestions.map((q, index) => (
           <button
             key={index}
             onClick={() => handleAsk(q)}
@@ -197,7 +194,6 @@ export default function Home() {
         {!hasStarted && (
           <button
             onClick={() => {
-              // Interrupt Da Vinci if speaking
               if (daVinciAudio.current) {
                 daVinciAudio.current.pause();
                 daVinciAudio.current.currentTime = 0;
