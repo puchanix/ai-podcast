@@ -1,7 +1,7 @@
 
-import { IncomingForm } from "formidable";
-import fs from "fs";
-import FormData from "form-data";
+import formidable from 'formidable';
+import fs from 'fs';
+import { Readable } from 'stream';
 
 export const config = {
   api: {
@@ -9,86 +9,57 @@ export const config = {
   },
 };
 
-export default async function handler(req, res) {
-  console.log("⚡ Incoming /api/transcribe request");
+function bufferToStream(buffer) {
+  const stream = new Readable();
+  stream.push(buffer);
+  stream.push(null);
+  return stream;
+}
 
-  if (req.method !== "POST") {
-    console.warn("⚠️ Rejected non-POST method");
-    return res.status(405).json({ error: "Method not allowed" });
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const form = new IncomingForm({ multiples: false });
+  const form = new formidable.IncomingForm({ multiples: false });
 
   form.parse(req, async (err, fields, files) => {
-    console.log("📥 Inside form.parse");
-
     if (err) {
-      console.error("❌ Formidable parse error:", err);
-      return res.status(500).json({ error: "Failed to parse form data" });
-    }
-
-    console.log("🧾 Parsed files:", files);
-
-    const file = files.audio;
-
-    if (!file?.filepath || typeof file.filepath !== "string") {
-      console.error("❌ Filepath missing or invalid:", file);
-      return res.status(400).json({ error: "Invalid file path" });
+      console.error('Formidable parse error:', err);
+      return res.status(500).json({ error: 'Failed to parse form data' });
     }
 
     try {
-      const formData = new FormData();
-      const fileStream = fs.createReadStream(file.filepath);
+      const file = files.audio;
+      if (!file) {
+        return res.status(400).json({ error: 'No audio file provided' });
+      }
 
-      formData.append("file", fileStream, {
-        filename: "recording.webm",
-        contentType: "audio/webm",
-      });
-      formData.append("model", "whisper-1");
+      const fileData = fs.readFileSync(file.filepath);
 
-      console.log("📤 Sending audio to OpenAI Whisper...");
-
-      const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          ...formData.getHeaders(),
         },
-        body: formData,
+        body: (() => {
+          const formData = new FormData();
+          formData.append('file', new Blob([fileData]), 'recording.webm');
+          formData.append('model', 'whisper-1');
+          return formData;
+        })(),
       });
 
-      const raw = await response.text();
-      console.log("📥 Raw response from OpenAI:", raw);
-
-      let result;
-      try {
-        result = JSON.parse(raw);
-      } catch (jsonErr) {
-        console.error("❌ Failed to parse OpenAI JSON:", raw);
-        return res.status(502).json({ error: "Invalid response from OpenAI Whisper API" });
-      }
-
       if (!response.ok) {
-        console.error("❌ OpenAI Whisper API error:", result);
-        return res.status(response.status).json({ error: result.error || "OpenAI API error" });
+        const errorText = await response.text();
+        throw new Error(`OpenAI API error: ${errorText}`);
       }
 
-      if (!result.text) {
-        console.error("❌ Whisper returned no transcription text:", result);
-        return res.status(502).json({ error: "No text returned from Whisper" });
-      }
-
-      console.log("✅ Transcription successful:", result.text);
-      res.status(200).json({ text: result.text });
+      const result = await response.json();
+      res.status(200).json({ question: result.text });
     } catch (error) {
-      console.error("❌ Transcription error (outer catch):", error);
-      res.status(500).json({ error: "Failed to transcribe audio" });
+      console.error('Transcription error:', error);
+      res.status(500).json({ error: 'Failed to transcribe audio' });
     }
   });
 }
-
-
-
-
-
-
