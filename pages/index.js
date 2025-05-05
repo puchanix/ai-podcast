@@ -102,9 +102,18 @@ export default function Home() {
           method: "POST",
           body: formData,
         });
-        const data = await response.json();
-        const transcribed = data.text?.trim();
-        console.log("🎤 Transcribed question:", transcribed);
+
+        const rawText = await response.text();
+        console.log("📦 Whisper raw response:", rawText);
+
+        let transcribed;
+        try {
+          const json = JSON.parse(rawText);
+          transcribed = json.text?.trim();
+          console.log("🎤 Transcribed question:", transcribed);
+        } catch (e) {
+          console.error("❌ Failed to parse Whisper response:", e);
+        }
 
         setTranscript(transcribed || "");
         setIsRecording(false);
