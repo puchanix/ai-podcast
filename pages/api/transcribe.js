@@ -1,7 +1,7 @@
 
-import formidable from 'formidable';
-import fs from 'fs';
-import { Readable } from 'stream';
+import formidable from "formidable";
+import fs from "fs";
+import FormData from "form-data";
 
 export const config = {
   api: {
@@ -9,57 +9,58 @@ export const config = {
   },
 };
 
-function bufferToStream(buffer) {
-  const stream = new Readable();
-  stream.push(buffer);
-  stream.push(null);
-  return stream;
-}
+const IncomingForm = formidable.IncomingForm;
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const form = new formidable.IncomingForm({ multiples: false });
+  const form = new IncomingForm({ multiples: false });
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      console.error('Formidable parse error:', err);
-      return res.status(500).json({ error: 'Failed to parse form data' });
+      console.error("❌ Error parsing form:", err);
+      return res.status(500).json({ error: "Failed to parse form data" });
+    }
+
+    const file = files.audio;
+
+    if (!file?.filepath || typeof file.filepath !== "string") {
+      console.error("❌ Filepath missing or invalid:", file);
+      return res.status(400).json({ error: "Invalid file path" });
     }
 
     try {
-      const file = files.audio;
-      if (!file) {
-        return res.status(400).json({ error: 'No audio file provided' });
-      }
+      const formData = new FormData();
+      formData.append("file", fs.createReadStream(file.filepath), {
+        filename: "input.webm",
+        contentType: "audio/webm",
+      });
+      formData.append("model", "whisper-1");
 
-      const fileData = fs.readFileSync(file.filepath);
-
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
+      const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+        method: "POST",
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          ...formData.getHeaders(),
         },
-        body: (() => {
-          const formData = new FormData();
-          formData.append('file', new Blob([fileData]), 'recording.webm');
-          formData.append('model', 'whisper-1');
-          return formData;
-        })(),
+        body: formData,
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`OpenAI API error: ${errorText}`);
+      const result = await response.json();
+
+      if (!response.ok || !result.text) {
+        console.error("❌ Whisper failed:", result);
+        return res.status(502).json({ error: "Whisper transcription failed" });
       }
 
-      const result = await response.json();
-      res.status(200).json({ question: result.text });
+      console.log("✅ Transcribed text:", result.text);
+      res.status(200).json({ text: result.text });
     } catch (error) {
-      console.error('Transcription error:', error);
-      res.status(500).json({ error: 'Failed to transcribe audio' });
+      console.error("❌ Whisper API error:", error);
+      res.status(500).json({ error: "Failed to transcribe audio" });
     }
   });
 }
+
