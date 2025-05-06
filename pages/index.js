@@ -6,6 +6,7 @@ export default function Home() {
   const [statusMessage, setStatusMessage] = useState("");
   const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [isDaVinciSpeaking, setIsDaVinciSpeaking] = useState(false);
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -26,7 +27,21 @@ export default function Home() {
     }
   }, []);
 
+  const stopDaVinci = () => {
+    if (daVinciAudio.current) {
+      daVinciAudio.current.pause();
+      daVinciAudio.current.currentTime = 0;
+      setIsDaVinciSpeaking(false);
+    }
+  };
+
   const startRecording = async () => {
+    stopDaVinci(); // ✅ Stop Da Vinci if speaking
+    if (podcastAudio.current && !podcastAudio.current.paused) {
+      podcastAudio.current.pause();
+      setIsPodcastPlaying(false);
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
@@ -83,34 +98,30 @@ export default function Home() {
     }
 
     setIsThinking(true);
-
-    if (podcastAudio.current && !podcastAudio.current.paused) {
-      podcastAudio.current.pause();
-      setIsPodcastPlaying(false);
-    }
-
-    if (daVinciAudio.current) {
-      daVinciAudio.current.pause();
-      daVinciAudio.current.currentTime = 0;
-    }
+    stopDaVinci();
 
     try {
       const encoded = encodeURIComponent(question);
       const audio = new Audio("/api/ask-stream?question=" + encoded);
       daVinciAudio.current = audio;
+      setIsDaVinciSpeaking(true);
+
       audio.play();
 
       audio.onended = () => {
+        setIsDaVinciSpeaking(false);
         setIsThinking(false);
         setStatusMessage("");
       };
 
       audio.onerror = () => {
+        setIsDaVinciSpeaking(false);
         setIsThinking(false);
         setStatusMessage("❌ Audio playback failed");
       };
     } catch (err) {
       console.error("Unexpected error:", err);
+      setIsDaVinciSpeaking(false);
       setIsThinking(false);
       setStatusMessage("❌ Unexpected error");
     }
@@ -124,6 +135,18 @@ export default function Home() {
     } else {
       podcastAudio.current.pause();
       setIsPodcastPlaying(false);
+    }
+  };
+
+  const toggleDaVinci = () => {
+    const da = daVinciAudio.current;
+    if (!da) return;
+    if (da.paused) {
+      da.play();
+      setIsDaVinciSpeaking(true);
+    } else {
+      da.pause();
+      setIsDaVinciSpeaking(false);
     }
   };
 
@@ -153,6 +176,18 @@ export default function Home() {
         </button>
       )}
 
+      {isDaVinciSpeaking && (
+        <button onClick={toggleDaVinci} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
+          ⏸️ Pause Da Vinci
+        </button>
+      )}
+
+      {!isDaVinciSpeaking && daVinciAudio.current && daVinciAudio.current.paused && (
+        <button onClick={toggleDaVinci} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
+          ▶️ Resume Da Vinci
+        </button>
+      )}
+
       {!hasStarted && (
         <button
           onClick={() => {
@@ -168,7 +203,7 @@ export default function Home() {
 
       {hasStarted && (
         <button onClick={togglePodcast} className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded">
-          {isPodcastPlaying ? "⏸️ Pause" : "⏯️ Resume"}
+          {isPodcastPlaying ? "⏸️ Pause Podcast" : "⏯️ Resume Podcast"}
         </button>
       )}
 
