@@ -58,28 +58,26 @@ export default async function handler(req) {
   const { choices } = await openaiRes.json();
   const answer = choices[0].message.content.trim();
 
-  // 4) Stream audio from ElevenLabs
-  const elevenApiKey = process.env.ELEVENLABS_API_KEY;
-  const elevenVoiceId = process.env.ELEVENLABS_VOICE_ID;
-  const ttsRes = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${elevenVoiceId}/stream`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "xi-api-key": elevenApiKey,
-      },
-      body: JSON.stringify({
-        text: answer,
-        voice_settings: { stability: 0.75, similarity_boost: 0.75 },
-      }),
-    }
-  );
-  if (!ttsRes.ok) {
-    const err = await ttsRes.text();
-    console.error("ElevenLabs TTS error:", err);
-    return new Response(err, { status: ttsRes.status });
-  }
+  // 4) Stream audio from ElevenLabs (supporting multiple voices)
+   // 4) Stream audio from ElevenLabs using the selected persona’s voice
+   const elevenApiKey = process.env.ELEVENLABS_API_KEY;
+   const voiceId      = persona.voiceId || process.env.ELEVENLABS_VOICE_ID;
+   console.log(`ElevenLabs voice for ${character}: ${voiceId}`);
+   const ttsRes = await fetch(
+     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
+     {
+       method: "POST",
+       headers: {
+         "Content-Type":  "application/json",
+         "xi-api-key":     elevenApiKey,
+       },
+       body: JSON.stringify({
+         text: answer,
+         voice_settings: { stability: 0.75, similarity_boost: 0.75 },
+       }),
+     }
+   );
+ 
 
   // 5) Return the audio stream
   return new Response(ttsRes.body, {
@@ -90,3 +88,4 @@ export default async function handler(req) {
     },
   });
 }
+
