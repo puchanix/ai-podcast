@@ -117,9 +117,14 @@ export default function Home() {
       const url = "/api/ask-stream?question=" + encoded;
 
       const audio = daVinciAudio.current;
+
+      audio.pause();
+      audio.src = "";
+      audio.load();
       audio.src = url;
 
-      audio.oncanplaythrough = () => {
+      audio.onloadedmetadata = () => {
+        console.log("🔊 Metadata loaded, attempting to play");
         audio.play()
           .then(() => {
             setIsDaVinciSpeaking(true);
@@ -131,15 +136,15 @@ export default function Home() {
       };
 
       audio.onended = () => {
+        console.log("✅ Audio finished playing.");
         setIsDaVinciSpeaking(false);
         setIsThinking(false);
         setStatusMessage("");
       };
 
       audio.onerror = () => {
-        setIsDaVinciSpeaking(false);
-        setIsThinking(false);
-        setStatusMessage("❌ Audio playback failed");
+        console.error("Audio playback error");
+        setStatusMessage("❌ Audio playback error");
       };
     } catch (err) {
       console.error("Unexpected error:", err);
