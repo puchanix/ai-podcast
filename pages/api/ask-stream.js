@@ -1,3 +1,7 @@
+// ask-stream.js
+export const config = { runtime: 'edge' };
+
+
 import { Readable } from 'stream';
 
 export default async function handler(req, res) {
