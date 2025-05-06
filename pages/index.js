@@ -165,7 +165,8 @@ export default function Home() {
     setDaVinciPaused(false);
 
     const encoded = encodeURIComponent(question);
-    const url = `/api/ask-audio?character=${selectedPersona}&question=${encoded}`;
+    const url = `/api/ask-audio?character=${selectedPersona}` +
+      `&question=${encoded}`;
 
     const audio = daVinciAudio.current;
     audio.src = url;
@@ -201,6 +202,7 @@ export default function Home() {
       podcastAudio.current.src = personas[selectedPersona].podcast;
       podcastAudio.current.play();
       setIsPodcastPlaying(true);
+      setHasStarted(true);
     } else {
       podcastAudio.current.pause();
       setIsPodcastPlaying(false);
@@ -221,7 +223,7 @@ export default function Home() {
     }
   };
 
-  const cannedQuestions = personas[selectedPersona].questions;
+  const uiQuestions = ["Tell me Your Story", ...personas[selectedPersona].questions];
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-yellow-100 p-4 space-y-4 text-center">
@@ -240,7 +242,7 @@ export default function Home() {
 
       <p className="text-blue-700">{statusMessage}</p>
       <div className="space-y-2">
-        {cannedQuestions.map((q, i) => (
+        {uiQuestions.map((q, i) => (
           <button
             key={i}
             onClick={() => handleAsk(q)}
@@ -270,24 +272,7 @@ export default function Home() {
         </button>
       )}
 
-      {!hasStarted && (
-        <button
-          onClick={togglePodcast}
-          className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded"
-        >
-          ▶️ Start Podcast
-        </button>
-      )}
-
-      {hasStarted && (
-        <button
-          onClick={togglePodcast}
-          className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2.rounded"
-        >
-          {isPodcastPlaying ? "⏸️ Pause Podcast" : "⏯️ Resume Podcast"}
-        </button>
-      )}
-
+      {/* Popular Questions Section */}
       <div className="mt-6 w-full max-w-md bg-white p-4 rounded-lg shadow">
         <h2 className="text-xl font-semibold mb-2">Popular Questions</h2>
         {popularQuestions.map((item, idx) => (
@@ -296,7 +281,7 @@ export default function Home() {
             onClick={() => handleAsk(item.question)}
             className="w-full text-left bg-gray-100 hover:bg-gray-200 py-2 px-3 mb-2 rounded"
           >
-            {item.question} ({item.count})
+            {item.question}
           </button>
         ))}
       </div>
@@ -307,3 +292,4 @@ export default function Home() {
     </div>
   );
 }
+
