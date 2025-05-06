@@ -1,4 +1,4 @@
-// pages/api/ask-stream.js
+import { Readable } from 'stream';
 
 export default async function handler(req, res) {
   const { question } = req.query;
@@ -39,7 +39,9 @@ export default async function handler(req, res) {
     res.setHeader("Transfer-Encoding", "chunked");
     res.setHeader("Access-Control-Allow-Origin", "*");
 
-    response.body.pipe(res);
+    // Convert Web ReadableStream to Node stream
+    const nodeStream = Readable.fromWeb(response.body);
+    nodeStream.pipe(res);
   } catch (error) {
     console.error("❌ ask-stream error:", error);
     res.status(500).json({ error: "Unexpected error in ask-stream" });
