@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import FormData from 'form-data';
+import axios from 'axios';
 
 export const config = {
   api: {
@@ -22,7 +23,7 @@ export default async function handler(req, res) {
   const filepath = path.join(tmpdir, `audio-${Date.now()}.webm`);
 
   const fileWritePromise = new Promise((resolve, reject) => {
-    const busboy = Busboy({ headers: req.headers }); // note: call as function, not with `new`
+    const busboy = Busboy({ headers: req.headers });
     const writeStream = fs.createWriteStream(filepath);
 
     busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
@@ -54,26 +55,22 @@ export default async function handler(req, res) {
     });
     formData.append('model', 'whisper-1');
 
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        ...formData.getHeaders(),
-      },
-      body: formData,
-    });
+    const whisperResponse = await axios.post(
+      'https://api.openai.com/v1/audio/transcriptions',
+      formData,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          ...formData.getHeaders(),
+        },
+      }
+    );
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(errText);
-    }
-
-    const result = await response.json();
-    console.log('📝 Whisper transcript:', result.text);
-    return res.status(200).json({ text: result.text });
+    console.log('📝 Whisper transcript:', whisperResponse.data.text);
+    res.status(200).json({ text: whisperResponse.data.text });
   } catch (err) {
-    console.error('❌ Final transcription error:', err);
-    return res.status(500).json({ error: 'Failed to transcribe audio' });
+    console.error('❌ Final transcription error:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Failed to transcribe audio' });
   }
 }
 
