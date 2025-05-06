@@ -65,7 +65,10 @@ export default function Home() {
       };
 
       recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType.current });
+        
+    const blob = new Blob(chunksRef.current, { type: mimeType.current });
+    chunksRef.current = []; // Clear buffer explicitly
+    
         const formData = new FormData();
         formData.append("audio", blob, filename.current);
 
@@ -117,7 +120,10 @@ export default function Home() {
     const url = "/api/ask-stream?question=" + encoded;
 
     const audio = daVinciAudio.current;
+    
+    console.log("🔗 Assigning audio src:", url);
     audio.src = url;
+    
     audio.load();
     audio.play()
       .then(() => {
