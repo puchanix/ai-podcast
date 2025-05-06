@@ -95,13 +95,48 @@ export default function Home() {
         if (e.data.size > 0) chunks.push(e.data);
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const blob = new Blob(chunks, { type: "audio/webm" });
         console.log("🛑 Recording stopped. Blob size:", blob.size);
         setIsRecording(false);
         setStatusMessage("⏳ Processing...");
         setRecordedChunks(chunks);
-        // Phase B: upload will go here
+
+        const formData = new FormData();
+        formData.append("audio", blob, "input.webm");
+
+        for (let [key, val] of formData.entries()) {
+          console.log("🧾 FormData key:", key, "→", val);
+        }
+
+        try {
+          console.log("📤 Uploading audio to /api/transcribe");
+
+          const response = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+
+          const responseText = await response.text();
+          console.log("📥 Raw /api/transcribe response:", responseText);
+
+          if (!response.ok) {
+            throw new Error("Transcribe HTTP error: " + response.status);
+          }
+
+          const data = JSON.parse(responseText);
+          const transcribed = data.text?.trim();
+          if (!transcribed) {
+            throw new Error("No 'text' in transcription response");
+          }
+
+          console.log("📝 Transcribed:", transcribed);
+          setStatusMessage("");
+          handleAsk(transcribed);
+        } catch (err) {
+          console.error("❌ Transcription failed:", err);
+          setStatusMessage("❌ Transcription failed");
+        }
       };
 
       recorder.start();
@@ -241,3 +276,5 @@ export default function Home() {
     </div>
   );
 }
+
+

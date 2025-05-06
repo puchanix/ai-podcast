@@ -1,7 +1,4 @@
 
-console.log("🛠️ Received /api/transcribe POST request");
-
-
 import formidable from 'formidable';
 import fs from 'fs';
 import { Readable } from 'stream';
@@ -13,14 +10,9 @@ export const config = {
   },
 };
 
-function bufferToStream(buffer) {
-  const stream = new Readable();
-  stream.push(buffer);
-  stream.push(null);
-  return stream;
-}
-
 export default async function handler(req, res) {
+  console.log("🛠️ Received /api/transcribe POST request");
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -67,4 +59,5 @@ export default async function handler(req, res) {
     }
   });
 }
+
 
