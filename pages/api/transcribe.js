@@ -1,4 +1,3 @@
-
 import Busboy from 'busboy';
 import fs from 'fs';
 import os from 'os';
@@ -20,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   const tmpdir = os.tmpdir();
-  const filepath = path.join(tmpdir, `audio-${Date.now()}.webm`);
+  const filepath = path.join(tmpdir, `audio-${Date.now()}.ogg`);
 
   const fileWritePromise = new Promise((resolve, reject) => {
     const busboy = Busboy({ headers: req.headers });
@@ -50,12 +49,12 @@ export default async function handler(req, res) {
 
     const formData = new FormData();
     formData.append('file', fileBuffer, {
-      filename: 'input.webm',
-      contentType: 'audio/webm',
+      filename: 'input.ogg',
+      contentType: 'audio/ogg',
     });
     formData.append('model', 'whisper-1');
 
-    const whisperResponse = await axios.post(
+    const response = await axios.post(
       'https://api.openai.com/v1/audio/transcriptions',
       formData,
       {
@@ -66,14 +65,10 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log('📝 Whisper transcript:', whisperResponse.data.text);
-    res.status(200).json({ text: whisperResponse.data.text });
+    console.log('📝 Whisper transcript:', response.data.text);
+    res.status(200).json({ text: response.data.text });
   } catch (err) {
     console.error('❌ Final transcription error:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to transcribe audio' });
   }
 }
-
-
-
-
