@@ -1,17 +1,17 @@
 
-const Busboy = require('busboy');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const FormData = require('form-data');
+import Busboy from 'busboy';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import FormData from 'form-data';
 
-module.exports.config = {
+export const config = {
   api: {
     bodyParser: false,
   },
 };
 
-module.exports.default = async function handler(req, res) {
+export default async function handler(req, res) {
   console.log('🛠️ /api/transcribe called');
 
   if (req.method !== 'POST') {
@@ -22,17 +22,17 @@ module.exports.default = async function handler(req, res) {
   const filepath = path.join(tmpdir, `audio-${Date.now()}.webm`);
 
   const fileWritePromise = new Promise((resolve, reject) => {
-    const busboy = new Busboy({ headers: req.headers });
-    const stream = fs.createWriteStream(filepath);
+    const busboy = Busboy({ headers: req.headers }); // note: call as function, not with `new`
+    const writeStream = fs.createWriteStream(filepath);
 
     busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
       console.log(`📥 Receiving file: ${filename}`);
-      file.pipe(stream);
+      file.pipe(writeStream);
     });
 
     busboy.on('finish', () => {
       console.log('✅ Finished receiving file');
-      stream.end(() => resolve(filepath));
+      resolve(filepath);
     });
 
     busboy.on('error', (err) => {
@@ -75,7 +75,7 @@ module.exports.default = async function handler(req, res) {
     console.error('❌ Final transcription error:', err);
     return res.status(500).json({ error: 'Failed to transcribe audio' });
   }
-};
+}
 
 
 
