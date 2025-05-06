@@ -18,7 +18,14 @@ export default function Home() {
   const podcastAudio = useRef(null);
   const daVinciAudio = useRef(null);
 
-  // Detect supported mime type
+  // Web Speech API setup for client-side STT
+  const SpeechRecognition =
+    typeof window !== "undefined"
+      ? window.SpeechRecognition || window.webkitSpeechRecognition
+      : null;
+  const recognitionRef = useRef(null);
+
+  // Detect supported mime type (for fallback, unused)
   useEffect(() => {
     if (typeof MediaRecorder === "undefined") return;
     if (MediaRecorder.isTypeSupported("audio/webm")) {
@@ -69,60 +76,43 @@ export default function Home() {
     }
   };
 
-  const startRecording = async () => {
-    unlockAudio();
-    stopDaVinci();
-    stopPodcast();
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
-      mediaRecorderRef.current = recorder;
-      chunksRef.current = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+  // startRecording with Web Speech API
+  const startRecording = () => {
+    if (!SpeechRecognition) {
+      setStatusMessage("⚠️ Mic not supported");
+      return;
+    }
+    if (!recognitionRef.current) {
+      const recog = new SpeechRecognition();
+      recog.continuous = false;
+      recog.interimResults = false;
+      recog.lang = "en-US";
+      recog.onstart = () => {
+        setIsRecording(true);
+        setStatusMessage("🎤 Listening...");
       };
-
-      recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType.current });
-        chunksRef.current = [];
-
-        const formData = new FormData();
-        formData.append("audio", blob, filename.current);
-
-        setStatusMessage("📝 Transcribing...");
-
-        try {
-          const res = await fetch("/api/transcribe", { method: "POST", body: formData });
-          const json = await res.json();
-          const transcript = json.text?.trim();
-          if (!transcript) throw new Error("No transcript");
-
-          setStatusMessage("🎧 Answering...");
-          handleAsk(transcript);
-        } catch (err) {
-          console.error("❌ Transcription failed:", err);
-          setStatusMessage("⚠️ Could not understand your voice.");
-        }
-
+      recog.onresult = (event) => {
+        const transcript = event.results[0][0].transcript.trim();
+        setIsRecording(false);
+        setStatusMessage("🎧 Answering...");
+        handleAsk(transcript);
+      };
+      recog.onerror = (event) => {
+        console.error("Speech recognition error", event.error);
+        setIsRecording(false);
+        setStatusMessage("❌ STT failed");
+      };
+      recog.onend = () => {
         setIsRecording(false);
       };
-
-      recorder.start();
-      setIsRecording(true);
-      setStatusMessage("🎤 Listening...");
-
-      setTimeout(() => {
-        if (recorder.state === "recording") recorder.stop();
-      }, 4000);
-    } catch (err) {
-      console.error("Mic error:", err);
-      setStatusMessage("❌ Mic not supported");
+      recognitionRef.current = recog;
     }
+    stopDaVinci();
+    stopPodcast();
+    recognitionRef.current.start();
   };
 
-  // Simplified ask: no validation or empty check, let Leonardo handle
+  // Simplified ask: no checks, let Leonardo handle
   const handleAsk = async (question) => {
     unlockAudio();
     stopDaVinci();
@@ -215,7 +205,7 @@ export default function Home() {
       {!isRecording && !isThinking && (
         <button
           onClick={startRecording}
-          className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded"
+          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
         >
           🎤 Ask with your voice
         </button>
