@@ -1,5 +1,6 @@
 
 const formidable = require('formidable');
+const fs = require('fs');
 const FormData = require('form-data');
 
 export const config = {
@@ -8,12 +9,17 @@ export const config = {
   },
 };
 
-function parseForm(req) {
+// Formidable v3 helper that returns a fully parsed result
+async function parseFormAsync(req) {
+  const form = formidable({ keepExtensions: true });
+
   return new Promise((resolve, reject) => {
-    const form = formidable();
     form.parse(req, (err, fields, files) => {
-      if (err) reject(err);
-      else resolve({ fields, files });
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve({ fields, files });
     });
   });
 }
@@ -26,14 +32,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { files } = await parseForm(req);
+    const { files } = await parseFormAsync(req);
     const file = files.audio;
 
     if (!file) {
+      console.error("🚫 No file found");
       return res.status(400).json({ error: 'No audio file provided' });
     }
 
-    const buffer = await file.toBuffer();
+    // Confirm file fields
+    console.log("📦 File:", {
+      originalFilename: file.originalFilename,
+      mimetype: file.mimetype,
+      size: file.size,
+      filepath: file.filepath,
+    });
+
+    const buffer = fs.readFileSync(file.filepath);
+
     const formData = new FormData();
     formData.append('file', buffer, { filename: 'input.webm', contentType: 'audio/webm' });
     formData.append('model', 'whisper-1');
@@ -56,7 +72,7 @@ export default async function handler(req, res) {
     console.log("📝 Whisper transcript:", result.text);
     res.status(200).json({ text: result.text });
   } catch (err) {
-    console.error("Transcription error:", err);
+    console.error("❌ Transcription error:", err);
     res.status(500).json({ error: "Failed to transcribe audio" });
   }
 }
