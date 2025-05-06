@@ -36,6 +36,7 @@ export default function Home() {
   const stopDaVinci = () => {
     if (daVinciAudio.current) {
       daVinciAudio.current.pause();
+      daVinciAudio.current.src = "";
       setIsDaVinciSpeaking(false);
       setDaVinciPaused(true);
     }
@@ -45,15 +46,6 @@ export default function Home() {
     if (podcastAudio.current && !podcastAudio.current.paused) {
       podcastAudio.current.pause();
       setIsPodcastPlaying(false);
-    }
-  };
-
-  const resumeAudioContext = () => {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
     }
   };
 
@@ -121,52 +113,31 @@ export default function Home() {
     setIsThinking(true);
     setDaVinciPaused(false);
 
-    try {
-      const encoded = encodeURIComponent(question);
-      const url = "/api/ask-stream?question=" + encoded;
+    const encoded = encodeURIComponent(question);
+    const url = "/api/ask-stream?question=" + encoded;
 
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch audio");
+    const audio = daVinciAudio.current;
+    audio.src = url;
+    audio.load();
+    audio.play()
+      .then(() => {
+        setIsDaVinciSpeaking(true);
+      })
+      .catch((err) => {
+        console.error("Playback error:", err);
+        setStatusMessage("❌ Audio playback failed");
+      });
 
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-
-      const freshAudio = new Audio();
-      daVinciAudio.current = freshAudio;
-
-      resumeAudioContext();
-
-      freshAudio.src = objectUrl;
-      freshAudio.load();
-
-      setTimeout(() => {
-        freshAudio.play()
-          .then(() => {
-            setIsDaVinciSpeaking(true);
-          })
-          .catch((err) => {
-            console.error("Playback error:", err);
-            setStatusMessage("❌ Audio playback failed");
-          });
-      }, 0);
-
-      freshAudio.onended = () => {
-        setIsDaVinciSpeaking(false);
-        setIsThinking(false);
-        setStatusMessage("");
-        URL.revokeObjectURL(objectUrl);
-      };
-
-      freshAudio.onerror = () => {
-        console.error("Audio playback error");
-        setStatusMessage("❌ Audio playback error");
-      };
-    } catch (err) {
-      console.error("Unexpected error:", err);
+    audio.onended = () => {
       setIsDaVinciSpeaking(false);
       setIsThinking(false);
-      setStatusMessage("❌ Unexpected error");
-    }
+      setStatusMessage("");
+    };
+
+    audio.onerror = () => {
+      console.error("Audio playback error");
+      setStatusMessage("❌ Audio playback error");
+    };
   };
 
   const togglePodcast = () => {

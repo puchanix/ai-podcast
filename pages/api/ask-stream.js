@@ -1,88 +1,47 @@
-
-export const config = {
-  runtime: 'nodejs',
-};
-
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const ELEVENLABS_API_KEY = "sk_800f5bb72970df24eaf8b2d3c8c125ba4e5b3980078bc7c0";
-const VOICE_ID = "AZnmrjjEOG9CofMyOxaA";
+// pages/api/ask-stream.js
 
 export default async function handler(req, res) {
-  const { question } = req.method === 'POST'
-    ? await new Promise((resolve, reject) => {
-        let body = '';
-        req.on('data', chunk => body += chunk);
-        req.on('end', () => resolve(JSON.parse(body)));
-        req.on('error', reject);
-      })
-    : req.query;
+  const { question } = req.query;
 
   if (!question) {
-    console.error("Missing question");
-    return res.status(400).json({ error: 'Missing question' });
+    res.status(400).json({ error: "Missing question" });
+    return;
   }
 
-  console.log("Received question:", question);
-
   try {
-    const prompt = [
-      {
-        role: "system",
-        content: "You are Leonardo da Vinci hosting a podcast. Answer briefly, with charm and wit, in 1–2 sentences."
-      },
-      {
-        role: "user",
-        content: question
-      }
-    ];
+    const elevenApiKey = process.env.ELEVENLABS_API_KEY;
+    const voiceId = process.env.ELEVENLABS_VOICE_ID || "EXAVITQu4vr4xnSDxMaL"; // default voice
 
-    const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "xi-api-key": elevenApiKey,
       },
       body: JSON.stringify({
-        model: "gpt-4",
-        messages: prompt,
-        max_tokens: 100,
-        temperature: 0.7
-      }),
-    });
-
-    const gptData = await gptRes.json();
-    console.log("GPT raw response:", JSON.stringify(gptData));
-
-    const answer = gptData.choices?.[0]?.message?.content?.trim();
-    console.log("GPT answer:", answer);
-
-    if (!answer) throw new Error("GPT response missing");
-
-    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`, {
-      method: "POST",
-      headers: {
-        "xi-api-key": ELEVENLABS_API_KEY,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        text: answer,
+        text: question,
         model_id: "eleven_monolingual_v1",
         voice_settings: {
-          stability: 0.4,
-          similarity_boost: 0.8
-        }
+          stability: 0.3,
+          similarity_boost: 0.75,
+        },
       }),
     });
 
-    console.log("ElevenLabs status:", ttsRes.status);
+    if (!response.ok || !response.body) {
+      console.error("❌ ElevenLabs stream failed", await response.text());
+      res.status(500).json({ error: "Failed to stream from ElevenLabs" });
+      return;
+    }
 
-    if (!ttsRes.ok || !ttsRes.body) throw new Error("ElevenLabs stream failed");
-
-    const audioBuffer = await ttsRes.arrayBuffer();
+    // ✅ Explicit headers for mobile browser support
     res.setHeader("Content-Type", "audio/mpeg");
-    res.send(Buffer.from(audioBuffer));
-  } catch (err) {
-    console.error("ask-stream error:", err);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.setHeader("Transfer-Encoding", "chunked");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    response.body.pipe(res);
+  } catch (error) {
+    console.error("❌ ask-stream error:", error);
+    res.status(500).json({ error: "Unexpected error in ask-stream" });
   }
 }
