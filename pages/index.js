@@ -142,7 +142,11 @@ export default function Home() {
     audio.src = url;
     audio.load();
     audio.play()
-      .then(() => setIsDaVinciSpeaking(true))
+      .then(() => {
+        setIsDaVinciSpeaking(true);
+        setIsThinking(false);
+        setStatusMessage("");
+      })
       .catch((err) => {
         console.error("Playback error:", err);
         setStatusMessage("❌ Audio playback failed");
