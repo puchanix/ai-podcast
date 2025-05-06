@@ -1,8 +1,8 @@
 
-import formidable from 'formidable';
-import fs from 'fs';
-import { Readable } from 'stream';
-import FormData from 'form-data';
+const formidable = require('formidable');
+const fs = require('fs');
+const { Readable } = require('stream');
+const FormData = require('form-data');
 
 export const config = {
   api: {
@@ -59,5 +59,6 @@ export default async function handler(req, res) {
     }
   });
 }
+
 
 
