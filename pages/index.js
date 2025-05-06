@@ -40,7 +40,7 @@ export default function Home() {
       "Pondering your question…",
       "Almost there…",
       "Just a moment more…",
-      "Leonardo is sketching an answer…"
+      "I am sketching an answer…"
     ];
     let idx = 0;
     setStatusMessage(messages[0]);
@@ -237,7 +237,7 @@ export default function Home() {
           onClick={toggleDaVinci}
           className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
         >
-          {isDaVinciSpeaking ? "⏸️ Pause Da Vinci" : "▶️ Resume Da Vinci"}
+          {isDaVinciSpeaking ? "⏸️ Pause" : "▶️ Resume"}
         </button>
       )}
 
@@ -259,7 +259,7 @@ export default function Home() {
           onClick={togglePodcast}
           className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded"
         >
-          {isPodcastPlaying ? "⏸️ Pause Podcast" : "⏯️ Resume Podcast"}
+          {isPodcastPlaying ? "⏸️ Pause Podcast" : "⏯️ Resume Story"}
         </button>
       )}
 
