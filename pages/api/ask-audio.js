@@ -1,17 +1,22 @@
 // pages/api/ask-audio.js
+import { personas } from "../../lib/personas";
 export const config = { runtime: "edge" };
 
 export default async function handler(req) {
-  // 1) Get question from GET or POST
+  // 1) Get question and character from GET or POST
   let question = "";
+  let character = "daVinci";
   if (req.method === "GET") {
-    question = new URL(req.url).searchParams.get("question") || "";
+    const url = new URL(req.url);
+    question = url.searchParams.get("question") || "";
+    character = url.searchParams.get("character") || character;
   } else if (req.method === "POST") {
     try {
-      const { question: q } = await req.json();
-      question = q || "";
+      const body = await req.json();
+      question = body.question || "";
+      character = body.character || character;
     } catch {
-      // ignore JSON parse errors
+      // ignore parse errors
     }
   } else {
     return new Response("Method Not Allowed", { status: 405 });
@@ -24,10 +29,11 @@ export default async function handler(req) {
     );
   }
 
-  // 2) Fetch full answer from OpenAI (using GPT-3.5-turbo for lower latency)
-  const systemPrompt =
-    process.env.SYSTEM_PROMPT ||
-    "You are Leonardo da Vinci, the great Renaissance polymath. Answer concisely but thoughtfully.";
+  // 2) Determine system prompt based on character
+  const persona = personas[character] || personas.daVinci;
+  const systemPrompt = persona.systemPrompt;
+
+  // 3) Fetch answer from OpenAI
   const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -52,7 +58,7 @@ export default async function handler(req) {
   const { choices } = await openaiRes.json();
   const answer = choices[0].message.content.trim();
 
-  // 3) Stream audio from ElevenLabs
+  // 4) Stream audio from ElevenLabs
   const elevenApiKey = process.env.ELEVENLABS_API_KEY;
   const elevenVoiceId = process.env.ELEVENLABS_VOICE_ID;
   const ttsRes = await fetch(
@@ -75,7 +81,7 @@ export default async function handler(req) {
     return new Response(err, { status: ttsRes.status });
   }
 
-  // 4) Return the audio stream
+  // 5) Return the audio stream
   return new Response(ttsRes.body, {
     headers: {
       "Content-Type": "audio/mpeg",

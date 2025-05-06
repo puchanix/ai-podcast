@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { personas } from "../lib/personas";
 
 export default function Home() {
+  // --- Character selection ---
+  const [selectedPersona, setSelectedPersona] = useState("daVinci");
+
   const [isRecording, setIsRecording] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -8,7 +12,6 @@ export default function Home() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isDaVinciSpeaking, setIsDaVinciSpeaking] = useState(false);
   const [daVinciPaused, setDaVinciPaused] = useState(false);
-  const [userQuestion, setUserQuestion] = useState("");
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -122,7 +125,7 @@ export default function Home() {
     }
   };
 
-  // Simplified ask: no validation or empty check, let Leonardo handle
+  // Simplified ask: include character selection
   const handleAsk = async (question) => {
     unlockAudio();
     stopDaVinci();
@@ -131,7 +134,7 @@ export default function Home() {
     setDaVinciPaused(false);
 
     const encoded = encodeURIComponent(question);
-    const url = "/api/ask-audio?question=" + encoded;
+    const url = `/api/ask-audio?character=${selectedPersona}&question=${encoded}`;
 
     const audio = daVinciAudio.current;
     audio.src = url;
@@ -196,7 +199,19 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-yellow-100 p-4 space-y-4 text-center">
       <h1 className="text-3xl font-bold">🎙️ Talk to Leonardo</h1>
-      <img src="/leonardo.jpg" alt="Leonardo" className="w-40 h-40 rounded-full" />
+      {/* Character Selector */}
+      <select
+        value={selectedPersona}
+        onChange={(e) => setSelectedPersona(e.target.value)}
+        className="mb-4 p-2 rounded border"
+      >
+        {Object.values(personas).map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+
       <p className="text-blue-700">{statusMessage}</p>
 
       <div className="space-y-2">
@@ -215,7 +230,7 @@ export default function Home() {
       {!isRecording && !isThinking && (
         <button
           onClick={startRecording}
-          className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded"
+          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
         >
           🎤 Ask with your voice
         </button>
