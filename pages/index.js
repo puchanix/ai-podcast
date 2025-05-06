@@ -2,9 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { personas } from "../lib/personas";
 
 export default function Home() {
-  // --- Character selection ---
   const [selectedPersona, setSelectedPersona] = useState("daVinci");
-
   const [isRecording, setIsRecording] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -20,6 +18,27 @@ export default function Home() {
 
   const podcastAudio = useRef(null);
   const daVinciAudio = useRef(null);
+
+  const [popularQuestions, setPopularQuestions] = useState([]);
+
+  // Fetch popular questions when persona changes or after a new question is recorded
+  useEffect(() => {
+    async function fetchPopular() {
+      const res = await fetch(`/api/question-count?character=${selectedPersona}`);
+      const data = await res.json();
+      setPopularQuestions(data.questions || []);
+    }
+    fetchPopular();
+  }, [selectedPersona]);
+
+  // Record question click for popularity stats
+  async function recordQuestion(question) {
+    await fetch(`/api/question-count`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ character: selectedPersona, question }),
+    });
+  }
 
   // Detect supported mime type
   useEffect(() => {
@@ -40,7 +59,7 @@ export default function Home() {
       "Pondering your question…",
       "Almost there…",
       "Just a moment more…",
-      "I am sketching an answer…"
+      `${personas[selectedPersona].name} is working on your question…`
     ];
     let idx = 0;
     setStatusMessage(messages[0]);
@@ -49,7 +68,7 @@ export default function Home() {
       setStatusMessage(messages[idx]);
     }, 3000);
     return () => clearInterval(iv);
-  }, [isThinking]);
+  }, [isThinking, selectedPersona]);
 
   const unlockAudio = () => {
     const dummy = new Audio("/silent.mp3");
@@ -103,6 +122,7 @@ export default function Home() {
           if (!transcript) throw new Error("No transcript");
 
           setStatusMessage("🎧 Answering...");
+          await recordQuestion(transcript);
           handleAsk(transcript);
         } catch (err) {
           console.error("❌ Transcription failed:", err);
@@ -125,8 +145,9 @@ export default function Home() {
     }
   };
 
-  // Simplified ask: include character selection
+  // Simplified ask: include recording popularity
   const handleAsk = async (question) => {
+    await recordQuestion(question);
     unlockAudio();
     stopDaVinci();
     stopPodcast();
@@ -237,13 +258,14 @@ export default function Home() {
           onClick={toggleDaVinci}
           className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
         >
-          {isDaVinciSpeaking ? "⏸️ Pause" : "▶️ Resume"}
+          {isDaVinciSpeaking ? "⏸️ Pause Response" : "▶️ Resume Response"}
         </button>
       )}
 
       {!hasStarted && (
         <button
           onClick={() => {
+            podcastAudio.current.src = personas[selectedPersona].podcast;
             podcastAudio.current.play();
             setIsPodcastPlaying(true);
             setHasStarted(true);
@@ -259,17 +281,25 @@ export default function Home() {
           onClick={togglePodcast}
           className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded"
         >
-          {isPodcastPlaying ? "⏸️ Pause Story" : "⏯️ Resume Story"}
+          {isPodcastPlaying ? "⏸️ Pause Podcast" : "⏯️ Resume Podcast"}
         </button>
       )}
 
-<audio
-  ref={podcastAudio}
-  hidden
-  preload="auto"
-  src={personas[selectedPersona].podcast}
-/>
+      {/* Popular Questions Section */}
+      <div className="mt-6 w-full max-w-md bg-white p-4 rounded-lg shadow">
+        <h2 className="text-xl font-semibold mb-2">Popular Questions</h2>
+        {popularQuestions.map((item, idx) => (
+          <button
+            key={idx}
+            onClick={() => handleAsk(item.question)}
+            className="w-full text-left bg-gray-100 hover:bg-gray-200 py-2 px-3 mb-2 rounded"
+          >
+            {item.question} ({item.count})
+          </button>
+        ))}
+      </div>
 
+      <audio ref={podcastAudio} hidden preload="auto" src="" />
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
     </div>
