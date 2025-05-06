@@ -48,6 +48,15 @@ export default function Home() {
     }
   };
 
+  const resumeAudioContext = () => {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+  };
+
   const startRecording = async () => {
     unlockAudio();
     stopDaVinci();
@@ -122,29 +131,33 @@ export default function Home() {
       const blob = await res.blob();
       const objectUrl = URL.createObjectURL(blob);
 
-      const audio = daVinciAudio.current;
-      audio.pause();
-      audio.src = objectUrl;
-      audio.load();
+      const freshAudio = new Audio();
+      daVinciAudio.current = freshAudio;
 
-      audio.play()
-        .then(() => {
-          setIsDaVinciSpeaking(true);
-        })
-        .catch((err) => {
-          console.error("Playback error:", err);
-          setStatusMessage("❌ Audio playback failed");
-        });
+      resumeAudioContext();
 
-      audio.onended = () => {
-        console.log("✅ Audio finished playing.");
+      freshAudio.src = objectUrl;
+      freshAudio.load();
+
+      setTimeout(() => {
+        freshAudio.play()
+          .then(() => {
+            setIsDaVinciSpeaking(true);
+          })
+          .catch((err) => {
+            console.error("Playback error:", err);
+            setStatusMessage("❌ Audio playback failed");
+          });
+      }, 0);
+
+      freshAudio.onended = () => {
         setIsDaVinciSpeaking(false);
         setIsThinking(false);
         setStatusMessage("");
         URL.revokeObjectURL(objectUrl);
       };
 
-      audio.onerror = () => {
+      freshAudio.onerror = () => {
         console.error("Audio playback error");
         setStatusMessage("❌ Audio playback error");
       };
