@@ -1,8 +1,7 @@
 
-import fs from 'fs';
-import path from 'path';
-import { IncomingForm } from 'formidable';
-import FormData from 'form-data';
+const formidable = require('formidable');
+const fs = require('fs');
+const FormData = require('form-data');
 
 export const config = {
   api: {
@@ -17,24 +16,29 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const form = new IncomingForm({ uploadDir: '/tmp', keepExtensions: true });
+  const form = formidable({ keepExtensions: true, multiples: false });
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
-      console.error("❌ Formidable error:", err);
+      console.error("❌ Form parsing error:", err);
       return res.status(500).json({ error: 'Form parsing failed' });
     }
 
-    const file = files.audio;
+    // LOG ALL KEYS TO DEBUG
+    console.log("📋 Fields:", fields);
+    console.log("📎 Files:", files);
+
+    const file = files.audio || files['audio']; // ensure compatibility
+
     if (!file || !file.filepath) {
-      console.error("🚫 No file uploaded");
+      console.error("🚫 No file uploaded under key 'audio'");
       return res.status(400).json({ error: 'No file found' });
     }
 
     try {
-      const fileBuffer = fs.readFileSync(file.filepath);
+      const buffer = fs.readFileSync(file.filepath);
       const formData = new FormData();
-      formData.append('file', fileBuffer, { filename: 'input.webm', contentType: 'audio/webm' });
+      formData.append('file', buffer, { filename: 'input.webm', contentType: 'audio/webm' });
       formData.append('model', 'whisper-1');
 
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -43,16 +47,16 @@ export default async function handler(req, res) {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
           ...formData.getHeaders()
         },
-        body: formData
+        body: formData,
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(errorText);
+        throw new Error(`Whisper API error: ${errorText}`);
       }
 
       const result = await response.json();
-      console.log("📝 Transcription:", result.text);
+      console.log("📝 Whisper transcript:", result.text);
       return res.status(200).json({ text: result.text });
     } catch (err) {
       console.error("❌ Whisper API failed:", err);
@@ -60,6 +64,7 @@ export default async function handler(req, res) {
     }
   });
 }
+
 
 
 
