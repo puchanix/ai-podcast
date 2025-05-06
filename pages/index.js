@@ -190,15 +190,11 @@ export default function Home() {
     }
   };
 
-  const cannedQuestions = [
-    "What is creativity?",
-    "How do you stay inspired?",
-    "What advice do you have for young artists?"
-  ];
+  const cannedQuestions = personas[selectedPersona].questions;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-yellow-100 p-4 space-y-4 text-center">
-      <h1 className="text-3xl font-bold">🎙️ Talk to Leonardo</h1>
+      <h1 className="text-3xl font-bold">Talk with the Heroes of History</h1>
       {/* Character Selector */}
       <select
         value={selectedPersona}
