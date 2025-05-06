@@ -1,4 +1,7 @@
 
+console.log("🛠️ Received /api/transcribe POST request");
+
+
 import formidable from 'formidable';
 import fs from 'fs';
 import { Readable } from 'stream';
