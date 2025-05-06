@@ -10,6 +10,7 @@ export default function Home() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isDaVinciSpeaking, setIsDaVinciSpeaking] = useState(false);
   const [daVinciPaused, setDaVinciPaused] = useState(false);
+  const [popularQuestions, setPopularQuestions] = useState([]);
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -19,26 +20,36 @@ export default function Home() {
   const podcastAudio = useRef(null);
   const daVinciAudio = useRef(null);
 
-  const [popularQuestions, setPopularQuestions] = useState([]);
-
-  // Fetch popular questions when persona changes or after a new question is recorded
-  useEffect(() => {
-    async function fetchPopular() {
+  // Fetch popular questions for the selected persona
+  const fetchPopularQuestions = async () => {
+    try {
       const res = await fetch(`/api/question-count?character=${selectedPersona}`);
       const data = await res.json();
       setPopularQuestions(data.questions || []);
+    } catch (err) {
+      console.error("Failed to fetch popular questions", err);
     }
-    fetchPopular();
+  };
+
+  // Refresh popular questions when persona changes
+  useEffect(() => {
+    fetchPopularQuestions();
   }, [selectedPersona]);
 
-  // Record question click for popularity stats
-  async function recordQuestion(question) {
-    await fetch(`/api/question-count`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ character: selectedPersona, question }),
-    });
-  }
+  // Record a question click and refresh list
+  const recordQuestion = async (question) => {
+    if (!question) return;
+    try {
+      await fetch(`/api/question-count`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ character: selectedPersona, question }),
+      });
+      await fetchPopularQuestions();
+    } catch (err) {
+      console.error("Failed to record question click", err);
+    }
+  };
 
   // Detect supported mime type
   useEffect(() => {
@@ -145,7 +156,6 @@ export default function Home() {
     }
   };
 
-  // Simplified ask: include recording popularity
   const handleAsk = async (question) => {
     await recordQuestion(question);
     unlockAudio();
@@ -188,6 +198,7 @@ export default function Home() {
   const togglePodcast = () => {
     if (!podcastAudio.current) return;
     if (podcastAudio.current.paused) {
+      podcastAudio.current.src = personas[selectedPersona].podcast;
       podcastAudio.current.play();
       setIsPodcastPlaying(true);
     } else {
@@ -199,7 +210,6 @@ export default function Home() {
   const toggleDaVinci = () => {
     const da = daVinciAudio.current;
     if (!da) return;
-
     if (da.paused) {
       da.play();
       setIsDaVinciSpeaking(true);
@@ -216,7 +226,6 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-yellow-100 p-4 space-y-4 text-center">
       <h1 className="text-3xl font-bold">Talk with the Heroes of History</h1>
-      {/* Character Selector */}
       <select
         value={selectedPersona}
         onChange={(e) => setSelectedPersona(e.target.value)}
@@ -230,7 +239,6 @@ export default function Home() {
       </select>
 
       <p className="text-blue-700">{statusMessage}</p>
-
       <div className="space-y-2">
         {cannedQuestions.map((q, i) => (
           <button
@@ -264,12 +272,7 @@ export default function Home() {
 
       {!hasStarted && (
         <button
-          onClick={() => {
-            podcastAudio.current.src = personas[selectedPersona].podcast;
-            podcastAudio.current.play();
-            setIsPodcastPlaying(true);
-            setHasStarted(true);
-          }}
+          onClick={togglePodcast}
           className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded"
         >
           ▶️ Start Podcast
@@ -279,13 +282,12 @@ export default function Home() {
       {hasStarted && (
         <button
           onClick={togglePodcast}
-          className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded"
+          className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2.rounded"
         >
           {isPodcastPlaying ? "⏸️ Pause Podcast" : "⏯️ Resume Podcast"}
         </button>
       )}
 
-      {/* Popular Questions Section */}
       <div className="mt-6 w-full max-w-md bg-white p-4 rounded-lg shadow">
         <h2 className="text-xl font-semibold mb-2">Popular Questions</h2>
         {popularQuestions.map((item, idx) => (
@@ -299,7 +301,7 @@ export default function Home() {
         ))}
       </div>
 
-      <audio ref={podcastAudio} hidden preload="auto" src="" />
+      <audio ref={podcastAudio} hidden preload="auto" />
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
     </div>
