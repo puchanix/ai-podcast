@@ -3,9 +3,6 @@ import { useEffect, useRef, useState } from "react";
 export default function Home() {
   const [isThinking, setIsThinking] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [transcript, setTranscript] = useState("");
   const [storyMode, setStoryMode] = useState(false);
   const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
@@ -81,82 +78,6 @@ export default function Home() {
     }
   };
 
-  const startRecording = async () => {
-    setIsRecording(true);
-    setStatusMessage("🎤 Recording...");
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
-    let chunks = [];
-
-    recorder.ondataavailable = (e) => chunks.push(e.data);
-
-    recorder.onstop = async () => {
-      setStatusMessage("📝 Transcribing...");
-      const blob = new Blob(chunks, { type: "audio/webm" });
-      const formData = new FormData();
-      formData.append("audio", blob, "input.webm");
-
-      try {
-        const response = await fetch("/api/transcribe", {
-          method: "POST",
-          body: formData,
-        });
-
-        const rawText = await response.text();
-        console.log("📦 Whisper raw response:", rawText);
-
-        let transcribed;
-        try {
-          const json = JSON.parse(rawText);
-          transcribed = json.text?.trim();
-          console.log("🎤 Transcribed question:", transcribed);
-        } catch (e) {
-          console.error("❌ Failed to parse Whisper response:", e);
-        }
-
-        setTranscript(transcribed || "");
-        setIsRecording(false);
-        setStatusMessage("");
-        handleAsk(transcribed);
-      } catch (err) {
-        console.error("❌ Transcription failed:", err);
-        setIsRecording(false);
-        setStatusMessage("❌ Transcription failed");
-      }
-    };
-
-    recorder.start();
-    setMediaRecorder(recorder);
-
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioCtx.createMediaStreamSource(stream);
-    const analyser = audioCtx.createAnalyser();
-    source.connect(analyser);
-    const data = new Uint8Array(analyser.frequencyBinCount);
-    let silenceStart = null;
-
-    const checkSilence = () => {
-      analyser.getByteFrequencyData(data);
-      const volume = data.reduce((a, b) => a + b) / data.length;
-
-      if (volume < 5) {
-        if (!silenceStart) silenceStart = Date.now();
-        else if (Date.now() - silenceStart > 1500) {
-          recorder.stop();
-          audioCtx.close();
-          return;
-        }
-      } else {
-        silenceStart = null;
-      }
-
-      requestAnimationFrame(checkSilence);
-    };
-
-    requestAnimationFrame(checkSilence);
-  };
-
   const togglePodcast = () => {
     const podcast = podcastAudio.current;
     const answer = daVinciAudio.current;
@@ -198,17 +119,6 @@ export default function Home() {
             {q}
           </button>
         ))}
-      </div>
-
-      <div className="mt-6">
-        {!isRecording && !isThinking && (
-          <button
-            onClick={startRecording}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow"
-          >
-            🎤 Ask with your voice
-          </button>
-        )}
       </div>
 
       <div className="mt-4 space-y-2">
