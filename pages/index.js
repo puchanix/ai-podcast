@@ -124,8 +124,17 @@ export default function Home() {
 
   const handleAsk = async (question) => {
     unlockAudio();
+    stopDaVinci();
+    stopPodcast();
+    // Early exit for empty question
     if (!question?.trim()) {
+      setIsThinking(false);
       setStatusMessage("⚠️ No question found.");
+      // Clear any previous audio source
+      if (daVinciAudio.current) {
+        daVinciAudio.current.pause();
+        daVinciAudio.current.src = "";
+      }
       return;
     }
 
@@ -138,7 +147,12 @@ export default function Home() {
       });
       const { valid } = await validateRes.json();
       if (!valid) {
+        setIsThinking(false);
         setStatusMessage("❓ I didn’t quite get that—could you rephrase?");
+        if (daVinciAudio.current) {
+          daVinciAudio.current.pause();
+          daVinciAudio.current.src = "";
+        }
         return;
       }
     } catch (err) {
