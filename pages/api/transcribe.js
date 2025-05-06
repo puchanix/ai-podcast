@@ -1,17 +1,17 @@
 
-import Busboy from 'busboy';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import FormData from 'form-data';
+const Busboy = require('busboy');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const FormData = require('form-data');
 
-export const config = {
+module.exports.config = {
   api: {
     bodyParser: false,
   },
 };
 
-export default async function handler(req, res) {
+module.exports.default = async function handler(req, res) {
   console.log('🛠️ /api/transcribe called');
 
   if (req.method !== 'POST') {
@@ -23,17 +23,16 @@ export default async function handler(req, res) {
 
   const fileWritePromise = new Promise((resolve, reject) => {
     const busboy = new Busboy({ headers: req.headers });
-    let fileStream;
+    const stream = fs.createWriteStream(filepath);
 
     busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
       console.log(`📥 Receiving file: ${filename}`);
-      fileStream = fs.createWriteStream(filepath);
-      file.pipe(fileStream);
+      file.pipe(stream);
     });
 
     busboy.on('finish', () => {
       console.log('✅ Finished receiving file');
-      resolve(filepath);
+      stream.end(() => resolve(filepath));
     });
 
     busboy.on('error', (err) => {
@@ -76,7 +75,7 @@ export default async function handler(req, res) {
     console.error('❌ Final transcription error:', err);
     return res.status(500).json({ error: 'Failed to transcribe audio' });
   }
-}
+};
 
 
 
