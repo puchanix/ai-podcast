@@ -259,11 +259,17 @@ export default function Home() {
           onClick={togglePodcast}
           className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded"
         >
-          {isPodcastPlaying ? "⏸️ Pause Podcast" : "⏯️ Resume Story"}
+          {isPodcastPlaying ? "⏸️ Pause Story" : "⏯️ Resume Story"}
         </button>
       )}
 
-      <audio ref={podcastAudio} hidden preload="auto" src="/podcast.mp3" />
+<audio
+  ref={podcastAudio}
+  hidden
+  preload="auto"
+  src={personas[selectedPersona].podcast}
+/>
+
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
     </div>
