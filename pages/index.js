@@ -122,44 +122,9 @@ export default function Home() {
     }
   };
 
+  // Simplified ask: no validation or empty check, let Leonardo handle
   const handleAsk = async (question) => {
     unlockAudio();
-    stopDaVinci();
-    stopPodcast();
-    // Early exit for empty question
-    if (!question?.trim()) {
-      setIsThinking(false);
-      setStatusMessage("⚠️ No question found.");
-      // Clear any previous audio source
-      if (daVinciAudio.current) {
-        daVinciAudio.current.pause();
-        daVinciAudio.current.src = "";
-      }
-      return;
-    }
-
-    // Validate question first
-    try {
-      const validateRes = await fetch("/api/validate-question", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
-      });
-      const { valid } = await validateRes.json();
-      if (!valid) {
-        setIsThinking(false);
-        setStatusMessage("❓ I didn’t quite get that—could you rephrase?");
-        if (daVinciAudio.current) {
-          daVinciAudio.current.pause();
-          daVinciAudio.current.src = "";
-        }
-        return;
-      }
-    } catch (err) {
-      console.error("Validation error:", err);
-      // Proceed even if validation fails
-    }
-
     stopDaVinci();
     stopPodcast();
     setIsThinking(true);
