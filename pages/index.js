@@ -49,7 +49,7 @@ export default function Home() {
   };
 
   const startRecording = async () => {
-    unlockAudio(); // 👈 unlock iOS audio
+    unlockAudio();
     stopDaVinci();
     stopPodcast();
 
@@ -101,7 +101,7 @@ export default function Home() {
   };
 
   const handleAsk = async (question) => {
-    unlockAudio(); // 👈 unlock iOS audio
+    unlockAudio();
     if (!question || question.trim() === "") {
       setStatusMessage("⚠️ No question found.");
       return;
@@ -118,9 +118,17 @@ export default function Home() {
 
       const audio = daVinciAudio.current;
       audio.src = url;
-      await audio.play();
 
-      setIsDaVinciSpeaking(true);
+      audio.oncanplaythrough = () => {
+        audio.play()
+          .then(() => {
+            setIsDaVinciSpeaking(true);
+          })
+          .catch((err) => {
+            console.error("Playback error:", err);
+            setStatusMessage("❌ Audio playback failed");
+          });
+      };
 
       audio.onended = () => {
         setIsDaVinciSpeaking(false);
