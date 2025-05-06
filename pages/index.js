@@ -7,6 +7,7 @@ export default function Home() {
   const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [isDaVinciSpeaking, setIsDaVinciSpeaking] = useState(false);
+  const [daVinciPaused, setDaVinciPaused] = useState(false);
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -30,17 +31,21 @@ export default function Home() {
   const stopDaVinci = () => {
     if (daVinciAudio.current) {
       daVinciAudio.current.pause();
-      daVinciAudio.current.currentTime = 0;
       setIsDaVinciSpeaking(false);
+      setDaVinciPaused(true);
     }
   };
 
-  const startRecording = async () => {
-    stopDaVinci(); // ✅ Stop Da Vinci if speaking
+  const stopPodcast = () => {
     if (podcastAudio.current && !podcastAudio.current.paused) {
       podcastAudio.current.pause();
       setIsPodcastPlaying(false);
     }
+  };
+
+  const startRecording = async () => {
+    stopDaVinci();
+    stopPodcast();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -97,16 +102,17 @@ export default function Home() {
       return;
     }
 
-    setIsThinking(true);
     stopDaVinci();
+    stopPodcast();
+    setIsThinking(true);
+    setDaVinciPaused(false);
 
     try {
       const encoded = encodeURIComponent(question);
       const audio = new Audio("/api/ask-stream?question=" + encoded);
       daVinciAudio.current = audio;
-      setIsDaVinciSpeaking(true);
-
       audio.play();
+      setIsDaVinciSpeaking(true);
 
       audio.onended = () => {
         setIsDaVinciSpeaking(false);
@@ -141,12 +147,15 @@ export default function Home() {
   const toggleDaVinci = () => {
     const da = daVinciAudio.current;
     if (!da) return;
+
     if (da.paused) {
       da.play();
       setIsDaVinciSpeaking(true);
+      setDaVinciPaused(false);
     } else {
       da.pause();
       setIsDaVinciSpeaking(false);
+      setDaVinciPaused(true);
     }
   };
 
@@ -176,15 +185,9 @@ export default function Home() {
         </button>
       )}
 
-      {isDaVinciSpeaking && (
-        <button onClick={toggleDaVinci} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
-          ⏸️ Pause Da Vinci
-        </button>
-      )}
-
-      {!isDaVinciSpeaking && daVinciAudio.current && daVinciAudio.current.paused && (
-        <button onClick={toggleDaVinci} className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">
-          ▶️ Resume Da Vinci
+      {(isDaVinciSpeaking || daVinciPaused) && (
+        <button onClick={toggleDaVinci} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+          {isDaVinciSpeaking ? "⏸️ Pause Da Vinci" : "▶️ Resume Da Vinci"}
         </button>
       )}
 
