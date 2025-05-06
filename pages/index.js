@@ -28,6 +28,11 @@ export default function Home() {
     }
   }, []);
 
+  const unlockAudio = () => {
+    const dummy = new Audio("/silent.mp3");
+    dummy.play().catch(() => {});
+  };
+
   const stopDaVinci = () => {
     if (daVinciAudio.current) {
       daVinciAudio.current.pause();
@@ -44,6 +49,7 @@ export default function Home() {
   };
 
   const startRecording = async () => {
+    unlockAudio(); // 👈 unlock iOS audio
     stopDaVinci();
     stopPodcast();
 
@@ -95,6 +101,7 @@ export default function Home() {
   };
 
   const handleAsk = async (question) => {
+    unlockAudio(); // 👈 unlock iOS audio
     if (!question || question.trim() === "") {
       setStatusMessage("⚠️ No question found.");
       return;
@@ -213,6 +220,7 @@ export default function Home() {
 
       <audio ref={podcastAudio} hidden preload="auto" src="/podcast.mp3" />
       <audio ref={daVinciAudio} hidden preload="auto" />
+      <audio hidden preload="auto" src="/silent.mp3" />
     </div>
   );
 }
