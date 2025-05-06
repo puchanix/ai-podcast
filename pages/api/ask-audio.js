@@ -1,4 +1,10 @@
 // pages/api/ask-audio.js
+export default async function handler(req) {
+    console.log("ELEVEN_API_KEY:", Boolean(process.env.ELEVEN_API_KEY));
+    console.log("ELEVEN_VOICE_ID:", process.env.ELEVEN_VOICE_ID);
+    // …rest of your code…
+  }
+
 export const config = { runtime: "edge" };
 
 export default async function handler(req) {
