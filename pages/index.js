@@ -8,6 +8,7 @@ export default function Home() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isDaVinciSpeaking, setIsDaVinciSpeaking] = useState(false);
   const [daVinciPaused, setDaVinciPaused] = useState(false);
+  const [userQuestion, setUserQuestion] = useState("");
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -17,6 +18,7 @@ export default function Home() {
   const podcastAudio = useRef(null);
   const daVinciAudio = useRef(null);
 
+  // Detect supported mime type
   useEffect(() => {
     if (typeof MediaRecorder === "undefined") return;
     if (MediaRecorder.isTypeSupported("audio/webm")) {
@@ -27,6 +29,25 @@ export default function Home() {
       filename.current = "input.ogg";
     }
   }, []);
+
+  // Loader messages while thinking
+  useEffect(() => {
+    if (!isThinking) return;
+    const messages = [
+      "Pondering your question…",
+      "Almost there…",
+      "Just a moment more…",
+      "Leonardo is sketching an answer…"
+    ];
+    let idx = 0;
+    // Show first message immediately
+    setStatusMessage(messages[0]);
+    const iv = setInterval(() => {
+      idx = (idx + 1) % messages.length;
+      setStatusMessage(messages[idx]);
+    }, 3000);
+    return () => clearInterval(iv);
+  }, [isThinking]);
 
   const unlockAudio = () => {
     const dummy = new Audio("/silent.mp3");
@@ -65,10 +86,9 @@ export default function Home() {
       };
 
       recorder.onstop = async () => {
-        
-    const blob = new Blob(chunksRef.current, { type: mimeType.current });
-    chunksRef.current = []; // Clear buffer explicitly
-    
+        const blob = new Blob(chunksRef.current, { type: mimeType.current });
+        chunksRef.current = [];
+
         const formData = new FormData();
         formData.append("audio", blob, filename.current);
 
@@ -76,8 +96,7 @@ export default function Home() {
 
         try {
           const res = await fetch("/api/transcribe", { method: "POST", body: formData });
-          const text = await res.text();
-          const json = JSON.parse(text);
+          const json = await res.json();
           const transcript = json.text?.trim();
           if (!transcript) throw new Error("No transcript");
 
@@ -106,7 +125,7 @@ export default function Home() {
 
   const handleAsk = async (question) => {
     unlockAudio();
-    if (!question || question.trim() === "") {
+    if (!question?.trim()) {
       setStatusMessage("⚠️ No question found.");
       return;
     }
@@ -117,21 +136,17 @@ export default function Home() {
     setDaVinciPaused(false);
 
     const encoded = encodeURIComponent(question);
-    const url = "/api/ask-stream?question=" + encoded;
+    const url = "/api/ask-audio?question=" + encoded;
 
     const audio = daVinciAudio.current;
-    
-    console.log("🔗 Assigning audio src:", url);
     audio.src = url;
-    
     audio.load();
     audio.play()
-      .then(() => {
-        setIsDaVinciSpeaking(true);
-      })
+      .then(() => setIsDaVinciSpeaking(true))
       .catch((err) => {
         console.error("Playback error:", err);
         setStatusMessage("❌ Audio playback failed");
+        setIsThinking(false);
       });
 
     audio.onended = () => {
@@ -143,6 +158,7 @@ export default function Home() {
     audio.onerror = () => {
       console.error("Audio playback error");
       setStatusMessage("❌ Audio playback error");
+      setIsThinking(false);
     };
   };
 
@@ -186,20 +202,31 @@ export default function Home() {
 
       <div className="space-y-2">
         {cannedQuestions.map((q, i) => (
-          <button key={i} onClick={() => handleAsk(q)} className="bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded">
+          <button
+            key={i}
+            onClick={() => handleAsk(q)}
+            disabled={isThinking}
+            className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white py-2 px-4 rounded"
+          >
             {q}
           </button>
         ))}
       </div>
 
       {!isRecording && !isThinking && (
-        <button onClick={startRecording} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+        <button
+          onClick={startRecording}
+          className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded"
+        >
           🎤 Ask with your voice
         </button>
       )}
 
       {(isDaVinciSpeaking || daVinciPaused) && (
-        <button onClick={toggleDaVinci} className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">
+        <button
+          onClick={toggleDaVinci}
+          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+        >
           {isDaVinciSpeaking ? "⏸️ Pause Da Vinci" : "▶️ Resume Da Vinci"}
         </button>
       )}
@@ -218,7 +245,10 @@ export default function Home() {
       )}
 
       {hasStarted && (
-        <button onClick={togglePodcast} className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded">
+        <button
+          onClick={togglePodcast}
+          className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded"
+        >
           {isPodcastPlaying ? "⏸️ Pause Podcast" : "⏯️ Resume Podcast"}
         </button>
       )}
