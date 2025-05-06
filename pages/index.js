@@ -40,7 +40,6 @@ export default function Home() {
       "Leonardo is sketching an answer…"
     ];
     let idx = 0;
-    // Show first message immediately
     setStatusMessage(messages[0]);
     const iv = setInterval(() => {
       idx = (idx + 1) % messages.length;
@@ -128,6 +127,23 @@ export default function Home() {
     if (!question?.trim()) {
       setStatusMessage("⚠️ No question found.");
       return;
+    }
+
+    // Validate question first
+    try {
+      const validateRes = await fetch("/api/validate-question", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      });
+      const { valid } = await validateRes.json();
+      if (!valid) {
+        setStatusMessage("❓ I didn’t quite get that—could you rephrase?");
+        return;
+      }
+    } catch (err) {
+      console.error("Validation error:", err);
+      // Proceed even if validation fails
     }
 
     stopDaVinci();
