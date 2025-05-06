@@ -17,22 +17,30 @@ export default async function handler(req, res) {
   }
 
   const tmpdir = os.tmpdir();
-  let finalFilename = "";
+  let safeFilename = "";
 
   const fileWritePromise = new Promise((resolve, reject) => {
     const busboy = Busboy({ headers: req.headers });
     let filepath = "";
 
     busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
-      finalFilename = filename || "input.webm";
-      filepath = path.join(tmpdir, filename);
+      // SAFELY resolve filename
+      safeFilename = typeof filename === 'string' ? filename : 'input.webm';
+      filepath = path.join(tmpdir, safeFilename);
+
+      console.log(`📥 Writing uploaded file to: ${filepath}`);
+
       const writeStream = fs.createWriteStream(filepath);
       file.pipe(writeStream);
       writeStream.on('close', () => resolve(filepath));
       writeStream.on('error', reject);
     });
 
-    busboy.on('error', reject);
+    busboy.on('error', (err) => {
+      console.error('❌ Busboy error:', err);
+      reject(err);
+    });
+
     req.pipe(busboy);
   });
 
@@ -42,8 +50,8 @@ export default async function handler(req, res) {
 
     const form = new FormData();
     form.append("file", fileBuffer, {
-      filename: finalFilename,
-      contentType: finalFilename.endsWith(".ogg") ? "audio/ogg" : "audio/webm",
+      filename: safeFilename,
+      contentType: safeFilename.endsWith(".ogg") ? "audio/ogg" : "audio/webm",
     });
     form.append("model", "whisper-1");
 
@@ -56,7 +64,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ text: response.data.text });
   } catch (err) {
-    console.error("Transcription error:", err.response?.data || err.message);
+    console.error("❌ Final transcription error:", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to transcribe audio" });
   }
 }
