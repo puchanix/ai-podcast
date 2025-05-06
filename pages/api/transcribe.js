@@ -1,13 +1,22 @@
 
 const formidable = require('formidable');
 const FormData = require('form-data');
-const fs = require('fs');
 
 export const config = {
   api: {
     bodyParser: false,
   },
 };
+
+function parseForm(req) {
+  return new Promise((resolve, reject) => {
+    const form = formidable();
+    form.parse(req, (err, fields, files) => {
+      if (err) reject(err);
+      else resolve({ fields, files });
+    });
+  });
+}
 
 export default async function handler(req, res) {
   console.log("🛠️ Received /api/transcribe POST request");
@@ -16,16 +25,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const form = formidable({});
-  const [fields, files] = await form.parse(req);
-
-  const file = files.audio;
-  if (!file) {
-    return res.status(400).json({ error: 'No audio file provided' });
-  }
-
   try {
-    const buffer = await file.toBuffer(); // new in v3
+    const { files } = await parseForm(req);
+    const file = files.audio;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    const buffer = await file.toBuffer();
     const formData = new FormData();
     formData.append('file', buffer, { filename: 'input.webm', contentType: 'audio/webm' });
     formData.append('model', 'whisper-1');
@@ -52,6 +60,7 @@ export default async function handler(req, res) {
     res.status(500).json({ error: "Failed to transcribe audio" });
   }
 }
+
 
 
 
