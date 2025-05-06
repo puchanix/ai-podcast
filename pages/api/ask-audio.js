@@ -1,13 +1,11 @@
 // pages/api/ask-audio.js
-export default async function handler(req) {
-    console.log("ELEVEN_API_KEY:", Boolean(process.env.ELEVEN_API_KEY));
-    console.log("ELEVEN_VOICE_ID:", process.env.ELEVEN_VOICE_ID);
-    // …rest of your code…
-  }
-
 export const config = { runtime: "edge" };
 
 export default async function handler(req) {
+  // 🔍 DEBUG: log whether env vars are present
+  console.log("ELEVEN_API_KEY present:", Boolean(process.env.ELEVEN_API_KEY));
+  console.log("ELEVEN_VOICE_ID:", process.env.ELEVEN_VOICE_ID);
+
   // 1) Get question from GET or POST
   let question = "";
   if (req.method === "GET") {
@@ -28,7 +26,7 @@ export default async function handler(req) {
     );
   }
 
-  // 2) Fetch the full answer from OpenAI
+  // 2) Fetch full answer from OpenAI
   const systemPrompt =
     process.env.SYSTEM_PROMPT ||
     "You are Leonardo da Vinci, the great Renaissance polymath. Answer concisely but thoughtfully.";
@@ -56,7 +54,7 @@ export default async function handler(req) {
   const { choices } = await openaiRes.json();
   const answer = choices[0].message.content.trim();
 
-  // 3) Send text to ElevenLabs TTS streaming endpoint
+  // 3) Stream audio from ElevenLabs
   const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVEN_VOICE_ID}/stream`;
   const ttsRes = await fetch(ttsUrl, {
     method: "POST",
@@ -66,10 +64,7 @@ export default async function handler(req) {
     },
     body: JSON.stringify({
       text: answer,
-      voice_settings: {
-        stability: 0.75,
-        similarity_boost: 0.75,
-      },
+      voice_settings: { stability: 0.75, similarity_boost: 0.75 },
     }),
   });
   if (!ttsRes.ok) {
@@ -78,7 +73,7 @@ export default async function handler(req) {
     return new Response(err, { status: ttsRes.status });
   }
 
-  // 4) Pipe the audio back
+  // 4) Pipe audio back
   return new Response(ttsRes.body, {
     headers: {
       "Content-Type": "audio/mpeg",
