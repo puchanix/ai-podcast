@@ -3,6 +3,9 @@ import { useEffect, useRef, useState } from "react";
 export default function Home() {
   const [isThinking, setIsThinking] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [recordedChunks, setRecordedChunks] = useState([]);
   const [storyMode, setStoryMode] = useState(false);
   const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
@@ -78,6 +81,72 @@ export default function Home() {
     }
   };
 
+  const startRecording = async () => {
+    try {
+      setIsRecording(true);
+      setStatusMessage("🎤 Recording...");
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      setRecordedChunks([]);
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: "audio/webm" });
+        console.log("🛑 Recording stopped. Blob size:", blob.size);
+        setIsRecording(false);
+        setStatusMessage("⏳ Processing...");
+        setRecordedChunks(chunks);
+        // Phase B: upload will go here
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      source.connect(analyser);
+      analyser.fftSize = 2048;
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      let silenceStart = null;
+      const SILENCE_THRESHOLD = 5;
+      const SILENCE_DURATION = 2000;
+
+      const detectSilence = () => {
+        analyser.getByteFrequencyData(data);
+        const average = data.reduce((a, b) => a + b, 0) / data.length;
+
+        if (average < SILENCE_THRESHOLD) {
+          if (!silenceStart) silenceStart = Date.now();
+          else if (Date.now() - silenceStart > SILENCE_DURATION) {
+            console.log("🤫 Detected 2s silence, stopping recorder");
+            recorder.stop();
+            stream.getTracks().forEach((t) => t.stop());
+            audioCtx.close();
+            return;
+          }
+        } else {
+          silenceStart = null;
+        }
+
+        requestAnimationFrame(detectSilence);
+      };
+
+      requestAnimationFrame(detectSilence);
+      console.log("🎤 Recording started");
+    } catch (err) {
+      console.error("🎙️ Mic setup failed:", err);
+      setStatusMessage("❌ Microphone error");
+      setIsRecording(false);
+    }
+  };
+
   const togglePodcast = () => {
     const podcast = podcastAudio.current;
     const answer = daVinciAudio.current;
@@ -119,6 +188,17 @@ export default function Home() {
             {q}
           </button>
         ))}
+      </div>
+
+      <div className="mt-4">
+        {!isRecording && !isThinking && (
+          <button
+            onClick={startRecording}
+            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow"
+          >
+            🎤 Ask your own question
+          </button>
+        )}
       </div>
 
       <div className="mt-4 space-y-2">
