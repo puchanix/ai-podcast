@@ -12,34 +12,27 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  console.log('🛠️ /api/transcribe called');
-
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const tmpdir = os.tmpdir();
-  const filepath = path.join(tmpdir, `audio-${Date.now()}.ogg`);
+  let finalFilename = "";
 
   const fileWritePromise = new Promise((resolve, reject) => {
     const busboy = Busboy({ headers: req.headers });
-    const writeStream = fs.createWriteStream(filepath);
+    let filepath = "";
 
     busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
-      console.log(`📥 Receiving file: ${filename}`);
+      finalFilename = filename || "input.webm";
+      filepath = path.join(tmpdir, filename);
+      const writeStream = fs.createWriteStream(filepath);
       file.pipe(writeStream);
+      writeStream.on('close', () => resolve(filepath));
+      writeStream.on('error', reject);
     });
 
-    busboy.on('finish', () => {
-      console.log('✅ Finished receiving file');
-      resolve(filepath);
-    });
-
-    busboy.on('error', (err) => {
-      console.error('❌ Busboy error:', err);
-      reject(err);
-    });
-
+    busboy.on('error', reject);
     req.pipe(busboy);
   });
 
@@ -47,28 +40,23 @@ export default async function handler(req, res) {
     const localPath = await fileWritePromise;
     const fileBuffer = fs.readFileSync(localPath);
 
-    const formData = new FormData();
-    formData.append('file', fileBuffer, {
-      filename: 'input.ogg',
-      contentType: 'audio/ogg',
+    const form = new FormData();
+    form.append("file", fileBuffer, {
+      filename: finalFilename,
+      contentType: finalFilename.endsWith(".ogg") ? "audio/ogg" : "audio/webm",
     });
-    formData.append('model', 'whisper-1');
+    form.append("model", "whisper-1");
 
-    const response = await axios.post(
-      'https://api.openai.com/v1/audio/transcriptions',
-      formData,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          ...formData.getHeaders(),
-        },
-      }
-    );
+    const response = await axios.post("https://api.openai.com/v1/audio/transcriptions", form, {
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        ...form.getHeaders(),
+      },
+    });
 
-    console.log('📝 Whisper transcript:', response.data.text);
     res.status(200).json({ text: response.data.text });
   } catch (err) {
-    console.error('❌ Final transcription error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to transcribe audio' });
+    console.error("Transcription error:", err.response?.data || err.message);
+    res.status(500).json({ error: "Failed to transcribe audio" });
   }
 }

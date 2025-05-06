@@ -1,258 +1,81 @@
 import { useEffect, useRef, useState } from "react";
 
 export default function Home() {
-  const [isThinking, setIsThinking] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
   const [isRecording, setIsRecording] = useState(false);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [transcript, setTranscript] = useState("");
-  const [storyMode, setStoryMode] = useState(false);
-  const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false);
-  const [podcastWasPlaying, setPodcastWasPlaying] = useState(false);
-
-  const promptAudio = useRef(null);
-  const choiceAudio = useRef(null);
-  const unlockAudio = useRef(null);
-  const storyAudio = useRef(null);
-  const podcastAudio = useRef(null);
-  const daVinciAudio = useRef(null);
+  const [statusMessage, setStatusMessage] = useState("");
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const mimeType = useRef("audio/webm");
+  const filename = useRef("input.webm");
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      promptAudio.current = new Audio("/prompt.mp3");
-      choiceAudio.current = new Audio("/choice.mp3");
-      unlockAudio.current = new Audio("/unlock.mp3");
+    if (typeof MediaRecorder === "undefined") return;
+    if (MediaRecorder.isTypeSupported("audio/webm")) {
+      mimeType.current = "audio/webm";
+      filename.current = "input.webm";
+    } else if (MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")) {
+      mimeType.current = "audio/ogg; codecs=opus";
+      filename.current = "input.ogg";
+    } else {
+      console.warn("No supported audio format for MediaRecorder");
     }
   }, []);
-
-  const stopAllAudio = () => {
-    [storyAudio.current, promptAudio.current, choiceAudio.current, unlockAudio.current, daVinciAudio.current].forEach(
-      (audio) => {
-        if (audio) {
-          audio.pause();
-          audio.currentTime = 0;
-        }
-      }
-    );
-  };
-
-  const handleAsk = async (question) => {
-    if (!question || question.trim() === "") {
-      setStatusMessage("⚠️ Could not understand your voice.");
-      return;
-    }
-
-    const podcast = podcastAudio.current;
-    if (podcast && !podcast.paused) {
-      podcast.pause();
-      setIsPodcastPlaying(false);
-      setPodcastWasPlaying(true);
-    }
-
-    if (daVinciAudio.current) {
-      daVinciAudio.current.pause();
-      daVinciAudio.current.currentTime = 0;
-    }
-
-    setIsThinking(true);
-    setStatusMessage("🤖 Thinking...");
-
-    try {
-      const encoded = encodeURIComponent(question);
-      const audio = new Audio("/api/ask-stream?question=" + encoded);
-      daVinciAudio.current = audio;
-      audio.play();
-
-      audio.onended = () => {
-        setIsThinking(false);
-        setStatusMessage("");
-      };
-
-      audio.onerror = (err) => {
-        console.error("Audio playback failed:", err);
-        setIsThinking(false);
-        setStatusMessage("❌ Playback failed");
-      };
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      setIsThinking(false);
-      setStatusMessage("❌ Unexpected error");
-    }
-  };
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      let chunks = [];
+      const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
 
-      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
 
       recorder.onstop = async () => {
-        setStatusMessage("📝 Transcribing...");
-        const blob = new Blob(chunks, { type: "audio/webm" });
+        const blob = new Blob(chunksRef.current, { type: mimeType.current });
         const formData = new FormData();
-        formData.append("audio", blob, "input.webm");
+        formData.append("audio", blob, filename.current);
+
+        setStatusMessage("📝 Transcribing...");
 
         try {
-          const response = await fetch("/api/transcribe", {
-            method: "POST",
-            body: formData,
-          });
+          const res = await fetch("/api/transcribe", { method: "POST", body: formData });
+          const text = await res.text();
+          console.log("📦 Whisper raw response:", text);
 
-          const rawText = await response.text();
-          console.log("📦 Whisper raw response:", rawText);
-
-          let transcribed;
-          try {
-            const json = JSON.parse(rawText);
-            transcribed = json.text?.trim();
-            console.log("🎤 Transcribed question:", transcribed);
-          } catch (e) {
-            console.error("❌ Failed to parse Whisper response:", e);
-          }
-
-          setTranscript(transcribed || "");
-          setIsRecording(false);
-          setStatusMessage("");
-          handleAsk(transcribed);
+          const json = JSON.parse(text);
+          const transcript = json.text;
+          if (!transcript) throw new Error("No transcript");
+          setStatusMessage("✅ " + transcript);
         } catch (err) {
           console.error("❌ Transcription failed:", err);
-          setIsRecording(false);
-          setStatusMessage("❌ Transcription failed");
+          setStatusMessage("⚠️ Could not understand your voice.");
         }
+
+        setIsRecording(false);
       };
 
       recorder.start();
-      setMediaRecorder(recorder);
       setIsRecording(true);
-      setStatusMessage("🎤 Recording...");
+      setStatusMessage("🎤 Listening...");
 
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioCtx.createMediaStreamSource(stream);
-      const analyser = audioCtx.createAnalyser();
-      source.connect(analyser);
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      let silenceStart = null;
-
-      const checkSilence = () => {
-        analyser.getByteFrequencyData(data);
-        const volume = data.reduce((a, b) => a + b) / data.length;
-
-        if (volume < 5) {
-          if (!silenceStart) silenceStart = Date.now();
-          else if (Date.now() - silenceStart > 1500) {
-            recorder.stop();
-            audioCtx.close();
-            return;
-          }
-        } else {
-          silenceStart = null;
-        }
-
-        requestAnimationFrame(checkSilence);
-      };
-
-      requestAnimationFrame(checkSilence);
+      setTimeout(() => {
+        if (recorder.state === "recording") recorder.stop();
+      }, 4000); // timeout-based silence fallback
     } catch (err) {
-      console.error("🎙️ Mic setup failed:", err);
-      setIsRecording(false);
+      console.error("Mic error:", err);
       setStatusMessage("❌ Mic not supported");
     }
   };
 
-  const togglePodcast = () => {
-    const podcast = podcastAudio.current;
-    const answer = daVinciAudio.current;
-
-    if (!podcast) return;
-
-    if (podcast.paused) {
-      podcast.play();
-      setIsPodcastPlaying(true);
-      setPodcastWasPlaying(false);
-    } else {
-      podcast.pause();
-      setIsPodcastPlaying(false);
-    }
-
-    if (answer && !answer.paused) {
-      answer.pause();
-    }
-  };
-
-  const cannedQuestions = [
-    "What is creativity?",
-    "How do you stay inspired?",
-    "What advice do you have for young artists?",
-  ];
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-yellow-100 to-yellow-300 flex flex-col items-center justify-center text-center p-4 space-y-6">
-      <h1 className="text-4xl font-bold text-gray-800">🎙️ Talk to Leonardo</h1>
-      <img src="/leonardo.jpg" alt="Leonardo da Vinci" className="w-48 h-48 rounded-full shadow-lg" />
-      {statusMessage && <p className="text-blue-600 font-medium">{statusMessage}</p>}
-      <div className="space-y-4">
-        {cannedQuestions.map((q, index) => (
-          <button
-            key={index}
-            onClick={() => handleAsk(q)}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded shadow"
-          >
-            {q}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-6">
-        {!isRecording && !isThinking && (
-          <button
-            onClick={startRecording}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow"
-          >
-            🎤 Ask with your voice
-          </button>
-        )}
-      </div>
-
-      <div className="mt-4 space-y-2">
-        {!hasStarted && (
-          <button
-            onClick={() => {
-              if (daVinciAudio.current) {
-                daVinciAudio.current.pause();
-                daVinciAudio.current.currentTime = 0;
-              }
-
-              const audio = podcastAudio.current;
-              if (audio) {
-                audio.currentTime = 0;
-                audio.play();
-                setIsPodcastPlaying(true);
-                setHasStarted(true);
-                setPodcastWasPlaying(false);
-              }
-            }}
-            className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded shadow"
-          >
-            ▶️ Start
-          </button>
-        )}
-        {hasStarted && (
-          <button
-            onClick={togglePodcast}
-            className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded shadow"
-          >
-            {isPodcastPlaying ? "⏸️ Pause" : "⏯️ Resume"}
-          </button>
-        )}
-        <audio ref={podcastAudio} hidden preload="auto" src="/podcast.mp3" />
-      </div>
-
-      <audio ref={promptAudio} hidden preload="auto" />
-      <audio ref={choiceAudio} hidden preload="auto" />
-      <audio ref={unlockAudio} hidden preload="auto" src="/silent.mp3" />
+    <div style={{ padding: 20 }}>
+      <h2>Ask Your Own Question</h2>
+      <button onClick={startRecording} disabled={isRecording}>
+        🎤 Ask
+      </button>
+      <p>{statusMessage}</p>
     </div>
   );
 }
