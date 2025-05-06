@@ -2,7 +2,7 @@
 export const config = { runtime: "edge" };
 
 export default async function handler(req) {
-  // 1) Extract question from GET or POST
+  // 1) Get question from GET or POST
   let question = "";
   if (req.method === "GET") {
     question = new URL(req.url).searchParams.get("question") || "";
@@ -24,7 +24,7 @@ export default async function handler(req) {
     );
   }
 
-  // 2) Fetch full answer from OpenAI
+  // 2) Fetch full answer from OpenAI (using GPT-3.5-turbo for lower latency)
   const systemPrompt =
     process.env.SYSTEM_PROMPT ||
     "You are Leonardo da Vinci, the great Renaissance polymath. Answer concisely but thoughtfully.";
@@ -35,7 +35,7 @@ export default async function handler(req) {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o",
+      model: "gpt-3.5-turbo",
       stream: false,
       messages: [
         { role: "system", content: systemPrompt },
@@ -52,7 +52,7 @@ export default async function handler(req) {
   const { choices } = await openaiRes.json();
   const answer = choices[0].message.content.trim();
 
-  // 3) Stream audio from ElevenLabs using the correct env var names
+  // 3) Stream audio from ElevenLabs
   const elevenApiKey = process.env.ELEVENLABS_API_KEY;
   const elevenVoiceId = process.env.ELEVENLABS_VOICE_ID;
   const ttsRes = await fetch(
