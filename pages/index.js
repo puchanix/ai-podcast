@@ -116,30 +116,32 @@ export default function Home() {
       const encoded = encodeURIComponent(question);
       const url = "/api/ask-stream?question=" + encoded;
 
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch audio");
+
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+
       const audio = daVinciAudio.current;
-
       audio.pause();
-      audio.src = "";
+      audio.src = objectUrl;
       audio.load();
-      audio.src = url;
 
-      audio.onloadedmetadata = () => {
-        console.log("🔊 Metadata loaded, attempting to play");
-        audio.play()
-          .then(() => {
-            setIsDaVinciSpeaking(true);
-          })
-          .catch((err) => {
-            console.error("Playback error:", err);
-            setStatusMessage("❌ Audio playback failed");
-          });
-      };
+      audio.play()
+        .then(() => {
+          setIsDaVinciSpeaking(true);
+        })
+        .catch((err) => {
+          console.error("Playback error:", err);
+          setStatusMessage("❌ Audio playback failed");
+        });
 
       audio.onended = () => {
         console.log("✅ Audio finished playing.");
         setIsDaVinciSpeaking(false);
         setIsThinking(false);
         setStatusMessage("");
+        URL.revokeObjectURL(objectUrl);
       };
 
       audio.onerror = () => {
