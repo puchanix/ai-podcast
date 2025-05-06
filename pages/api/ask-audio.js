@@ -2,11 +2,7 @@
 export const config = { runtime: "edge" };
 
 export default async function handler(req) {
-  // 🔍 DEBUG: log whether env vars are present
-  console.log("ELEVEN_API_KEY present:", Boolean(process.env.ELEVEN_API_KEY));
-  console.log("ELEVEN_VOICE_ID:", process.env.ELEVEN_VOICE_ID);
-
-  // 1) Get question from GET or POST
+  // 1) Extract question from GET or POST
   let question = "";
   if (req.method === "GET") {
     question = new URL(req.url).searchParams.get("question") || "";
@@ -14,7 +10,9 @@ export default async function handler(req) {
     try {
       const { question: q } = await req.json();
       question = q || "";
-    } catch {}
+    } catch {
+      // ignore JSON parse errors
+    }
   } else {
     return new Response("Method Not Allowed", { status: 405 });
   }
@@ -54,26 +52,30 @@ export default async function handler(req) {
   const { choices } = await openaiRes.json();
   const answer = choices[0].message.content.trim();
 
-  // 3) Stream audio from ElevenLabs
-  const ttsUrl = `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVEN_VOICE_ID}/stream`;
-  const ttsRes = await fetch(ttsUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "xi-api-key": process.env.ELEVEN_API_KEY,
-    },
-    body: JSON.stringify({
-      text: answer,
-      voice_settings: { stability: 0.75, similarity_boost: 0.75 },
-    }),
-  });
+  // 3) Stream audio from ElevenLabs using the correct env var names
+  const elevenApiKey = process.env.ELEVENLABS_API_KEY;
+  const elevenVoiceId = process.env.ELEVENLABS_VOICE_ID;
+  const ttsRes = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${elevenVoiceId}/stream`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "xi-api-key": elevenApiKey,
+      },
+      body: JSON.stringify({
+        text: answer,
+        voice_settings: { stability: 0.75, similarity_boost: 0.75 },
+      }),
+    }
+  );
   if (!ttsRes.ok) {
     const err = await ttsRes.text();
     console.error("ElevenLabs TTS error:", err);
     return new Response(err, { status: ttsRes.status });
   }
 
-  // 4) Pipe audio back
+  // 4) Return the audio stream
   return new Response(ttsRes.body, {
     headers: {
       "Content-Type": "audio/mpeg",
