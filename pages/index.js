@@ -226,7 +226,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background text-copy p-4 space-y-4 text-center">
-      <h1 className="text-h1 font-bold uppercase font-[Cinzel] tracking-wide">
+      <h1 className="text-h1 font-bold uppercase font-[Cinzel] tracking-wide text-heading">
       TALK TO THE HEROES OF HISTORY</h1>
       <img
   src={personas[selectedPersona].image}
@@ -252,7 +252,7 @@ export default function Home() {
             key={i}
             onClick={() => handleAsk(q)}
             disabled={isThinking}
-            className="bg-button hover:bg-button-dark disabled:bg-neutral-dark text-copy py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out"
+            className="bg-button hover:bg-button-dark disabled:bg-neutral-dark text-white py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out"
           >
             {q}
           </button>
@@ -262,7 +262,7 @@ export default function Home() {
       {!isRecording && !isThinking && (
         <button
           onClick={startRecording}
-          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow"
+          className="bg-secondary hover:bg-secondary-dark text-white px-4 py-2 rounded shadow"
         >
           🎤 Ask with your voice
         </button>
@@ -271,13 +271,13 @@ export default function Home() {
       {(isDaVinciSpeaking || daVinciPaused) && (
         <button
           onClick={toggleDaVinci}
-          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded shadow"
+          className="bg-secondary hover:bg-secondary-dark text-white px-4 py-2 rounded shadow"
         >
           {isDaVinciSpeaking ? "⏸️ Pause Response" : "▶️ Resume Response"}
         </button>
       )}
 
-<div className="mt-6 w-full max-w-md bg-pantone-318 p-4 rounded-lg shadow-lg">
+<div className="mt-6 w-full max-w-md bg-background-accent p-4 rounded-lg shadow-lg">
         <h2 className="text-h2 font-semibold mb-2">Popular Questions</h2>
         {popularQuestions.map((item, idx) => (
           <button
