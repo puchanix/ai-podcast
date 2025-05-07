@@ -272,7 +272,7 @@ export default function Home() {
         </button>
       )}
 
-<div className="mt-6 w-full max-w-md bg-pantone-318 p-4 rounded-lg shadow-lg">
+<div className="mt-6 w-full max-w-md bg-pantone-300 p-4 rounded-lg shadow-lg">
         <h2 className="text-h2 font-semibold mb-2">Popular Questions</h2>
         {popularQuestions.map((item, idx) => (
           <button
