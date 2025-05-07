@@ -5,7 +5,23 @@ module.exports = {
     './components/**/*.{js,ts,jsx,tsx}'
   ],
   theme: {
-    extend: {
+    
+extend: {
+  colors: {
+    background: '#003344',
+    'background-accent': '#014D57',
+    button: '#D97706',                  // Mellow Frida-inspired orange
+    'button-dark': '#B45309',           // Deeper variant
+    secondary: '#1976D2',
+    'secondary-dark': '#1565C0',
+    copy: '#FFFFFF',
+    'copy-soft': '#E0F7FA',
+    heading: '#D7A86E',                 // Frida light brown
+    neutral: '#F0F0F0',
+    'neutral-dark': '#D9D9D9',
+    'box-accent': '#A9C8A4',            // Light sage green from chin
+  },
+
       colors: {
         background: '#003344',              // Deep navy-teal
         'background-accent': '#014D57',     // Muted greenish teal
@@ -18,6 +34,17 @@ module.exports = {
         heading: '#FFF8E1',
         neutral: '#F0F0F0',
         'neutral-dark': '#D9D9D9',
+        'pantone-628': '#B8DDE1',
+        'pantone-300': '#0072CE'
+      },
+      colors: {
+        background: '#008F95',       // Pantone 323
+        'background-dark': '#007A84', // Darker shade for hover or accents
+        button: '#003057',           // Pantone 295
+        'button-dark': '#002646',    // Darker shade for active states
+        copy: '#FFFFFF',             // White text
+        neutral: '#F0F0F0',          // Light gray for panels/backgrounds
+        'neutral-dark': '#D9D9D9',    // Slightly darker gray for borders
         'pantone-628': '#B8DDE1',
         'pantone-300': '#0072CE'
       },
