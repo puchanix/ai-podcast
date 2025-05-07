@@ -236,7 +236,7 @@ export default function Home() {
       <select
         value={selectedPersona}
         onChange={(e) => setSelectedPersona(e.target.value)}
-        className="mb-4 p-2 rounded border text-black bg-pantone-628"
+        className="mb-4 p-2 rounded border text-black bg-box-accent"
       >
         {Object.values(personas).map((p) => (
           <option key={p.id} value={p.id}>
@@ -277,13 +277,13 @@ export default function Home() {
         </button>
       )}
 
-<div className="mt-6 w-full max-w-md bg-background-accent p-4 rounded-lg shadow-lg">
+<div className="mt-6 w-full max-w-md bg-box-accent p-4 rounded-lg shadow-lg">
         <h2 className="text-h2 font-semibold mb-2">Popular Questions</h2>
         {popularQuestions.map((item, idx) => (
           <button
             key={idx}
             onClick={() => handleAsk(item.question)}
-            className="w-full text-left bg-pantone-628 hover:bg-neutral-dark py-2 px-3 mb-2 rounded text-black"
+            className="w-full text-left bg-box-accent hover:bg-neutral-dark py-2 px-3 mb-2 rounded text-black"
           >
             {item.question}
           </button>
