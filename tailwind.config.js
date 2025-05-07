@@ -14,6 +14,7 @@ module.exports = {
         copy: '#FFFFFF',             // White text
         neutral: '#F0F0F0',          // Light gray for panels/backgrounds
         'neutral-dark': '#D9D9D9',    // Slightly darker gray for borders
+        'pantone-628': '#B8DDE1',
         'pantone-300': '#0072CE'
       },
       fontSize: {

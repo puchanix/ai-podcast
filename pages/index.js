@@ -226,11 +226,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background text-copy p-4 space-y-4 text-center">
-      <h1 className="text-h1 font-bold uppercase font-[Cinzel] tracking-wide">TALK TO THE HEROES OF HISTORY</h1>
+      <h1 className="text-h1 font-bold">Talk with the Heroes of History</h1>
       <select
         value={selectedPersona}
         onChange={(e) => setSelectedPersona(e.target.value)}
-        className="mb-4 p-2 rounded border text-black"
+        className="mb-4 p-2 rounded border text-black bg-pantone-628"
       >
         {Object.values(personas).map((p) => (
           <option key={p.id} value={p.id}>
@@ -240,14 +240,13 @@ export default function Home() {
       </select>
 
       <p className="text-neutral-dark font-medium">{statusMessage}</p>
-      <div className="flex flex-wrap justify-center gap-3">
-
+      <div className="space-y-2">
         {uiQuestions.map((q, i) => (
           <button
             key={i}
             onClick={() => handleAsk(q)}
             disabled={isThinking}
-            className="bg-button hover:bg-button-dark disabled:bg-neutral-dark text-copy py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out"
+            className="bg-button hover:bg-button-dark disabled:bg-neutral-dark text-copy py-2 px-4 rounded shadow"
           >
             {q}
           </button>
@@ -272,13 +271,13 @@ export default function Home() {
         </button>
       )}
 
-<div className="mt-6 w-full max-w-md bg-pantone-300 p-4 rounded-lg shadow-lg">
+      <div className="mt-6 w-full max-w-md bg-neutral p-4 rounded-lg shadow-lg">
         <h2 className="text-h2 font-semibold mb-2">Popular Questions</h2>
         {popularQuestions.map((item, idx) => (
           <button
             key={idx}
             onClick={() => handleAsk(item.question)}
-            className="w-full text-left bg-white hover:bg-neutral-dark py-2 px-3 mb-2 rounded text-black"
+            className="w-full text-left bg-pantone-628 hover:bg-neutral-dark py-2 px-3 mb-2 rounded text-black"
           >
             {item.question}
           </button>
