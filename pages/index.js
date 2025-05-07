@@ -302,3 +302,9 @@ export default function Home() {
     </div>
   );
 }
+<footer className="mt-10 text-sm text-copy-soft">
+  <div className="flex space-x-6 justify-center">
+    <a href="/about" className="hover:underline">About</a>
+    <a href="/feedback" className="hover:underline">Feedback</a>
+  </div>
+</footer>
