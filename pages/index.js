@@ -299,12 +299,15 @@ export default function Home() {
       <audio ref={podcastAudio} hidden preload="auto" />
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
-    </div>
-  );
-}
-<footer className="mt-10 text-sm text-copy-soft">
+
+      <footer className="mt-10 text-sm text-copy-soft">
   <div className="flex space-x-6 justify-center">
     <a href="/about" className="hover:underline">About</a>
     <a href="/feedback" className="hover:underline">Feedback</a>
   </div>
 </footer>
+
+    </div>
+  );
+}
+
