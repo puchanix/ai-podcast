@@ -11,14 +11,15 @@ module.exports = {
       colors: {
         background: '#001f2f',
         'background-top': '#004050',
-        'box-accent': '#1e4e4e',
+        'box-accent': '#344e5c',
+        'dropdown-bg': '#2d3e3e',
         'button-primary': '#c25e2c',
         'button-hover': '#9b451e',
+        'voice-button': '#d6b56c',
         heading: '#d6b56c',
         copy: '#ffffff',
         'copy-soft': '#f5f5f5',
         border: '#d9d9d9',
-        'dropdown-bg': '#f1e9dc'
       },
       fontFamily: {
         heading: ['"Cinzel Decorative"', 'serif'],

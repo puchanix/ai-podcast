@@ -239,7 +239,7 @@ export default function Home() {
       <select
         value={selectedPersona}
         onChange={(e) => setSelectedPersona(e.target.value)}
-        className="mt-2 mb-6 p-2 rounded border border-border text-black bg-dropdown-bg bg-opacity-90 shadow-sm"
+        className="mt-2 mb-6 p-2 rounded border border-border text-white bg-dropdown-bg bg-opacity-95 shadow-sm"
       >
         {Object.values(personas).map((p) => (
           <option key={p.id} value={p.id}>
@@ -266,7 +266,7 @@ export default function Home() {
       {!isRecording && !isThinking && (
         <button
           onClick={startRecording}
-          className="bg-button-primary hover:bg-button-hover text-white py-2 px-5 mt-4 rounded-full shadow-md"
+          className="bg-voice-button text-black font-semibold py-3 px-6 mt-4 rounded-full shadow-lg ring-2 ring-heading hover:ring-offset-2 hover:scale-105 transition-all duration-200"
         >
           🎤 Ask with your voice
         </button>
