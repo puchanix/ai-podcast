@@ -20,7 +20,6 @@ export default function Home() {
   const podcastAudio = useRef(null);
   const daVinciAudio = useRef(null);
 
-  // Fetch popular questions for the selected persona
   const fetchPopularQuestions = async () => {
     try {
       const res = await fetch(`/api/question-count?character=${selectedPersona}`);
@@ -31,12 +30,10 @@ export default function Home() {
     }
   };
 
-  // Refresh popular questions when persona changes
   useEffect(() => {
     fetchPopularQuestions();
   }, [selectedPersona]);
 
-  // Record a question click and refresh list
   const recordQuestion = async (question) => {
     if (!question) return;
     try {
@@ -51,7 +48,6 @@ export default function Home() {
     }
   };
 
-  // Detect supported mime type
   useEffect(() => {
     if (typeof MediaRecorder === "undefined") return;
     if (MediaRecorder.isTypeSupported("audio/webm")) {
@@ -63,7 +59,6 @@ export default function Home() {
     }
   }, []);
 
-  // Loader messages while thinking
   useEffect(() => {
     if (!isThinking) return;
     const messages = [
@@ -157,6 +152,10 @@ export default function Home() {
   };
 
   const handleAsk = async (question) => {
+    if (question === "Tell me Your Story") {
+      togglePodcast();
+      return;
+    }
     await recordQuestion(question);
     unlockAudio();
     stopDaVinci();
@@ -226,12 +225,12 @@ export default function Home() {
   const uiQuestions = ["Tell me Your Story", ...personas[selectedPersona].questions];
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-yellow-100 p-4 space-y-4 text-center">
-      <h1 className="text-3xl font-bold">Talk with the Heroes of History</h1>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background text-copy p-4 space-y-4 text-center">
+      <h1 className="text-h1 font-bold">Talk with the Heroes of History</h1>
       <select
         value={selectedPersona}
         onChange={(e) => setSelectedPersona(e.target.value)}
-        className="mb-4 p-2 rounded border"
+        className="mb-4 p-2 rounded border text-black"
       >
         {Object.values(personas).map((p) => (
           <option key={p.id} value={p.id}>
@@ -240,14 +239,14 @@ export default function Home() {
         ))}
       </select>
 
-      <p className="text-blue-700">{statusMessage}</p>
+      <p className="text-neutral-dark font-medium">{statusMessage}</p>
       <div className="space-y-2">
         {uiQuestions.map((q, i) => (
           <button
             key={i}
             onClick={() => handleAsk(q)}
             disabled={isThinking}
-            className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white py-2 px-4 rounded"
+            className="bg-button hover:bg-button-dark disabled:bg-neutral-dark text-copy py-2 px-4 rounded shadow"
           >
             {q}
           </button>
@@ -257,7 +256,7 @@ export default function Home() {
       {!isRecording && !isThinking && (
         <button
           onClick={startRecording}
-          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded"
+          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow"
         >
           🎤 Ask with your voice
         </button>
@@ -266,20 +265,19 @@ export default function Home() {
       {(isDaVinciSpeaking || daVinciPaused) && (
         <button
           onClick={toggleDaVinci}
-          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded shadow"
         >
           {isDaVinciSpeaking ? "⏸️ Pause Response" : "▶️ Resume Response"}
         </button>
       )}
 
-      {/* Popular Questions Section */}
-      <div className="mt-6 w-full max-w-md bg-white p-4 rounded-lg shadow">
-        <h2 className="text-xl font-semibold mb-2">Popular Questions</h2>
+      <div className="mt-6 w-full max-w-md bg-neutral p-4 rounded-lg shadow-lg">
+        <h2 className="text-h2 font-semibold mb-2">Popular Questions</h2>
         {popularQuestions.map((item, idx) => (
           <button
             key={idx}
             onClick={() => handleAsk(item.question)}
-            className="w-full text-left bg-gray-100 hover:bg-gray-200 py-2 px-3 mb-2 rounded"
+            className="w-full text-left bg-white hover:bg-neutral-dark py-2 px-3 mb-2 rounded text-black"
           >
             {item.question}
           </button>
@@ -292,4 +290,3 @@ export default function Home() {
     </div>
   );
 }
-
