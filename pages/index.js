@@ -228,6 +228,11 @@ export default function Home() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-background text-copy p-4 space-y-4 text-center">
       <h1 className="text-h1 font-bold uppercase font-[Cinzel] tracking-wide">
       TALK TO THE HEROES OF HISTORY</h1>
+      <img
+  src={personas[selectedPersona].image}
+  alt={personas[selectedPersona].name}
+  className="w-32 h-32 rounded-full object-cover mb-4 shadow-md"
+/>
       <select
         value={selectedPersona}
         onChange={(e) => setSelectedPersona(e.target.value)}
