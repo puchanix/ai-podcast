@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { personas } from "../lib/personas";
 
 export default function Home() {
+  const [selectedPersona, setSelectedPersona] = useState("daVinci");
   const [isRecording, setIsRecording] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -8,7 +10,7 @@ export default function Home() {
   const [hasStarted, setHasStarted] = useState(false);
   const [isDaVinciSpeaking, setIsDaVinciSpeaking] = useState(false);
   const [daVinciPaused, setDaVinciPaused] = useState(false);
-  const [userQuestion, setUserQuestion] = useState("");
+  const [popularQuestions, setPopularQuestions] = useState([]);
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -18,7 +20,34 @@ export default function Home() {
   const podcastAudio = useRef(null);
   const daVinciAudio = useRef(null);
 
-  // Detect supported mime type
+  const fetchPopularQuestions = async () => {
+    try {
+      const res = await fetch(`/api/question-count?character=${selectedPersona}`);
+      const data = await res.json();
+      setPopularQuestions(data.questions || []);
+    } catch (err) {
+      console.error("Failed to fetch popular questions", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchPopularQuestions();
+  }, [selectedPersona]);
+
+  const recordQuestion = async (question) => {
+    if (!question) return;
+    try {
+      await fetch(`/api/question-count`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ character: selectedPersona, question }),
+      });
+      await fetchPopularQuestions();
+    } catch (err) {
+      console.error("Failed to record question click", err);
+    }
+  };
+
   useEffect(() => {
     if (typeof MediaRecorder === "undefined") return;
     if (MediaRecorder.isTypeSupported("audio/webm")) {
@@ -30,14 +59,13 @@ export default function Home() {
     }
   }, []);
 
-  // Loader messages while thinking
   useEffect(() => {
     if (!isThinking) return;
     const messages = [
       "Pondering your question…",
       "Almost there…",
       "Just a moment more…",
-      "Leonardo is sketching an answer…"
+      `${personas[selectedPersona].name} is working on your question…`
     ];
     let idx = 0;
     setStatusMessage(messages[0]);
@@ -46,7 +74,7 @@ export default function Home() {
       setStatusMessage(messages[idx]);
     }, 3000);
     return () => clearInterval(iv);
-  }, [isThinking]);
+  }, [isThinking, selectedPersona]);
 
   const unlockAudio = () => {
     const dummy = new Audio("/silent.mp3");
@@ -100,6 +128,7 @@ export default function Home() {
           if (!transcript) throw new Error("No transcript");
 
           setStatusMessage("🎧 Answering...");
+          await recordQuestion(transcript);
           handleAsk(transcript);
         } catch (err) {
           console.error("❌ Transcription failed:", err);
@@ -122,8 +151,12 @@ export default function Home() {
     }
   };
 
-  // Simplified ask: no validation or empty check, let Leonardo handle
   const handleAsk = async (question) => {
+    if (question === "Tell me Your Story") {
+      togglePodcast();
+      return;
+    }
+    await recordQuestion(question);
     unlockAudio();
     stopDaVinci();
     stopPodcast();
@@ -131,7 +164,8 @@ export default function Home() {
     setDaVinciPaused(false);
 
     const encoded = encodeURIComponent(question);
-    const url = "/api/ask-audio?question=" + encoded;
+    const url = `/api/ask-audio?character=${selectedPersona}` +
+      `&question=${encoded}`;
 
     const audio = daVinciAudio.current;
     audio.src = url;
@@ -164,8 +198,10 @@ export default function Home() {
   const togglePodcast = () => {
     if (!podcastAudio.current) return;
     if (podcastAudio.current.paused) {
+      podcastAudio.current.src = personas[selectedPersona].podcast;
       podcastAudio.current.play();
       setIsPodcastPlaying(true);
+      setHasStarted(true);
     } else {
       podcastAudio.current.pause();
       setIsPodcastPlaying(false);
@@ -175,7 +211,6 @@ export default function Home() {
   const toggleDaVinci = () => {
     const da = daVinciAudio.current;
     if (!da) return;
-
     if (da.paused) {
       da.play();
       setIsDaVinciSpeaking(true);
@@ -187,25 +222,37 @@ export default function Home() {
     }
   };
 
-  const cannedQuestions = [
-    "What is creativity?",
-    "How do you stay inspired?",
-    "What advice do you have for young artists?"
-  ];
+  const uiQuestions = ["Tell me Your Story", ...personas[selectedPersona].questions];
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-yellow-100 p-4 space-y-4 text-center">
-      <h1 className="text-3xl font-bold">🎙️ Talk to Leonardo</h1>
-      <img src="/leonardo.jpg" alt="Leonardo" className="w-40 h-40 rounded-full" />
-      <p className="text-blue-700">{statusMessage}</p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background text-copy p-4 space-y-4 text-center">
+      <h1 className="text-h1 font-bold uppercase font-[Cinzel] tracking-wide">
+      TALK TO THE HEROES OF HISTORY</h1>
+      <img
+  src={personas[selectedPersona].image}
+  alt={personas[selectedPersona].name}
+  className="w-32 h-32 rounded-full object-cover mb-4 shadow-md"
+/>
+      <select
+        value={selectedPersona}
+        onChange={(e) => setSelectedPersona(e.target.value)}
+        className="mb-4 p-2 rounded border text-black bg-pantone-628"
+      >
+        {Object.values(personas).map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
 
-      <div className="space-y-2">
-        {cannedQuestions.map((q, i) => (
+      <p className="text-neutral-dark font-medium">{statusMessage}</p>
+      <div className="flex flex-wrap justify-center gap-3">
+        {uiQuestions.map((q, i) => (
           <button
             key={i}
             onClick={() => handleAsk(q)}
             disabled={isThinking}
-            className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white py-2 px-4 rounded"
+            className="bg-button hover:bg-button-dark disabled:bg-neutral-dark text-copy py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out"
           >
             {q}
           </button>
@@ -215,7 +262,7 @@ export default function Home() {
       {!isRecording && !isThinking && (
         <button
           onClick={startRecording}
-          className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded"
+          className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow"
         >
           🎤 Ask with your voice
         </button>
@@ -224,35 +271,26 @@ export default function Home() {
       {(isDaVinciSpeaking || daVinciPaused) && (
         <button
           onClick={toggleDaVinci}
-          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+          className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded shadow"
         >
-          {isDaVinciSpeaking ? "⏸️ Pause Da Vinci" : "▶️ Resume Da Vinci"}
+          {isDaVinciSpeaking ? "⏸️ Pause Response" : "▶️ Resume Response"}
         </button>
       )}
 
-      {!hasStarted && (
-        <button
-          onClick={() => {
-            podcastAudio.current.play();
-            setIsPodcastPlaying(true);
-            setHasStarted(true);
-          }}
-          className="bg-indigo-500 hover:bg-indigo-600 text-white px-4 py-2 rounded"
-        >
-          ▶️ Start Podcast
-        </button>
-      )}
+<div className="mt-6 w-full max-w-md bg-pantone-318 p-4 rounded-lg shadow-lg">
+        <h2 className="text-h2 font-semibold mb-2">Popular Questions</h2>
+        {popularQuestions.map((item, idx) => (
+          <button
+            key={idx}
+            onClick={() => handleAsk(item.question)}
+            className="w-full text-left bg-pantone-628 hover:bg-neutral-dark py-2 px-3 mb-2 rounded text-black"
+          >
+            {item.question}
+          </button>
+        ))}
+      </div>
 
-      {hasStarted && (
-        <button
-          onClick={togglePodcast}
-          className="bg-indigo-400 hover:bg-indigo-500 text-white px-4 py-2 rounded"
-        >
-          {isPodcastPlaying ? "⏸️ Pause Podcast" : "⏯️ Resume Podcast"}
-        </button>
-      )}
-
-      <audio ref={podcastAudio} hidden preload="auto" src="/podcast.mp3" />
+      <audio ref={podcastAudio} hidden preload="auto" />
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
     </div>
