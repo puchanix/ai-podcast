@@ -1,6 +1,4 @@
 // pages/admin.js
-
-// Prevent static prerendering — use SSR for this dynamic admin page
 export async function getServerSideProps() {
     return { props: {} };
   }
@@ -11,8 +9,8 @@ export async function getServerSideProps() {
   export default function Admin() {
     const [selectedPersona, setSelectedPersona] = useState('daVinci');
     const [questions, setQuestions] = useState([]);
+    const [feedback, setFeedback] = useState([]);
   
-    // Fetch questions for the selected persona
     const fetchQuestions = async () => {
       try {
         const res = await fetch(`/api/question-count?character=${selectedPersona}`);
@@ -23,25 +21,36 @@ export async function getServerSideProps() {
       }
     };
   
+    const fetchFeedback = async () => {
+      try {
+        const res = await fetch(`/api/feedback`);
+        const data = await res.json();
+        setFeedback(data.feedback || []);
+      } catch (err) {
+        console.error('Failed to fetch feedback', err);
+      }
+    };
+  
     useEffect(() => {
       fetchQuestions();
     }, [selectedPersona]);
   
-    // Reset all questions across all characters
+    useEffect(() => {
+      fetchFeedback();
+    }, []);
+  
     const handleResetAll = async () => {
       if (!confirm('Are you sure you want to reset ALL questions?')) return;
       await fetch('/api/question-count', { method: 'DELETE' });
       fetchQuestions();
     };
   
-    // Reset questions for current character
     const handleResetCharacter = async () => {
       if (!confirm(`Reset all questions for ${personas[selectedPersona].name}?`)) return;
       await fetch(`/api/question-count?character=${selectedPersona}`, { method: 'DELETE' });
       fetchQuestions();
     };
   
-    // Delete a specific question
     const handleDeleteQuestion = async (q) => {
       if (!confirm(`Delete question: "${q}"?`)) return;
       await fetch(
@@ -52,7 +61,7 @@ export async function getServerSideProps() {
     };
   
     return (
-      <div className="p-6 max-w-xl mx-auto">
+      <div className="p-6 max-w-xl mx-auto text-copy">
         <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1>
         <div className="mb-4 flex items-center space-x-2">
           <button
@@ -80,8 +89,10 @@ export async function getServerSideProps() {
           </button>
         </div>
   
-        <h2 className="text-xl font-semibold mb-2">Questions for {personas[selectedPersona].name}</h2>
-        <ul className="space-y-2">
+        <h2 className="text-xl font-semibold mb-2">
+          Questions for {personas[selectedPersona].name}
+        </h2>
+        <ul className="space-y-2 mb-10">
           {questions.map(({ question }, idx) => (
             <li key={idx} className="flex justify-between items-center bg-gray-100 p-2 rounded">
               <span>{question}</span>
@@ -94,7 +105,20 @@ export async function getServerSideProps() {
             </li>
           ))}
         </ul>
+  
+        <h2 className="text-xl font-semibold mb-2">Feedback</h2>
+        <ul className="space-y-2">
+          {feedback
+            .slice()
+            .reverse()
+            .map((entry, idx) => (
+              <li key={idx} className="bg-box-accent text-black p-3 rounded shadow">
+                <span className="text-sm">{entry.text}</span>
+              </li>
+          ))}
+        </ul>
       </div>
     );
   }
+  
   
