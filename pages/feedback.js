@@ -5,19 +5,27 @@ export default function Feedback() {
   const [text, setText] = useState("");
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    await fetch("/api/submit-feedback", {
+    e.preventDefault(); // 🛑 Prevent default form submission
+    const res = await fetch("/api/feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     });
-    setSubmitted(true);
+
+    if (res.ok) {
+      setSubmitted(true);
+      setText("");
+    } else {
+      alert("Failed to submit feedback.");
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background text-copy p-8">
       <form onSubmit={handleSubmit} className="w-full max-w-md space-y-4">
-        <label className="block text-lg font-semibold">Please share your feedback and suggestions.</label>
+        <label className="block text-lg font-semibold">
+          Please share your feedback and suggestions.
+        </label>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -36,3 +44,4 @@ export default function Feedback() {
     </div>
   );
 }
+
