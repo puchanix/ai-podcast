@@ -226,7 +226,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background-top to-background text-copy p-4 space-y-6 text-center">
-      <h1 className="text-3xl sm:text-4xl font-heading font-bold tracking-wide text-heading drop-shadow-sm">
+      <h1 className="text-3xl sm:text-4xl font-heading font-bold tracking-wide text-heading drop-shadow-sm uppercase">
         Talk to the Heroes of History
       </h1>
 
@@ -281,8 +281,8 @@ export default function Home() {
         </button>
       )}
 
-      <div className="mt-6 w-full max-w-md bg-box-accent p-4 rounded-xl shadow-lg border border-border">
-        <h2 className="text-heading font-bold text-lg mb-2">Popular Questions</h2>
+      <div className="mt-10 w-full max-w-md bg-box-accent p-5 rounded-xl shadow-lg border border-border">
+        <h2 className="text-heading font-heading font-bold text-lg uppercase tracking-wider drop-shadow-sm opacity-90 mb-4">Popular Questions</h2>
         <div className="space-y-2">
           {popularQuestions.map((item, idx) => (
             <button
