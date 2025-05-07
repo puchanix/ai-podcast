@@ -4,11 +4,13 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply font-body text-copy antialiased;
-  background: linear-gradient(to bottom, #004050, #001f2f);
-}
+@layer base {
+  body {
+    @apply font-body text-copy antialiased;
+    background: linear-gradient(to bottom, #004050, #001f2f);
+  }
 
-h1, h2, h3 {
-  @apply font-heading;
+  h1, h2, h3 {
+    @apply font-heading;
+  }
 }
