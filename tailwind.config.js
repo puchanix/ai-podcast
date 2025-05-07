@@ -9,18 +9,20 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: '#003344',
-        'background-accent': '#014D57',
-        button: '#D97706',
-        'button-dark': '#B45309',
-        secondary: '#1976D2',
-        'secondary-dark': '#1565C0',
-        copy: '#FFFFFF',
-        'copy-soft': '#E0F7FA',
-        heading: '#D7A86E',
-        neutral: '#F0F0F0',
-        'neutral-dark': '#D9D9D9',
-        'box-accent': '#A9C8A4',
+        background: '#001f2f',
+        'background-top': '#004050',
+        'box-accent': '#f1e9dc',
+        'button-primary': '#c25e2c',
+        'button-hover': '#9b451e',
+        heading: '#d6b56c',
+        copy: '#ffffff',
+        'copy-soft': '#f5f5f5',
+        border: '#d9d9d9',
+        'dropdown-bg': '#f1e9dc',
+      },
+      fontFamily: {
+        heading: ['"Cinzel Decorative"', 'serif'],
+        body: ['"Inter"', 'sans-serif']
       },
     },
   },
