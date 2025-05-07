@@ -1,35 +1,41 @@
 
-import fs from 'fs';
-import path from 'path';
+import { createClient } from 'redis';
 
-const feedbackFile = path.resolve('./data', 'feedback.json');
+const redisClient = createClient({ url: process.env.REDIS_URL });
+let isRedisConnected = false;
 
-export default function handler(req, res) {
+async function getRedis() {
+  if (!isRedisConnected) {
+    redisClient.on('error', (err) => console.error('Redis Client Error', err));
+    await redisClient.connect();
+    isRedisConnected = true;
+  }
+  return redisClient;
+}
+
+export default async function handler(req, res) {
+  const client = await getRedis();
+
   if (req.method === 'POST') {
     const { text } = req.body;
-    if (typeof text !== 'string' || text.trim() === '') {
+    if (!text || typeof text !== 'string' || text.trim() === '') {
       return res.status(400).json({ error: 'Invalid feedback' });
     }
-
-    let existing = [];
-    if (fs.existsSync(feedbackFile)) {
-      const content = fs.readFileSync(feedbackFile, 'utf8');
-      existing = JSON.parse(content);
-    }
-
-    existing.push({ text: text.trim(), timestamp: Date.now() });
-    fs.writeFileSync(feedbackFile, JSON.stringify(existing, null, 2));
+    const timestamp = Date.now();
+    await client.set(`feedback:${timestamp}`, text.trim());
     return res.status(200).json({ success: true });
   }
 
   if (req.method === 'GET') {
-    if (!fs.existsSync(feedbackFile)) {
-      return res.status(200).json({ feedback: [] });
-    }
-    const content = fs.readFileSync(feedbackFile, 'utf8');
-    const feedback = JSON.parse(content);
+    const keys = await client.keys('feedback:*');
+    const sortedKeys = keys.sort((a, b) => b.localeCompare(a)); // newest first
+    const values = await Promise.all(sortedKeys.map((k) => client.get(k)));
+    const feedback = sortedKeys.map((k, i) => ({
+      text: values[i],
+      timestamp: Number(k.split(':')[1])
+    }));
     return res.status(200).json({ feedback });
   }
 
-  return res.status(405).end();
+  return res.status(405).end(); // Method Not Allowed
 }
