@@ -37,5 +37,14 @@ export default async function handler(req, res) {
     return res.status(200).json({ feedback });
   }
 
+  if (req.method === 'DELETE') {
+    const { timestamp } = req.query;
+    if (!timestamp || isNaN(timestamp)) {
+      return res.status(400).json({ error: 'Missing or invalid timestamp' });
+    }
+    await client.del(`feedback:${timestamp}`);
+    return res.status(200).json({ success: true });
+  }
+
   return res.status(405).end(); // Method Not Allowed
 }
