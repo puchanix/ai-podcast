@@ -7,6 +7,21 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        background: '#003344',              // Deep navy-teal
+        'background-accent': '#014D57',     // Muted greenish teal
+        button: '#FFA726',                  // Warm orange
+        'button-dark': '#FB8C00',           // Darker orange
+        secondary: '#1976D2',               // Soft blue
+        'secondary-dark': '#1565C0',        // Darker blue
+        copy: '#FFFFFF',
+        'copy-soft': '#E0F7FA',
+        heading: '#FFF8E1',
+        neutral: '#F0F0F0',
+        'neutral-dark': '#D9D9D9',
+        'pantone-628': '#B8DDE1',
+        'pantone-300': '#0072CE'
+      },
+      colors: {
         background: '#008F95',       // Pantone 323
         'background-dark': '#007A84', // Darker shade for hover or accents
         button: '#003057',           // Pantone 295
