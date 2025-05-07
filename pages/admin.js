@@ -90,7 +90,7 @@ export default function Admin() {
       </h2>
       <ul className="space-y-2 mb-10">
         {questions.map(({ question }, idx) => (
-          <li key={idx} className="flex justify-between items-center bg-neutral-dark text-black p-2 rounded">
+          <li key={idx} className="flex justify-between items-center bg-white text-black p-2 rounded shadow">
             <span>{question}</span>
             <button
               onClick={() => handleDeleteQuestion(question)}
@@ -104,13 +104,10 @@ export default function Admin() {
 
       <h2 className="text-xl font-semibold mb-2">Feedback</h2>
       <ul className="space-y-2">
-        {feedback
-          .slice()
-          .reverse()
-          .map((entry, idx) => (
-            <li key={idx} className="bg-neutral-dark text-black p-3 rounded shadow">
-              <span className="text-sm">{entry.text}</span>
-            </li>
+        {feedback.map((entry, idx) => (
+          <li key={idx} className="bg-white text-black p-3 rounded shadow">
+            <span className="text-sm">{entry.text}</span>
+          </li>
         ))}
       </ul>
     </div>
