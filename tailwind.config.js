@@ -21,17 +21,6 @@ module.exports = {
         'pantone-628': '#B8DDE1',
         'pantone-300': '#0072CE'
       },
-      colors: {
-        background: '#008F95',       // Pantone 323
-        'background-dark': '#007A84', // Darker shade for hover or accents
-        button: '#003057',           // Pantone 295
-        'button-dark': '#002646',    // Darker shade for active states
-        copy: '#FFFFFF',             // White text
-        neutral: '#F0F0F0',          // Light gray for panels/backgrounds
-        'neutral-dark': '#D9D9D9',    // Slightly darker gray for borders
-        'pantone-628': '#B8DDE1',
-        'pantone-300': '#0072CE'
-      },
       fontSize: {
         h1: ['2rem', { lineHeight: '2.5rem' }],   // 32px/40px
         h2: ['1.5rem', { lineHeight: '2rem' }],   // 24px/32px
