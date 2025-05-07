@@ -27,6 +27,16 @@ export default function Admin() {
     }
   };
 
+  const deleteFeedback = async (timestamp) => {
+    const confirmed = confirm("Delete this feedback?");
+    if (!confirmed) return;
+
+    await fetch(`/api/feedback?timestamp=${timestamp}`, {
+      method: 'DELETE'
+    });
+    fetchFeedback();
+  };
+
   useEffect(() => {
     fetchQuestions();
   }, [selectedPersona]);
@@ -69,7 +79,7 @@ export default function Admin() {
         <select
           value={selectedPersona}
           onChange={(e) => setSelectedPersona(e.target.value)}
-          className="p-2 rounded border"
+          className="p-2 rounded border bg-white text-black"
         >
           {Object.values(personas).map((p) => (
             <option key={p.id} value={p.id}>
@@ -105,8 +115,14 @@ export default function Admin() {
       <h2 className="text-xl font-semibold mb-2">Feedback</h2>
       <ul className="space-y-2">
         {feedback.map((entry, idx) => (
-          <li key={idx} className="bg-white text-black p-3 rounded shadow">
+          <li key={idx} className="bg-white text-black p-3 rounded shadow flex justify-between items-center">
             <span className="text-sm">{entry.text}</span>
+            <button
+              onClick={() => deleteFeedback(entry.timestamp)}
+              className="text-red-600 text-xs ml-4"
+            >
+              Delete
+            </button>
           </li>
         ))}
       </ul>
