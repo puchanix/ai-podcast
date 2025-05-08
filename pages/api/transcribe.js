@@ -61,6 +61,7 @@ export default async function handler(req, res) {
         ...form.getHeaders(),
       },
     });
+    console.log("📜 Full transcript:", response.data.text);
 
     res.status(200).json({ text: response.data.text });
   } catch (err) {
