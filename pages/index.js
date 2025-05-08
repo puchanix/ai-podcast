@@ -24,8 +24,6 @@ export default function Home() {
 
 const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
 
-const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
-
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const mimeType = useRef("audio/webm");
