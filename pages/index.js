@@ -239,7 +239,7 @@ export default function Home() {
       <select
         value={selectedPersona}
         onChange={(e) => setSelectedPersona(e.target.value)}
-        className="mt-2 mb-6 p-2 rounded border border-border text-white bg-dropdown-bg bg-opacity-95 shadow-sm"
+        className="mt-2 mb-6 p-2 rounded border border-border text-black bg-dropdown-bg bg-opacity-90 shadow-sm"
       >
         {Object.values(personas).map((p) => (
           <option key={p.id} value={p.id}>
@@ -248,7 +248,18 @@ export default function Home() {
         ))}
       </select>
 
-      <p className="text-neutral-dark font-medium">{statusMessage}</p>
+
+      {isThinking ? (
+        <div className="flex items-center justify-center space-x-1 text-heading font-medium animate-pulse">
+          <span>Thinking</span>
+          <span className="animate-bounce delay-100">.</span>
+          <span className="animate-bounce delay-200">.</span>
+          <span className="animate-bounce delay-300">.</span>
+        </div>
+      ) : (
+        <p className="text-neutral-dark font-medium">{statusMessage}</p>
+      )}
+    
 
       <div className="flex flex-wrap justify-center gap-3">
         {uiQuestions.map((q, i) => (
@@ -266,7 +277,7 @@ export default function Home() {
       {!isRecording && !isThinking && (
         <button
           onClick={startRecording}
-          className="bg-voice-button text-black font-semibold py-3 px-6 mt-4 rounded-full shadow-lg ring-2 ring-heading hover:ring-offset-2 hover:scale-105 transition-all duration-200"
+          className="bg-button-primary hover:bg-button-hover text-white py-2 px-5 mt-4 rounded-full shadow-md"
         >
           🎤 Ask with your voice
         </button>
@@ -299,15 +310,6 @@ export default function Home() {
       <audio ref={podcastAudio} hidden preload="auto" />
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
-
-      <footer className="mt-10 text-sm text-copy-soft">
-  <div className="flex space-x-6 justify-center">
-    <a href="/about" className="hover:underline">About</a>
-    <a href="/feedback" className="hover:underline">Feedback</a>
-  </div>
-</footer>
-
     </div>
   );
 }
-
