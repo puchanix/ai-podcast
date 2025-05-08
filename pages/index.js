@@ -15,6 +15,16 @@ export default function Home() {
   const [isDaVinciSpeaking, setIsDaVinciSpeaking] = useState(false);
   const [daVinciPaused, setDaVinciPaused] = useState(false);
   const [popularQuestions, setPopularQuestions] = useState([]);
+  const mimeType = useRef(""); // put this with other useRef declarations
+  
+
+  mimeType.current = MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")
+  ? "audio/ogg; codecs=opus"
+  : "audio/webm";
+
+const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
+
+const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
