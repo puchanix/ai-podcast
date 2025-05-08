@@ -154,6 +154,8 @@ export default function Home() {
 
       recorder.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: mimeType.current });
+        console.log("📦 Audio blob size:", blob.size, "bytes — Chunks:", chunksRef.current.length);
+
         chunksRef.current = [];
 
         const formData = new FormData();

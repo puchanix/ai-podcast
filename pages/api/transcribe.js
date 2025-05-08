@@ -56,11 +56,14 @@ export default async function handler(req, res) {
     form.append("model", "whisper-1");
 
     const response = await axios.post("https://api.openai.com/v1/audio/transcriptions", form, {
+        
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         ...form.getHeaders(),
       },
     });
+    console.log("📜 Full transcript from Whisper:", response.data.text);
+
     console.log("📜 Full transcript:", response.data.text);
 
     res.status(200).json({ text: response.data.text });
