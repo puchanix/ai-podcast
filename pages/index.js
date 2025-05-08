@@ -74,13 +74,14 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (typeof MediaRecorder === "undefined") return;
-    if (MediaRecorder.isTypeSupported("audio/webm")) {
-      mimeType.current = "audio/webm";
-      filename.current = "input.webm";
-    } else if (MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")) {
-      mimeType.current = "audio/ogg; codecs=opus";
-      filename.current = "input.ogg";
+    if (typeof navigator !== 'undefined' && navigator.permissions && navigator.mediaDevices) {
+      navigator.permissions.query({ name: "microphone" }).then((res) => {
+        if (res.state === "prompt") {
+          navigator.mediaDevices.getUserMedia({ audio: true })
+            .then((stream) => stream.getTracks().forEach(track => track.stop()))
+            .catch(() => {});
+        }
+      }).catch(() => {});
     }
   }, []);
 
@@ -284,7 +285,8 @@ export default function Home() {
         ))}
       </div>
 
-      {!isThinking && !isRecording && (
+      {(!isRecording && !isThinking && !isTranscribing) && (
+
         <button
           onClick={handleClickRecord}
           onTouchStart={handleTouchStart}
