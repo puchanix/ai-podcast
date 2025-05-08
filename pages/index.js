@@ -153,6 +153,7 @@ export default function Home() {
       : "audio/webm";
 
       const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
+      mediaRecorderRef.current = recorder; // ✅ Save it so stop() can be called later
 
       chunksRef.current = [];
 
