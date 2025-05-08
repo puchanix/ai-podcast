@@ -298,7 +298,8 @@ export default function Home() {
         ))}
       </div>
 
-      {(!isRecording && !isThinking) && (
+      {!isThinking && !isTranscribing && (
+
 
         <button
           onClick={handleClickRecord}
@@ -307,9 +308,8 @@ export default function Home() {
           className="w-[260px] h-12 bg-voice-button text-black font-semibold py-3 px-6 mt-4 rounded-full shadow-lg ring-2 ring-heading hover:ring-offset-2 hover:scale-105 transition-all duration-200"
 
         >
-          {isTouchDevice
-            ? isRecording ? "🛑 Release to stop" : "🎤 Tap and hold to record"
-            : isRecording ? "🛑 Click to stop" : "🎤 Click to record"}
+{isRecording ? "🛑 Click when you are done" : "🎤 Click to ask your own question"}
+
         </button>
       )}
 
