@@ -26,7 +26,6 @@ const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
 
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
-  const mimeType = useRef("audio/webm");
   const filename = useRef("input.webm");
 
   const podcastAudio = useRef(null);
