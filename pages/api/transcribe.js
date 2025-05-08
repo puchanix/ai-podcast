@@ -24,7 +24,6 @@ export default async function handler(req, res) {
     let filepath = "";
 
     busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
-      // SAFELY resolve filename
       safeFilename = typeof filename === 'string' ? filename : 'input.webm';
       filepath = path.join(tmpdir, safeFilename);
 
@@ -55,21 +54,25 @@ export default async function handler(req, res) {
     });
     form.append("model", "whisper-1");
     form.append("response_format", "verbose_json");
-    console.log("📜 Full Whisper segments:", response.data.segments);
 
+    const response = await axios.post(
+      "https://api.openai.com/v1/audio/transcriptions",
+      form,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          ...form.getHeaders(),
+        },
+      }
+    );
 
-    const response = await axios.post("https://api.openai.com/v1/audio/transcriptions", form, {
-        
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        ...form.getHeaders(),
-      },
-    });
-    console.log("📜 Full transcript from Whisper:", response.data.text);
+    // ✅ Extract full transcript from segments
+    const segments = response.data.segments || [];
+    const fullTranscript = segments.map(s => s.text).join(" ").trim();
 
-    console.log("📜 Full transcript:", response.data.text);
+    console.log("📜 Full Whisper segments:", fullTranscript);
 
-    res.status(200).json({ text: response.data.text });
+    res.status(200).json({ text: fullTranscript });
   } catch (err) {
     console.error("❌ Final transcription error:", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to transcribe audio" });
