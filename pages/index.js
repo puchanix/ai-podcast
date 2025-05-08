@@ -285,7 +285,8 @@ export default function Home() {
         ))}
       </div>
 
-      {(!isRecording && !isThinking && !isTranscribing) && (
+      {(!isThinking && !isTranscribing) && (
+
 
         <button
           onClick={handleClickRecord}
