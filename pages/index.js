@@ -18,9 +18,7 @@ export default function Home() {
   const mimeType = useRef(""); // put this with other useRef declarations
   
 
-  mimeType.current = MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")
-  ? "audio/ogg; codecs=opus"
-  : "audio/webm";
+ 
 
 const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
 
@@ -151,6 +149,9 @@ const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mimeType.current = MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")
+      ? "audio/ogg; codecs=opus"
+      : "audio/webm";
       const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
