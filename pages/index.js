@@ -23,7 +23,7 @@ export default function Home() {
   const podcastAudio = useRef(null);
   const daVinciAudio = useRef(null);
 
-  const isTouchDevice = typeof window !== 'undefined' && 'ontouchstart' in window;
+  const isTouchDevice = false; // Treat all devices the same
 
   const handleTouchStart = () => {
     if (isTouchDevice && !isRecording && !isThinking) startRecording();
@@ -58,6 +58,19 @@ export default function Home() {
   useEffect(() => {
     fetchPopularQuestions();
   }, [selectedPersona]);
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.permissions && navigator.mediaDevices) {
+      navigator.permissions.query({ name: "microphone" }).then((res) => {
+        if (res.state === "prompt") {
+          navigator.mediaDevices.getUserMedia({ audio: true })
+            .then((stream) => stream.getTracks().forEach(track => track.stop()))
+            .catch(() => {});
+        }
+      }).catch(() => {});
+    }
+  }, []);
+  
 
   const recordQuestion = async (question) => {
     if (!question) return;
@@ -285,7 +298,8 @@ export default function Home() {
         ))}
       </div>
 
-      {!isThinking && (
+      {(!isRecording && !isThinking) && (
+
         <button
           onClick={handleClickRecord}
           onTouchStart={handleTouchStart}
