@@ -66,6 +66,9 @@ export default async function handler(req, res) {
       }
     );
 
+    console.log("📑 Segments raw:", JSON.stringify(response.data.segments, null, 2));
+
+
     // ✅ Extract full transcript from segments
     const segments = response.data.segments || [];
     const fullTranscript = segments.map(s => s.text).join(" ").trim();
