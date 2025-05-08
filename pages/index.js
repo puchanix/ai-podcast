@@ -284,12 +284,13 @@ export default function Home() {
         ))}
       </div>
 
-      {!isThinking && (
+      {!isThinking && !isRecording && (
         <button
           onClick={handleClickRecord}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          className="bg-voice-button text-black font-semibold py-3 px-6 mt-4 rounded-full shadow-lg ring-2 ring-heading hover:ring-offset-2 hover:scale-105 transition-all duration-200"
+          className="w-[260px] h-12 bg-voice-button text-black font-semibold py-3 px-6 mt-4 rounded-full shadow-lg ring-2 ring-heading hover:ring-offset-2 hover:scale-105 transition-all duration-200"
+
         >
           {isTouchDevice
             ? isRecording ? "🛑 Release to stop" : "🎤 Tap and hold to record"
