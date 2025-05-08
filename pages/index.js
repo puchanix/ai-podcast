@@ -20,8 +20,6 @@ export default function Home() {
 
  
 
-const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
-
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const filename = useRef("input.webm");
@@ -152,8 +150,6 @@ const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
       mimeType.current = MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")
       ? "audio/ogg; codecs=opus"
       : "audio/webm";
-      const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
-      mediaRecorderRef.current = recorder;
       chunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
