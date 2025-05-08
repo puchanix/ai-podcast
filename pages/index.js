@@ -7,6 +7,7 @@ import { personas } from "../lib/personas";
 export default function Home() {
   const [selectedPersona, setSelectedPersona] = useState("daVinci");
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
