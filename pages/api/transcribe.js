@@ -54,6 +54,9 @@ export default async function handler(req, res) {
       contentType: safeFilename.endsWith(".ogg") ? "audio/ogg" : "audio/webm",
     });
     form.append("model", "whisper-1");
+    form.append("response_format", "verbose_json");
+    console.log("📜 Full Whisper segments:", response.data.segments);
+
 
     const response = await axios.post("https://api.openai.com/v1/audio/transcriptions", form, {
         
