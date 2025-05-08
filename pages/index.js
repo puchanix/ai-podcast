@@ -151,6 +151,9 @@ export default function Home() {
       mimeType.current = MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")
       ? "audio/ogg; codecs=opus"
       : "audio/webm";
+
+      const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
+
       chunksRef.current = [];
 
       recorder.ondataavailable = (e) => {
