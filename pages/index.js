@@ -1,5 +1,3 @@
-// index.js with tap-and-hold (mobile) and click-to-toggle (desktop) voice recording
-// All previous logic preserved (Da Vinci, podcast, status, questions, UI)
 
 import { useEffect, useRef, useState } from "react";
 import { personas } from "../lib/personas";
@@ -22,28 +20,6 @@ export default function Home() {
 
   const podcastAudio = useRef(null);
   const daVinciAudio = useRef(null);
-
-  const isTouchDevice = typeof window !== 'undefined' && 'ontouchstart' in window;
-
-  const handleTouchStart = () => {
-    if (isTouchDevice && !isRecording && !isThinking) startRecording();
-  };
-
-  const handleTouchEnd = () => {
-    if (isTouchDevice && isRecording && mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
-    }
-  };
-
-  const handleClickRecord = () => {
-    if (!isTouchDevice) {
-      if (!isRecording) {
-        startRecording();
-      } else {
-        mediaRecorderRef.current?.stop();
-      }
-    }
-  };
 
   const fetchPopularQuestions = async () => {
     try {
@@ -74,14 +50,13 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.permissions && navigator.mediaDevices) {
-      navigator.permissions.query({ name: "microphone" }).then((res) => {
-        if (res.state === "prompt") {
-          navigator.mediaDevices.getUserMedia({ audio: true })
-            .then((stream) => stream.getTracks().forEach(track => track.stop()))
-            .catch(() => {});
-        }
-      }).catch(() => {});
+    if (typeof MediaRecorder === "undefined") return;
+    if (MediaRecorder.isTypeSupported("audio/webm")) {
+      mimeType.current = "audio/webm";
+      filename.current = "input.webm";
+    } else if (MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")) {
+      mimeType.current = "audio/ogg; codecs=opus";
+      filename.current = "input.ogg";
     }
   }, []);
 
@@ -168,6 +143,9 @@ export default function Home() {
       setIsRecording(true);
       setStatusMessage("🎤 Listening...");
 
+      setTimeout(() => {
+        if (recorder.state === "recording") recorder.stop();
+      }, 4000);
     } catch (err) {
       console.error("Mic error:", err);
       setStatusMessage("❌ Mic not supported");
@@ -285,19 +263,12 @@ export default function Home() {
         ))}
       </div>
 
-      {(!isThinking && !isTranscribing) && (
-
-
+      {!isRecording && !isThinking && (
         <button
-          onClick={handleClickRecord}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          className="w-[260px] h-12 bg-voice-button text-black font-semibold py-3 px-6 mt-4 rounded-full shadow-lg ring-2 ring-heading hover:ring-offset-2 hover:scale-105 transition-all duration-200"
-
+          onClick={startRecording}
+          className="bg-voice-button text-black font-semibold py-3 px-6 mt-4 rounded-full shadow-lg ring-2 ring-heading hover:ring-offset-2 hover:scale-105 transition-all duration-200"
         >
-          {isTouchDevice
-            ? isRecording ? "🛑 Release to stop" : "🎤 Tap and hold to record"
-            : isRecording ? "🛑 Click to stop" : "🎤 Click to record"}
+          🎤 Ask with your voice
         </button>
       )}
 
@@ -330,11 +301,12 @@ export default function Home() {
       <audio hidden preload="auto" src="/silent.mp3" />
 
       <footer className="mt-10 text-sm text-copy-soft">
-        <div className="flex space-x-6 justify-center">
-          <a href="/about" className="hover:underline">About</a>
-          <a href="/feedback" className="hover:underline">Feedback</a>
-        </div>
-      </footer>
+  <div className="flex space-x-6 justify-center">
+    <a href="/about" className="hover:underline">About</a>
+    <a href="/feedback" className="hover:underline">Feedback</a>
+  </div>
+</footer>
+
     </div>
   );
 }
