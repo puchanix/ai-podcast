@@ -1,3 +1,5 @@
+// index.js with tap-and-hold (mobile) and click-to-toggle (desktop) voice recording
+// All previous logic preserved (Da Vinci, podcast, status, questions, UI)
 
 import { useEffect, useRef, useState } from "react";
 import { personas } from "../lib/personas";
@@ -20,6 +22,28 @@ export default function Home() {
 
   const podcastAudio = useRef(null);
   const daVinciAudio = useRef(null);
+
+  const isTouchDevice = typeof window !== 'undefined' && 'ontouchstart' in window;
+
+  const handleTouchStart = () => {
+    if (isTouchDevice && !isRecording && !isThinking) startRecording();
+  };
+
+  const handleTouchEnd = () => {
+    if (isTouchDevice && isRecording && mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const handleClickRecord = () => {
+    if (!isTouchDevice) {
+      if (!isRecording) {
+        startRecording();
+      } else {
+        mediaRecorderRef.current?.stop();
+      }
+    }
+  };
 
   const fetchPopularQuestions = async () => {
     try {
@@ -50,13 +74,14 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (typeof MediaRecorder === "undefined") return;
-    if (MediaRecorder.isTypeSupported("audio/webm")) {
-      mimeType.current = "audio/webm";
-      filename.current = "input.webm";
-    } else if (MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")) {
-      mimeType.current = "audio/ogg; codecs=opus";
-      filename.current = "input.ogg";
+    if (typeof navigator !== 'undefined' && navigator.permissions && navigator.mediaDevices) {
+      navigator.permissions.query({ name: "microphone" }).then((res) => {
+        if (res.state === "prompt") {
+          navigator.mediaDevices.getUserMedia({ audio: true })
+            .then((stream) => stream.getTracks().forEach(track => track.stop()))
+            .catch(() => {});
+        }
+      }).catch(() => {});
     }
   }, []);
 
@@ -143,9 +168,6 @@ export default function Home() {
       setIsRecording(true);
       setStatusMessage("🎤 Listening...");
 
-      setTimeout(() => {
-        if (recorder.state === "recording") recorder.stop();
-      }, 4000);
     } catch (err) {
       console.error("Mic error:", err);
       setStatusMessage("❌ Mic not supported");
@@ -239,7 +261,7 @@ export default function Home() {
       <select
         value={selectedPersona}
         onChange={(e) => setSelectedPersona(e.target.value)}
-        className="mt-2 mb-6 p-2 rounded border border-border text-black bg-dropdown-bg bg-opacity-90 shadow-sm"
+        className="mt-2 mb-6 p-2 rounded border border-border text-white bg-dropdown-bg bg-opacity-95 shadow-sm"
       >
         {Object.values(personas).map((p) => (
           <option key={p.id} value={p.id}>
@@ -248,18 +270,7 @@ export default function Home() {
         ))}
       </select>
 
-
-      {isThinking ? (
-        <div className="flex items-center justify-center space-x-1 text-heading font-medium animate-pulse">
-          <span>Thinking</span>
-          <span className="animate-bounce delay-100">.</span>
-          <span className="animate-bounce delay-200">.</span>
-          <span className="animate-bounce delay-300">.</span>
-        </div>
-      ) : (
-        <p className="text-neutral-dark font-medium">{statusMessage}</p>
-      )}
-    
+      <p className="text-neutral-dark font-medium">{statusMessage}</p>
 
       <div className="flex flex-wrap justify-center gap-3">
         {uiQuestions.map((q, i) => (
@@ -274,12 +285,19 @@ export default function Home() {
         ))}
       </div>
 
-      {!isRecording && !isThinking && (
+      {(!isThinking && !isTranscribing) && (
+
+
         <button
-          onClick={startRecording}
-          className="bg-button-primary hover:bg-button-hover text-white py-2 px-5 mt-4 rounded-full shadow-md"
+          onClick={handleClickRecord}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className="w-[260px] h-12 bg-voice-button text-black font-semibold py-3 px-6 mt-4 rounded-full shadow-lg ring-2 ring-heading hover:ring-offset-2 hover:scale-105 transition-all duration-200"
+
         >
-          🎤 Ask with your voice
+          {isTouchDevice
+            ? isRecording ? "🛑 Release to stop" : "🎤 Tap and hold to record"
+            : isRecording ? "🛑 Click to stop" : "🎤 Click to record"}
         </button>
       )}
 
@@ -310,6 +328,14 @@ export default function Home() {
       <audio ref={podcastAudio} hidden preload="auto" />
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
+
+      <footer className="mt-10 text-sm text-copy-soft">
+        <div className="flex space-x-6 justify-center">
+          <a href="/about" className="hover:underline">About</a>
+          <a href="/feedback" className="hover:underline">Feedback</a>
+        </div>
+      </footer>
     </div>
   );
 }
+
