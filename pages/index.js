@@ -311,19 +311,20 @@ export default function Home() {
       </div>
 
       {!isThinking && !isTranscribing && (
+  <button
+    onClick={handleClickRecord}
+    onTouchStart={handleTouchStart}
+    onTouchEnd={handleTouchEnd}
+    className="mt-6"
+  >
+    <img
+      src={isRecording ? "/mic-stop.gif" : "/mic-start.gif"} // or use .png if preferred
+      alt={isRecording ? "Stop recording" : "Start recording"}
+      className="w-20 h-20 hover:scale-105 transition-transform duration-200"
+    />
+  </button>
+)}
 
-
-        <button
-          onClick={handleClickRecord}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          className="w-[260px] h-12 bg-voice-button text-black font-semibold py-3 px-6 mt-4 rounded-full shadow-lg ring-2 ring-heading hover:ring-offset-2 hover:scale-105 transition-all duration-200"
-
-        >
-{isRecording ? "🛑 Click when you are done" : "🎤 Click to ask your own question"}
-
-        </button>
-      )}
 
       {(isDaVinciSpeaking || daVinciPaused) && (
         <button
