@@ -20,6 +20,7 @@ export default async function handler(req, res) {
 
   const tmpdir = os.tmpdir();
   let safeFilename = "";
+  let isIOS = false;
 
   const fileWritePromise = new Promise((resolve, reject) => {
     const busboy = Busboy({ 
@@ -43,6 +44,13 @@ export default async function handler(req, res) {
       writeStream.on('error', reject);
     });
 
+    busboy.on('field', (fieldname, val) => {
+      if (fieldname === 'isIOS' && val === 'true') {
+        isIOS = true;
+        console.log('📱 iOS device detected');
+      }
+    });
+
     busboy.on('error', (err) => {
       console.error('❌ Busboy error:', err);
       reject(err);
@@ -56,20 +64,36 @@ export default async function handler(req, res) {
     const fileBuffer = fs.readFileSync(localPath);
     const fileSize = fileBuffer.length;
     
-    console.log(`📦 Processing audio file: ${safeFilename}, size: ${fileSize} bytes`);
+    console.log(`📦 Processing audio file: ${safeFilename}, size: ${fileSize} bytes, iOS: ${isIOS}`);
+
+    // If file is too small, it might be corrupted
+    if (fileSize < 1000) {
+      console.error('❌ Audio file too small, likely corrupted');
+      return res.status(400).json({ error: 'Audio file too small or corrupted' });
+    }
 
     const form = new FormData();
+    
+    // Set the correct content type based on file extension and iOS flag
+    let contentType = 'audio/webm';
+    if (safeFilename.endsWith('.ogg')) {
+      contentType = 'audio/ogg';
+    } else if (safeFilename.endsWith('.m4a') || isIOS) {
+      contentType = 'audio/mp4';
+    }
+    
     form.append("file", fileBuffer, {
       filename: safeFilename,
-      contentType: safeFilename.endsWith(".ogg") ? "audio/ogg" : "audio/webm",
+      contentType: contentType,
     });
+    
     form.append("model", "whisper-1");
     form.append("response_format", "verbose_json");
     // Add additional parameters for better transcription
     form.append("language", "en"); // Specify language
     form.append("temperature", "0.2"); // Lower temperature for more accurate transcription
 
-    console.log('🔊 Sending audio to Whisper API...');
+    console.log(`🔊 Sending audio to Whisper API with content type: ${contentType}`);
     
     const response = await axios.post(
       "https://api.openai.com/v1/audio/transcriptions",
@@ -84,13 +108,19 @@ export default async function handler(req, res) {
       }
     );
 
-    console.log("📑 Segments raw:", JSON.stringify(response.data.segments, null, 2));
+    // Check if we got a valid response
+    if (!response.data || !response.data.segments) {
+      console.error('❌ Invalid response from Whisper API:', response.data);
+      return res.status(500).json({ error: 'Invalid response from transcription service' });
+    }
+
+    console.log("📑 Segments count:", response.data.segments.length);
 
     // ✅ Extract full transcript from segments
     const segments = response.data.segments || [];
     const fullTranscript = segments.map(s => s.text).join(" ").trim();
 
-    console.log("📜 Full Whisper segments:", fullTranscript);
+    console.log("📜 Full Whisper transcript:", fullTranscript);
     
     // Clean up the temporary file
     try {
@@ -102,9 +132,15 @@ export default async function handler(req, res) {
     res.status(200).json({ text: fullTranscript });
   } catch (err) {
     console.error("❌ Final transcription error:", err.response?.data || err.message);
+    
+    // More detailed error response
+    const errorDetails = err.response?.data || {};
+    const errorMessage = errorDetails.error?.message || err.message || 'Unknown error';
+    
     res.status(500).json({ 
       error: "Failed to transcribe audio",
-      details: err.response?.data || err.message
+      message: errorMessage,
+      details: errorDetails
     });
   }
 }

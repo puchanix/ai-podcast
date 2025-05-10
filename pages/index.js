@@ -1,4 +1,4 @@
-// index.js with improved mobile voice recording
+// index.js with improved mobile voice recording for iOS
 // Fixes the issue of recordings getting truncated after ~5 seconds on mobile
 
 import { useEffect, useRef, useState } from "react";
@@ -28,6 +28,7 @@ export default function Home() {
   const daVinciAudio = useRef(null);
 
   const isTouchDevice = false; // Treat all devices the same
+  const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   const handleTouchStart = () => {
     if (isTouchDevice && !isRecording && !isThinking) startRecording();
@@ -145,58 +146,104 @@ export default function Home() {
     stopPodcast();
 
     try {
-      // Request microphone with specific constraints for better mobile compatibility
+      // Request microphone with specific constraints for better iOS compatibility
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          // iOS-specific constraints
+          sampleRate: 44100,
+          channelCount: 1,
         } 
       });
       
       streamRef.current = stream;
       
-      // Try to use webm for better compatibility
-      try {
-        mimeType.current = "audio/webm";
-        mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: mimeType.current });
-      } catch (e) {
-        // Fallback if webm is not supported
+      // For iOS, we need to be more specific about the MIME type
+      if (isIOS) {
+        // iOS works better with mp4 container
         try {
           mimeType.current = "audio/mp4";
           mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: mimeType.current });
         } catch (e) {
-          // Last resort - use default
+          console.log("iOS fallback to default mime type");
           mimeType.current = "";
           mediaRecorderRef.current = new MediaRecorder(stream);
+        }
+      } else {
+        // Non-iOS devices
+        try {
+          mimeType.current = "audio/webm";
+          mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: mimeType.current });
+        } catch (e) {
+          try {
+            mimeType.current = "audio/mp4";
+            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: mimeType.current });
+          } catch (e) {
+            mimeType.current = "";
+            mediaRecorderRef.current = new MediaRecorder(stream);
+          }
         }
       }
 
       chunksRef.current = [];
 
-      // Collect data more frequently to prevent loss on mobile (every 1 second)
+      // For iOS, we need more frequent data collection
+      const timeslice = isIOS ? 500 : 1000; // 500ms for iOS, 1000ms for others
+      
       mediaRecorderRef.current.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          console.log(`Chunk received: ${e.data.size} bytes`);
+        }
       };
 
       mediaRecorderRef.current.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType.current || "audio/webm" });
+        console.log(`Recording stopped. Total chunks: ${chunksRef.current.length}`);
+        
+        // For iOS, we need to handle the blob differently
+        let blob;
+        if (isIOS) {
+          // For iOS, specify the type explicitly
+          blob = new Blob(chunksRef.current, { type: 'audio/m4a' });
+          filename.current = "input.m4a";
+        } else {
+          blob = new Blob(chunksRef.current, { type: mimeType.current || "audio/webm" });
+          filename.current = "input.webm";
+        }
+        
         console.log("📦 Audio blob size:", blob.size, "bytes — Chunks:", chunksRef.current.length);
 
         chunksRef.current = [];
 
         const formData = new FormData();
         formData.append("audio", blob, filename.current);
+        // Add a flag to indicate iOS
+        if (isIOS) {
+          formData.append("isIOS", "true");
+        }
 
         setStatusMessage("📝 Transcribing...");
         setIsTranscribing(true);
 
         try {
-          const res = await fetch("/api/transcribe", { method: "POST", body: formData });
+          const res = await fetch("/api/transcribe", { 
+            method: "POST", 
+            body: formData 
+          });
+          
+          if (!res.ok) {
+            const errorText = await res.text();
+            console.error("Transcription API error:", errorText);
+            throw new Error(`API returned ${res.status}: ${errorText}`);
+          }
+          
           const json = await res.json();
           const transcript = json.text?.trim();
           if (!transcript) throw new Error("No transcript");
 
+          console.log("Transcription result:", transcript);
           setStatusMessage("🎧 Answering...");
           await recordQuestion(transcript);
           handleAsk(transcript);
@@ -217,8 +264,8 @@ export default function Home() {
         }
       };
 
-      // Start recording with 1-second intervals for data collection
-      mediaRecorderRef.current.start(1000);
+      // Start recording with more frequent intervals for iOS
+      mediaRecorderRef.current.start(timeslice);
       setIsRecording(true);
       setStatusMessage("🎤 Listening...");
       setRecordingTime(0);
