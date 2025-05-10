@@ -144,7 +144,7 @@ export default function Home() {
     unlockAudio();
     stopDaVinci();
     stopPodcast();
-  
+
     try {
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -177,52 +177,11 @@ export default function Home() {
           mediaRecorderRef.current = new MediaRecorder(stream);
         }
       }
-  
+
       chunksRef.current = [];
       
       // Collect data more frequently on iOS
       const timeslice = isIOS ? 100 : 1000;
-      
-      mediaRecorderRef.current.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data);
-        }
-      };
-  
-      mediaRecorderRef.current.onstop = async () => {
-        // Create blob without specifying type for iOS
-        let blob;
-        if (isIOS) {
-          blob = new Blob(chunksRef.current);
-          filename.current = "recording.m4a";
-        } else {
-          blob = new Blob(chunksRef.current, { type: mimeType.current || "audio/webm" });
-          filename.current = "recording.webm";
-        }
-        
-        console.log("📦 Audio blob size:", blob.size, "bytes — Chunks:", chunksRef.current.length);
-  
-        chunksRef.current = [];
-  
-        const formData = new FormData();
-        formData.append("audio", blob, filename.current);
-        if (isIOS) {
-          formData.append("isIOS", "true");
-        }
-  
-        setStatusMessage("📝 Transcribing...");
-        setIsTranscribing(true);
-  
-        try {
-          const res = await fetch("/api/transcribe", { 
-            method: "POST", 
-            body: formData 
-          });
-
-      chunksRef.current = [];
-
-      // For iOS, we need more frequent data collection
-      const timeslice = isIOS ? 500 : 1000; // 500ms for iOS, 1000ms for others
       
       mediaRecorderRef.current.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -234,15 +193,14 @@ export default function Home() {
       mediaRecorderRef.current.onstop = async () => {
         console.log(`Recording stopped. Total chunks: ${chunksRef.current.length}`);
         
-        // For iOS, we need to handle the blob differently
+        // Create blob without specifying type for iOS
         let blob;
         if (isIOS) {
-          // For iOS, specify the type explicitly
-          blob = new Blob(chunksRef.current, { type: 'audio/m4a' });
-          filename.current = "input.m4a";
+          blob = new Blob(chunksRef.current);
+          filename.current = "recording.m4a";
         } else {
           blob = new Blob(chunksRef.current, { type: mimeType.current || "audio/webm" });
-          filename.current = "input.webm";
+          filename.current = "recording.webm";
         }
         
         console.log("📦 Audio blob size:", blob.size, "bytes — Chunks:", chunksRef.current.length);
@@ -251,7 +209,6 @@ export default function Home() {
 
         const formData = new FormData();
         formData.append("audio", blob, filename.current);
-        // Add a flag to indicate iOS
         if (isIOS) {
           formData.append("isIOS", "true");
         }

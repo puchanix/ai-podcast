@@ -33,45 +33,36 @@ export default function TestRecording() {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: 44100,
-          channelCount: 1,
         } 
       });
       
       streamRef.current = stream;
       setStatus('Microphone access granted');
       
-      let mimeType = '';
-      
+      // For iOS, don't specify mimeType
       if (isIOS) {
         try {
-          mimeType = 'audio/mp4';
-          mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
-          setStatus('Using audio/mp4 for iOS');
-        } catch (e) {
-          setStatus('iOS fallback to default mime type');
           mediaRecorderRef.current = new MediaRecorder(stream);
+          setStatus('Using default recorder for iOS');
+        } catch (e) {
+          setStatus(`iOS recorder error: ${e.message}`);
+          return;
         }
       } else {
+        // Non-iOS devices
         try {
-          mimeType = 'audio/webm';
-          mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
+          mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: "audio/webm" });
           setStatus('Using audio/webm');
         } catch (e) {
-          try {
-            mimeType = 'audio/mp4';
-            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
-            setStatus('Using audio/mp4');
-          } catch (e) {
-            setStatus('Using default mime type');
-            mediaRecorderRef.current = new MediaRecorder(stream);
-          }
+          mediaRecorderRef.current = new MediaRecorder(stream);
+          setStatus('Using default recorder');
         }
       }
       
       chunksRef.current = [];
       
-      const timeslice = isIOS ? 500 : 1000;
+      // Collect data more frequently on iOS
+      const timeslice = isIOS ? 100 : 1000;
       
       mediaRecorderRef.current.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -83,27 +74,28 @@ export default function TestRecording() {
       mediaRecorderRef.current.onstop = async () => {
         setStatus(`Recording stopped. Total chunks: ${chunksRef.current.length}`);
         
+        // Create blob without specifying type for iOS
         let blob;
         let filename;
         
         if (isIOS) {
-          blob = new Blob(chunksRef.current, { type: 'audio/m4a' });
-          filename = 'test.m4a';
+          blob = new Blob(chunksRef.current);
+          filename = 'recording.m4a';
         } else {
-          blob = new Blob(chunksRef.current, { type: mimeType || 'audio/webm' });
-          filename = 'test.webm';
+          blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          filename = 'recording.webm';
         }
         
         setStatus(`Audio blob size: ${blob.size} bytes`);
         
+        // Create URL for playback
         const url = URL.createObjectURL(blob);
         setAudioURL(url);
         
+        // Create FormData for API
         const formData = new FormData();
         formData.append('audio', blob, filename);
-        if (isIOS) {
-          formData.append('isIOS', 'true');
-        }
+        formData.append('isIOS', isIOS ? 'true' : 'false');
         
         setStatus('Transcribing...');
         
