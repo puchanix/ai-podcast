@@ -4,10 +4,6 @@ import os from "os"
 import path from "path"
 import FormData from "form-data"
 import axios from "axios"
-import { exec } from "child_process"
-import { promisify } from "util"
-
-const execPromise = promisify(exec)
 
 export const config = {
   api: {
@@ -24,6 +20,7 @@ export default async function handler(req, res) {
   const tmpdir = os.tmpdir()
   let safeFilename = ""
   let isIOS = false
+  let mimeType = ""
 
   const fileWritePromise = new Promise((resolve, reject) => {
     const busboy = Busboy({
@@ -34,12 +31,16 @@ export default async function handler(req, res) {
     })
     let filepath = ""
 
-    busboy.on("file", (fieldname, file, filename, encoding, mimetype) => {
+    busboy.on("file", (fieldname, file, info) => {
+      const { filename, mimeType: fileMimeType } = info
+
       safeFilename = typeof filename === "string" ? filename : "input.webm"
+      mimeType = fileMimeType || "audio/webm"
+
       filepath = path.join(tmpdir, safeFilename)
 
       console.log(`📥 Writing uploaded file to: ${filepath}`)
-      console.log(`📊 File mimetype: ${mimetype}`)
+      console.log(`📊 File mimetype: ${mimeType}`)
 
       const writeStream = fs.createWriteStream(filepath)
       file.pipe(writeStream)
@@ -75,42 +76,44 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Audio file too small or corrupted" })
     }
 
-    // Convert to MP3 format which is universally supported by Whisper API
-    const mp3Path = path.join(tmpdir, "converted.mp3")
-
-    try {
-      // Check if ffmpeg is available
-      await execPromise("ffmpeg -version")
-
-      // Convert to MP3 using ffmpeg
-      await execPromise(`ffmpeg -i "${localPath}" -c:a libmp3lame -q:a 2 "${mp3Path}"`)
-      console.log("🔄 Converted audio to MP3 format")
-    } catch (conversionError) {
-      console.error("⚠️ FFmpeg conversion failed:", conversionError)
-      console.log("⚠️ Proceeding with original file")
-      // If conversion fails, we'll try with the original file
+    // Determine the correct content type based on file extension
+    let contentType = mimeType
+    if (safeFilename.endsWith(".m4a")) {
+      contentType = "audio/mp4"
+    } else if (safeFilename.endsWith(".mp3")) {
+      contentType = "audio/mpeg"
+    } else if (safeFilename.endsWith(".wav")) {
+      contentType = "audio/wav"
+    } else if (safeFilename.endsWith(".webm")) {
+      contentType = "audio/webm"
     }
 
-    // Use the MP3 file if it exists and has content, otherwise use the original
-    const finalPath = fs.existsSync(mp3Path) && fs.statSync(mp3Path).size > 0 ? mp3Path : localPath
+    // For iOS, always use mp4 content type
+    if (isIOS) {
+      contentType = "audio/mp4"
+    }
 
-    const finalBuffer = fs.readFileSync(finalPath)
-    const finalFilename = path.basename(finalPath)
+    console.log(`🔊 Using content type: ${contentType} for file: ${safeFilename}`)
 
-    console.log(`🔊 Using file for transcription: ${finalFilename}, size: ${finalBuffer.length} bytes`)
+    // Create a new filename with the correct extension for Whisper API
+    let apiFilename = safeFilename
+    if (isIOS && !safeFilename.endsWith(".m4a")) {
+      apiFilename = "recording.m4a"
+    }
 
     const form = new FormData()
-    form.append("file", finalBuffer, {
-      filename: finalFilename,
-      contentType: finalFilename.endsWith(".mp3") ? "audio/mpeg" : "audio/webm",
+    form.append("file", fileBuffer, {
+      filename: apiFilename,
+      contentType: contentType,
     })
 
     form.append("model", "whisper-1")
-    form.append("response_format", "verbose_json")
+    // Use simple response format instead of verbose_json
+    form.append("response_format", "json")
     form.append("language", "en")
     form.append("temperature", "0.2")
 
-    console.log(`🔊 Sending audio to Whisper API...`)
+    console.log(`🔊 Sending audio to Whisper API with filename: ${apiFilename}`)
 
     const response = await axios.post("https://api.openai.com/v1/audio/transcriptions", form, {
       headers: {
@@ -121,28 +124,25 @@ export default async function handler(req, res) {
     })
 
     // Check if we got a valid response
-    if (!response.data || !response.data.segments) {
+    if (!response.data) {
       console.error("❌ Invalid response from Whisper API:", response.data)
       return res.status(500).json({ error: "Invalid response from transcription service" })
     }
 
-    console.log("📑 Segments count:", response.data.segments.length)
+    let fullTranscript = ""
 
-    // Extract full transcript from segments
-    const segments = response.data.segments || []
-    const fullTranscript = segments
-      .map((s) => s.text)
-      .join(" ")
-      .trim()
-
-    console.log("📜 Full Whisper transcript:", fullTranscript)
+    // Handle both verbose_json and simple text responses
+    if (response.data.text) {
+      fullTranscript = response.data.text.trim()
+      console.log("📜 Full Whisper transcript:", fullTranscript)
+    } else {
+      console.error("❌ No transcript in response:", response.data)
+      return res.status(500).json({ error: "No transcript in response" })
+    }
 
     // Clean up the temporary files
     try {
       fs.unlinkSync(localPath)
-      if (fs.existsSync(mp3Path)) {
-        fs.unlinkSync(mp3Path)
-      }
     } catch (err) {
       console.error("⚠️ Failed to clean up temp files:", err)
     }
