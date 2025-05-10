@@ -23,6 +23,8 @@ export default function Home() {
   const filename = useRef("input.webm")
   const streamRef = useRef(null)
   const timerRef = useRef(null)
+  const recordingTimeoutRef = useRef(null)
+  const processingRef = useRef(false)
 
   const podcastAudio = useRef(null)
   const daVinciAudio = useRef(null)
@@ -93,6 +95,9 @@ export default function Home() {
       if (timerRef.current) {
         clearInterval(timerRef.current)
       }
+      if (recordingTimeoutRef.current) {
+        clearTimeout(recordingTimeoutRef.current)
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop())
       }
@@ -152,6 +157,10 @@ export default function Home() {
   }
 
   const startRecording = async () => {
+    // Prevent multiple recordings
+    if (processingRef.current) return
+    processingRef.current = true
+
     unlockAudio()
     stopDaVinci()
     stopPodcast()
@@ -176,6 +185,7 @@ export default function Home() {
         } catch (e) {
           console.error("iOS recorder error:", e)
           setStatusMessage("❌ Mic not supported on this device")
+          processingRef.current = false
           return
         }
       } else {
@@ -191,31 +201,34 @@ export default function Home() {
 
       chunksRef.current = []
 
-      // Collect data more frequently on iOS
-      const timeslice = isIOS ? 100 : 1000
+      // Use a larger timeslice for iOS to prevent fragmentation
+      const timeslice = isIOS ? 500 : 1000
 
       mediaRecorderRef.current.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunksRef.current.push(e.data)
-          console.log(`Chunk received: ${e.data.size} bytes`)
+          console.log(`Chunk received: ${e.data.size} bytes, total chunks: ${chunksRef.current.length}`)
         }
       }
 
       mediaRecorderRef.current.onstop = async () => {
         console.log(`Recording stopped. Total chunks: ${chunksRef.current.length}`)
 
+        // Make sure we have chunks to process
+        if (chunksRef.current.length === 0) {
+          console.error("No audio chunks collected")
+          setStatusMessage("⚠️ No audio recorded. Please try again.")
+          setIsRecording(false)
+          processingRef.current = false
+          return
+        }
+
         // Create blob with the appropriate type
         let blob
         if (isIOS) {
-          // For iOS, try to use mp3 format which is more widely supported
-          try {
-            blob = new Blob(chunksRef.current, { type: "audio/mpeg" })
-            filename.current = "recording.mp3"
-          } catch (e) {
-            // Fallback to m4a if mp3 fails
-            blob = new Blob(chunksRef.current)
-            filename.current = "recording.m4a"
-          }
+          // For iOS, use mp3 format which is more widely supported
+          blob = new Blob(chunksRef.current, { type: "audio/mpeg" })
+          filename.current = "recording.mp3"
         } else {
           blob = new Blob(chunksRef.current, { type: mimeType.current || "audio/webm" })
           filename.current = "recording.webm"
@@ -224,7 +237,14 @@ export default function Home() {
         console.log("📦 Audio blob size:", blob.size, "bytes — Chunks:", chunksRef.current.length)
         console.log("📦 Audio filename:", filename.current, "type:", blob.type)
 
-        chunksRef.current = []
+        // Check if the blob is too small (likely corrupted or empty)
+        if (blob.size < 1000) {
+          console.error("Audio blob too small, likely corrupted or empty")
+          setStatusMessage("⚠️ Recording too short. Please try again.")
+          setIsRecording(false)
+          processingRef.current = false
+          return
+        }
 
         const formData = new FormData()
         formData.append("file", blob, filename.current)
@@ -260,6 +280,7 @@ export default function Home() {
           setStatusMessage("⚠️ Could not understand your voice.")
         } finally {
           setIsTranscribing(false)
+          processingRef.current = false
         }
 
         setIsRecording(false)
@@ -272,7 +293,7 @@ export default function Home() {
         }
       }
 
-      // Start recording with more frequent intervals for iOS
+      // Start recording with appropriate intervals
       mediaRecorderRef.current.start(timeslice)
       setIsRecording(true)
       setStatusMessage("🎤 Listening...")
@@ -281,28 +302,70 @@ export default function Home() {
       // Start timer to show recording duration
       timerRef.current = setInterval(() => {
         setRecordingTime((prev) => prev + 1)
+      }, 1000)
 
-        // Auto-stop after 30 seconds to prevent issues
-        if (recordingTime >= 29) {
+      // Set a hard limit for recording duration (30 seconds for all devices)
+      // Longer recording time for iOS to ensure we capture enough audio
+      const maxDuration = 30000 // 30 seconds for all devices
+      recordingTimeoutRef.current = setTimeout(() => {
+        if (isRecording && mediaRecorderRef.current?.state === "recording") {
+          console.log("Auto-stopping recording after timeout")
           stopRecording()
         }
-      }, 1000)
+      }, maxDuration)
+
+      processingRef.current = false
     } catch (err) {
       console.error("Mic error:", err)
       setStatusMessage("❌ Mic not supported")
+      processingRef.current = false
     }
   }
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      // Request final data chunk before stopping
-      mediaRecorderRef.current.requestData()
-      mediaRecorderRef.current.stop()
+    console.log("Stopping recording...")
 
-      // Clear timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
+    // Clear the auto-stop timeout
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current)
+      recordingTimeoutRef.current = null
+    }
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      try {
+        // Request final data chunk before stopping
+        mediaRecorderRef.current.requestData()
+
+        // Give a little time for the final chunk to be processed
+        setTimeout(() => {
+          try {
+            mediaRecorderRef.current.stop()
+          } catch (err) {
+            console.error("Error stopping media recorder:", err)
+          }
+
+          // Clear timer
+          if (timerRef.current) {
+            clearInterval(timerRef.current)
+            timerRef.current = null
+          }
+        }, 500) // Longer delay to ensure all audio is captured
+      } catch (err) {
+        console.error("Error stopping recording:", err)
+
+        // Cleanup even if there's an error
+        if (timerRef.current) {
+          clearInterval(timerRef.current)
+          timerRef.current = null
+        }
+
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop())
+          streamRef.current = null
+        }
+
+        setIsRecording(false)
+        processingRef.current = false
       }
     }
   }
