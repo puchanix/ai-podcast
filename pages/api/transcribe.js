@@ -74,26 +74,31 @@ export default async function handler(req, res) {
 
     const form = new FormData();
     
-    // Set the correct content type based on file extension and iOS flag
-    let contentType = 'audio/webm';
-    if (safeFilename.endsWith('.ogg')) {
-      contentType = 'audio/ogg';
-    } else if (safeFilename.endsWith('.m4a') || isIOS) {
-      contentType = 'audio/mp4';
+    // For iOS, we need to convert the audio to a format Whisper accepts
+    if (isIOS) {
+      // Use .m4a extension for iOS recordings
+      const newFilename = 'recording.m4a';
+      
+      form.append("file", fileBuffer, {
+        filename: newFilename,
+        contentType: 'audio/mp4a-latm', // Specific MIME type for iOS audio
+      });
+      
+      console.log(`📱 iOS audio: renamed to ${newFilename} with MIME type audio/mp4a-latm`);
+    } else {
+      // For non-iOS, use the original approach
+      form.append("file", fileBuffer, {
+        filename: safeFilename,
+        contentType: safeFilename.endsWith(".ogg") ? "audio/ogg" : "audio/webm",
+      });
     }
-    
-    form.append("file", fileBuffer, {
-      filename: safeFilename,
-      contentType: contentType,
-    });
     
     form.append("model", "whisper-1");
     form.append("response_format", "verbose_json");
-    // Add additional parameters for better transcription
-    form.append("language", "en"); // Specify language
-    form.append("temperature", "0.2"); // Lower temperature for more accurate transcription
+    form.append("language", "en");
+    form.append("temperature", "0.2");
 
-    console.log(`🔊 Sending audio to Whisper API with content type: ${contentType}`);
+    console.log(`🔊 Sending audio to Whisper API...`);
     
     const response = await axios.post(
       "https://api.openai.com/v1/audio/transcriptions",

@@ -144,32 +144,28 @@ export default function Home() {
     unlockAudio();
     stopDaVinci();
     stopPodcast();
-
+  
     try {
-      // Request microphone with specific constraints for better iOS compatibility
+      // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          // iOS-specific constraints
-          sampleRate: 44100,
-          channelCount: 1,
         } 
       });
       
       streamRef.current = stream;
       
-      // For iOS, we need to be more specific about the MIME type
+      // For iOS, don't specify mimeType
       if (isIOS) {
-        // iOS works better with mp4 container
         try {
-          mimeType.current = "audio/mp4";
-          mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: mimeType.current });
-        } catch (e) {
-          console.log("iOS fallback to default mime type");
-          mimeType.current = "";
           mediaRecorderRef.current = new MediaRecorder(stream);
+          console.log("Using default recorder for iOS");
+        } catch (e) {
+          console.error("iOS recorder error:", e);
+          setStatusMessage("❌ Mic not supported on this device");
+          return;
         }
       } else {
         // Non-iOS devices
@@ -177,15 +173,51 @@ export default function Home() {
           mimeType.current = "audio/webm";
           mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: mimeType.current });
         } catch (e) {
-          try {
-            mimeType.current = "audio/mp4";
-            mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: mimeType.current });
-          } catch (e) {
-            mimeType.current = "";
-            mediaRecorderRef.current = new MediaRecorder(stream);
-          }
+          console.log("Fallback to default recorder");
+          mediaRecorderRef.current = new MediaRecorder(stream);
         }
       }
+  
+      chunksRef.current = [];
+      
+      // Collect data more frequently on iOS
+      const timeslice = isIOS ? 100 : 1000;
+      
+      mediaRecorderRef.current.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+  
+      mediaRecorderRef.current.onstop = async () => {
+        // Create blob without specifying type for iOS
+        let blob;
+        if (isIOS) {
+          blob = new Blob(chunksRef.current);
+          filename.current = "recording.m4a";
+        } else {
+          blob = new Blob(chunksRef.current, { type: mimeType.current || "audio/webm" });
+          filename.current = "recording.webm";
+        }
+        
+        console.log("📦 Audio blob size:", blob.size, "bytes — Chunks:", chunksRef.current.length);
+  
+        chunksRef.current = [];
+  
+        const formData = new FormData();
+        formData.append("audio", blob, filename.current);
+        if (isIOS) {
+          formData.append("isIOS", "true");
+        }
+  
+        setStatusMessage("📝 Transcribing...");
+        setIsTranscribing(true);
+  
+        try {
+          const res = await fetch("/api/transcribe", { 
+            method: "POST", 
+            body: formData 
+          });
 
       chunksRef.current = [];
 
