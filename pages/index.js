@@ -204,22 +204,30 @@ export default function Home() {
       mediaRecorderRef.current.onstop = async () => {
         console.log(`Recording stopped. Total chunks: ${chunksRef.current.length}`)
 
-        // Create blob without specifying type for iOS
+        // Create blob with the appropriate type
         let blob
         if (isIOS) {
-          blob = new Blob(chunksRef.current)
-          filename.current = "recording.m4a"
+          // For iOS, try to use mp3 format which is more widely supported
+          try {
+            blob = new Blob(chunksRef.current, { type: "audio/mpeg" })
+            filename.current = "recording.mp3"
+          } catch (e) {
+            // Fallback to m4a if mp3 fails
+            blob = new Blob(chunksRef.current)
+            filename.current = "recording.m4a"
+          }
         } else {
           blob = new Blob(chunksRef.current, { type: mimeType.current || "audio/webm" })
           filename.current = "recording.webm"
         }
 
         console.log("📦 Audio blob size:", blob.size, "bytes — Chunks:", chunksRef.current.length)
+        console.log("📦 Audio filename:", filename.current, "type:", blob.type)
 
         chunksRef.current = []
 
         const formData = new FormData()
-        formData.append("audio", blob, filename.current)
+        formData.append("file", blob, filename.current)
         if (isIOS) {
           formData.append("isIOS", "true")
         }
