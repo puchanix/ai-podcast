@@ -21,6 +21,7 @@ export default async function handler(req, res) {
   let safeFilename = ""
   let isIOS = false
   let mimeType = ""
+  let fileBuffer = null
 
   const fileWritePromise = new Promise((resolve, reject) => {
     const busboy = Busboy({
@@ -37,18 +38,20 @@ export default async function handler(req, res) {
       safeFilename = typeof filename === "string" ? filename : "input.webm"
       mimeType = fileMimeType || "audio/webm"
 
+      console.log(`Original filename: ${safeFilename}, MIME type: ${mimeType}`)
+
       // Ensure we use a supported file extension based on the detected MIME type
       if (mimeType.includes("mp4") || mimeType.includes("m4a") || safeFilename.endsWith(".m4a")) {
-        safeFilename = "recording.m4a"
+        safeFilename = "recording.mp3" // Convert to mp3 for better compatibility
+      } else if (mimeType.includes("mpeg") || mimeType.includes("mp3") || safeFilename.endsWith(".mp3")) {
+        safeFilename = "recording.mp3"
       } else if (mimeType.includes("webm") || safeFilename.endsWith(".webm")) {
         safeFilename = "recording.webm"
-      } else if (mimeType.includes("mp3") || safeFilename.endsWith(".mp3")) {
-        safeFilename = "recording.mp3"
       } else if (mimeType.includes("wav") || safeFilename.endsWith(".wav")) {
         safeFilename = "recording.wav"
       } else {
-        // Default to webm if we can't determine the type
-        safeFilename = "recording.webm"
+        // Default to mp3 if we can't determine the type
+        safeFilename = "recording.mp3"
       }
 
       filepath = path.join(tmpdir, safeFilename)
@@ -56,10 +59,15 @@ export default async function handler(req, res) {
       console.log(`📥 Writing uploaded file to: ${filepath}`)
       console.log(`📊 File mimetype: ${mimeType}`)
 
-      const writeStream = fs.createWriteStream(filepath)
-      file.pipe(writeStream)
-      writeStream.on("close", () => resolve(filepath))
-      writeStream.on("error", reject)
+      const chunks = []
+      file.on("data", (chunk) => {
+        chunks.push(chunk)
+      })
+
+      file.on("end", () => {
+        fileBuffer = Buffer.concat(chunks)
+        resolve(filepath)
+      })
     })
 
     busboy.on("field", (fieldname, val) => {
@@ -79,7 +87,11 @@ export default async function handler(req, res) {
 
   try {
     const localPath = await fileWritePromise
-    const fileBuffer = fs.readFileSync(localPath)
+
+    if (!fileBuffer) {
+      fileBuffer = fs.readFileSync(localPath)
+    }
+
     const fileSize = fileBuffer.length
 
     console.log(`📦 Processing audio file: ${safeFilename}, size: ${fileSize} bytes, iOS: ${isIOS}`)
@@ -94,12 +106,12 @@ export default async function handler(req, res) {
     let apiFilename = safeFilename
     let contentType
 
-    if (apiFilename.endsWith(".m4a")) {
+    if (apiFilename.endsWith(".mp3")) {
+      contentType = "audio/mpeg"
+    } else if (apiFilename.endsWith(".m4a")) {
       contentType = "audio/mp4"
     } else if (apiFilename.endsWith(".webm")) {
       contentType = "audio/webm"
-    } else if (apiFilename.endsWith(".mp3")) {
-      contentType = "audio/mpeg"
     } else if (apiFilename.endsWith(".wav")) {
       contentType = "audio/wav"
     } else {
