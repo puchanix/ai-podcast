@@ -1,8 +1,5 @@
 "use client"
 
-// index.js with improved mobile voice recording for iOS
-// Fixes the issue of recordings getting truncated after ~5 seconds on mobile
-
 import { useEffect, useRef, useState } from "react"
 import { personas } from "../lib/personas"
 
@@ -18,6 +15,7 @@ export default function Home() {
   const [daVinciPaused, setDaVinciPaused] = useState(false)
   const [popularQuestions, setPopularQuestions] = useState([])
   const [recordingTime, setRecordingTime] = useState(0)
+  const [isIOS, setIsIOS] = useState(false)
   const mimeType = useRef("")
 
   const mediaRecorderRef = useRef(null)
@@ -30,10 +28,14 @@ export default function Home() {
   const daVinciAudio = useRef(null)
 
   const isTouchDevice = false // Treat all devices the same
-  const isIOS =
-    typeof navigator !== "undefined" &&
-    (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1))
+
+  useEffect(() => {
+    // Check for iOS only on the client side
+    setIsIOS(
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1),
+    )
+  }, [])
 
   const handleTouchStart = () => {
     if (isTouchDevice && !isRecording && !isThinking) startRecording()
