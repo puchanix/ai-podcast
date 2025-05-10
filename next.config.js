@@ -1,38 +1,38 @@
-// next.config.js
-const webpack = require('webpack');
+"use client"
 
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  webpack: (config, { isServer }) => {
-    // Ignore all "node:" imports (e.g. node:crypto) during bundling
-    config.plugins.push(
-      new webpack.IgnorePlugin({ resourceRegExp: /^node:/ })
-    );
+import { useEffect, useState } from "react"
 
-    if (isServer) {
-      // Exclude redis from server bundle so it's required at runtime
-      config.externals = config.externals || [];
-      config.externals.push('redis');
-      // Treat other node built-ins as externals
-      config.externals.push((context, request, callback) => {
-        if (/^node:.*/.test(request)) {
-          return callback(null, `commonjs ${request}`);
-        }
-        callback();
-      });
-    } else {
-      // On client, fallback node built-ins to false
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        crypto: false,
-        stream: false,
-        fs: false,
-        path: false,
-      };
-    }
+// Create a placeholder component for server-side rendering
+export default function TestRecording() {
+  // This will only be rendered on the server or during static generation
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background-top to-background text-copy p-4 space-y-6">
+      <h1 className="text-2xl font-bold">Audio Recording Test</h1>
+      <p>Loading recording interface...</p>
 
-    return config;
-  },
-};
+      {/* Client-side only component will be loaded here */}
+      <ClientSideRecorder />
 
-module.exports = nextConfig;
+      <div className="mt-8">
+        <a href="/" className="text-blue-400 hover:underline">
+          Back to Home
+        </a>
+      </div>
+    </div>
+  )
+}
+
+// This is a special pattern for client-only components in Next.js
+function ClientSideRecorder() {
+  const [Component, setComponent] = useState(null)
+
+  useEffect(() => {
+    // Only import the component on the client side
+    import("../components/test-recording-client")
+      .then((mod) => setComponent(() => mod.default))
+      .catch((err) => console.error("Failed to load client component:", err))
+  }, [])
+
+  // Return null during server-side rendering
+  return Component ? <Component /> : null
+}

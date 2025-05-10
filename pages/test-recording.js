@@ -1,155 +1,38 @@
-import Busboy from "busboy"
-import fs from "fs"
-import os from "os"
-import path from "path"
-import FormData from "form-data"
-import axios from "axios"
+"use client"
 
-export const config = {
-  api: {
-    bodyParser: false,
-    responseLimit: false,
-  },
+import { useEffect, useState } from "react"
+
+// Create a placeholder component for server-side rendering
+export default function TestRecording() {
+  // This will only be rendered on the server or during static generation
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background-top to-background text-copy p-4 space-y-6">
+      <h1 className="text-2xl font-bold">Audio Recording Test</h1>
+      <p>Loading recording interface...</p>
+
+      {/* Client-side only component will be loaded here */}
+      <ClientSideRecorder />
+
+      <div className="mt-8">
+        <a href="/" className="text-blue-400 hover:underline">
+          Back to Home
+        </a>
+      </div>
+    </div>
+  )
 }
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" })
-  }
+// This is a special pattern for client-only components in Next.js
+function ClientSideRecorder() {
+  const [Component, setComponent] = useState(null)
 
-  const tmpdir = os.tmpdir()
-  let safeFilename = ""
-  let isIOS = false
-  let mimeType = ""
+  useEffect(() => {
+    // Only import the component on the client side
+    import("../components/test-recording-client")
+      .then((mod) => setComponent(() => mod.default))
+      .catch((err) => console.error("Failed to load client component:", err))
+  }, [])
 
-  const fileWritePromise = new Promise((resolve, reject) => {
-    const busboy = Busboy({
-      headers: req.headers,
-      limits: {
-        fileSize: 25 * 1024 * 1024, // 25MB max file size
-      },
-    })
-    let filepath = ""
-
-    busboy.on("file", (fieldname, file, info) => {
-      const { filename, mimeType: fileMimeType } = info
-
-      safeFilename = typeof filename === "string" ? filename : "input.webm"
-      mimeType = fileMimeType || "audio/webm"
-
-      filepath = path.join(tmpdir, safeFilename)
-
-      console.log(`📥 Writing uploaded file to: ${filepath}`)
-      console.log(`📊 File mimetype: ${mimeType}`)
-
-      const writeStream = fs.createWriteStream(filepath)
-      file.pipe(writeStream)
-      writeStream.on("close", () => resolve(filepath))
-      writeStream.on("error", reject)
-    })
-
-    busboy.on("field", (fieldname, val) => {
-      if (fieldname === "isIOS" && val === "true") {
-        isIOS = true
-        console.log("📱 iOS device detected")
-      }
-    })
-
-    busboy.on("error", (err) => {
-      console.error("❌ Busboy error:", err)
-      reject(err)
-    })
-
-    req.pipe(busboy)
-  })
-
-  try {
-    const localPath = await fileWritePromise
-    const fileBuffer = fs.readFileSync(localPath)
-    const fileSize = fileBuffer.length
-
-    console.log(`📦 Processing audio file: ${safeFilename}, size: ${fileSize} bytes, iOS: ${isIOS}`)
-
-    // If file is too small, it might be corrupted
-    if (fileSize < 1000) {
-      console.error("❌ Audio file too small, likely corrupted")
-      return res.status(400).json({ error: "Audio file too small or corrupted" })
-    }
-
-    // Convert the file to a supported format for Whisper API
-    // For iOS recordings, we'll explicitly use .m4a extension
-    // For other recordings, we'll use .webm
-    let apiFilename
-    let contentType
-
-    if (isIOS) {
-      apiFilename = "recording.m4a"
-      contentType = "audio/mp4"
-    } else {
-      apiFilename = "recording.webm"
-      contentType = "audio/webm"
-    }
-
-    console.log(`🔊 Using content type: ${contentType} for file: ${apiFilename}`)
-
-    const form = new FormData()
-    form.append("file", fileBuffer, {
-      filename: apiFilename,
-      contentType: contentType,
-    })
-
-    form.append("model", "whisper-1")
-    // Use simple response format
-    form.append("response_format", "json")
-    form.append("language", "en")
-    form.append("temperature", "0.2")
-
-    console.log(`🔊 Sending audio to Whisper API with filename: ${apiFilename}`)
-
-    const response = await axios.post("https://api.openai.com/v1/audio/transcriptions", form, {
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        ...form.getHeaders(),
-      },
-      timeout: 60000,
-    })
-
-    // Check if we got a valid response
-    if (!response.data) {
-      console.error("❌ Invalid response from Whisper API:", response.data)
-      return res.status(500).json({ error: "Invalid response from transcription service" })
-    }
-
-    let fullTranscript = ""
-
-    // Handle both verbose_json and simple text responses
-    if (response.data.text) {
-      fullTranscript = response.data.text.trim()
-      console.log("📜 Full Whisper transcript:", fullTranscript)
-    } else {
-      console.error("❌ No transcript in response:", response.data)
-      return res.status(500).json({ error: "No transcript in response" })
-    }
-
-    // Clean up the temporary files
-    try {
-      fs.unlinkSync(localPath)
-    } catch (err) {
-      console.error("⚠️ Failed to clean up temp files:", err)
-    }
-
-    res.status(200).json({ text: fullTranscript })
-  } catch (err) {
-    console.error("❌ Final transcription error:", err.response?.data || err.message)
-
-    // More detailed error response
-    const errorDetails = err.response?.data || {}
-    const errorMessage = errorDetails.error?.message || err.message || "Unknown error"
-
-    res.status(500).json({
-      error: "Failed to transcribe audio",
-      message: errorMessage,
-      details: errorDetails,
-    })
-  }
+  // Return null during server-side rendering
+  return Component ? <Component /> : null
 }
