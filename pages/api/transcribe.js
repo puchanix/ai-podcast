@@ -37,6 +37,20 @@ export default async function handler(req, res) {
       safeFilename = typeof filename === "string" ? filename : "input.webm"
       mimeType = fileMimeType || "audio/webm"
 
+      // Ensure we use a supported file extension based on the detected MIME type
+      if (mimeType.includes("mp4") || mimeType.includes("m4a") || safeFilename.endsWith(".m4a")) {
+        safeFilename = "recording.m4a"
+      } else if (mimeType.includes("webm") || safeFilename.endsWith(".webm")) {
+        safeFilename = "recording.webm"
+      } else if (mimeType.includes("mp3") || safeFilename.endsWith(".mp3")) {
+        safeFilename = "recording.mp3"
+      } else if (mimeType.includes("wav") || safeFilename.endsWith(".wav")) {
+        safeFilename = "recording.wav"
+      } else {
+        // Default to webm if we can't determine the type
+        safeFilename = "recording.webm"
+      }
+
       filepath = path.join(tmpdir, safeFilename)
 
       console.log(`📥 Writing uploaded file to: ${filepath}`)
@@ -76,18 +90,22 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Audio file too small or corrupted" })
     }
 
-    // Convert the file to a supported format for Whisper API
-    // For iOS recordings, we'll explicitly use .m4a extension
-    // For other recordings, we'll use .webm
-    let apiFilename
+    // Determine the correct content type and filename for Whisper API
+    let apiFilename = safeFilename
     let contentType
 
-    if (isIOS) {
-      apiFilename = "recording.m4a"
+    if (apiFilename.endsWith(".m4a")) {
       contentType = "audio/mp4"
-    } else {
-      apiFilename = "recording.webm"
+    } else if (apiFilename.endsWith(".webm")) {
       contentType = "audio/webm"
+    } else if (apiFilename.endsWith(".mp3")) {
+      contentType = "audio/mpeg"
+    } else if (apiFilename.endsWith(".wav")) {
+      contentType = "audio/wav"
+    } else {
+      // Default fallback
+      apiFilename = "recording.mp3"
+      contentType = "audio/mpeg"
     }
 
     console.log(`🔊 Using content type: ${contentType} for file: ${apiFilename}`)
@@ -99,7 +117,6 @@ export default async function handler(req, res) {
     })
 
     form.append("model", "whisper-1")
-    // Use simple response format
     form.append("response_format", "json")
     form.append("language", "en")
     form.append("temperature", "0.2")

@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRef } from "react"
+import { useEffect, useState, useRef } from "react"
 
 // This is a special Next.js Pages Router way to disable SSR for this page
 export const config = {
@@ -33,7 +32,6 @@ export default function TestRecording() {
     )
   }
 
-  // Import the client-side only component
   return <TestRecordingClient />
 }
 
@@ -133,9 +131,17 @@ function TestRecordingClient() {
         let filename
 
         if (isIOS) {
-          blob = new Blob(chunksRef.current, { type: "audio/mp4" })
-          filename = "recording.m4a"
+          // For iOS, try to use mp3 format which is more widely supported
+          try {
+            blob = new Blob(chunksRef.current, { type: "audio/mpeg" })
+            filename = "recording.mp3"
+          } catch (e) {
+            // Fallback to m4a if mp3 fails
+            blob = new Blob(chunksRef.current, { type: "audio/mp4" })
+            filename = "recording.m4a"
+          }
         } else {
+          // For non-iOS, use webm which works well on most browsers
           blob = new Blob(chunksRef.current, { type: "audio/webm" })
           filename = "recording.webm"
         }
@@ -188,7 +194,17 @@ function TestRecordingClient() {
     const formData = new FormData()
 
     // Add the audio blob with the correct filename extension
-    const filename = isIOS ? "recording.m4a" : "recording.webm"
+    let filename
+    if (isIOS) {
+      if (audioBlob.type.includes("mpeg") || audioBlob.type.includes("mp3")) {
+        filename = "recording.mp3"
+      } else {
+        filename = "recording.m4a"
+      }
+    } else {
+      filename = "recording.webm"
+    }
+
     formData.append("audio", audioBlob, filename)
 
     // Add iOS flag
