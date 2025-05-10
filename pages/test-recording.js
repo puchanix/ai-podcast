@@ -1,263 +1,155 @@
-"use client"
+import Busboy from "busboy"
+import fs from "fs"
+import os from "os"
+import path from "path"
+import FormData from "form-data"
+import axios from "axios"
 
-import { useEffect, useState } from "react"
-
-// This is a special Next.js Pages Router way to disable SSR for this page
 export const config = {
-  unstable_runtimeJS: true,
+  api: {
+    bodyParser: false,
+    responseLimit: false,
+  },
 }
 
-export default function TestRecording() {
-  // State to track if we're on the client side
-  const [isClient, setIsClient] = useState(false)
-
-  useEffect(() => {
-    // Set isClient to true once component mounts on the client
-    setIsClient(true)
-  }, [])
-
-  // Only render the recording UI on the client side
-  if (!isClient) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background-top to-background text-copy p-4 space-y-6">
-        <h1 className="text-2xl font-bold">Audio Recording Test</h1>
-        <p>Loading recording interface...</p>
-      </div>
-    )
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" })
   }
 
-  // Import the client-side only component
-  return <TestRecordingClient />
-}
+  const tmpdir = os.tmpdir()
+  let safeFilename = ""
+  let isIOS = false
+  let mimeType = ""
 
-// Client-side only component
-function TestRecordingClient() {
-  const [isRecording, setIsRecording] = useState(false)
-  const [audioURL, setAudioURL] = useState("")
-  const [transcription, setTranscription] = useState("")
-  const [status, setStatus] = useState("")
-  const [recordingTime, setRecordingTime] = useState(0)
-  const [audioBlob, setAudioBlob] = useState(null)
-  const [isTranscribing, setIsTranscribing] = useState(false)
-  const [isIOS, setIsIOS] = useState(false)
+  const fileWritePromise = new Promise((resolve, reject) => {
+    const busboy = Busboy({
+      headers: req.headers,
+      limits: {
+        fileSize: 25 * 1024 * 1024, // 25MB max file size
+      },
+    })
+    let filepath = ""
 
-  const mediaRecorderRef = useRef(null)
-  const chunksRef = useRef([])
-  const timerRef = useRef(null)
-  const streamRef = useRef(null)
+    busboy.on("file", (fieldname, file, info) => {
+      const { filename, mimeType: fileMimeType } = info
 
-  useEffect(() => {
-    // Check for iOS only on the client side
-    setIsIOS(
-      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1),
-    )
+      safeFilename = typeof filename === "string" ? filename : "input.webm"
+      mimeType = fileMimeType || "audio/webm"
 
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
+      filepath = path.join(tmpdir, safeFilename)
+
+      console.log(`📥 Writing uploaded file to: ${filepath}`)
+      console.log(`📊 File mimetype: ${mimeType}`)
+
+      const writeStream = fs.createWriteStream(filepath)
+      file.pipe(writeStream)
+      writeStream.on("close", () => resolve(filepath))
+      writeStream.on("error", reject)
+    })
+
+    busboy.on("field", (fieldname, val) => {
+      if (fieldname === "isIOS" && val === "true") {
+        isIOS = true
+        console.log("📱 iOS device detected")
       }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop())
-      }
+    })
+
+    busboy.on("error", (err) => {
+      console.error("❌ Busboy error:", err)
+      reject(err)
+    })
+
+    req.pipe(busboy)
+  })
+
+  try {
+    const localPath = await fileWritePromise
+    const fileBuffer = fs.readFileSync(localPath)
+    const fileSize = fileBuffer.length
+
+    console.log(`📦 Processing audio file: ${safeFilename}, size: ${fileSize} bytes, iOS: ${isIOS}`)
+
+    // If file is too small, it might be corrupted
+    if (fileSize < 1000) {
+      console.error("❌ Audio file too small, likely corrupted")
+      return res.status(400).json({ error: "Audio file too small or corrupted" })
     }
-  }, [])
 
-  const startRecording = async () => {
-    setStatus("Requesting microphone access...")
+    // Convert the file to a supported format for Whisper API
+    // For iOS recordings, we'll explicitly use .m4a extension
+    // For other recordings, we'll use .webm
+    let apiFilename
+    let contentType
+
+    if (isIOS) {
+      apiFilename = "recording.m4a"
+      contentType = "audio/mp4"
+    } else {
+      apiFilename = "recording.webm"
+      contentType = "audio/webm"
+    }
+
+    console.log(`🔊 Using content type: ${contentType} for file: ${apiFilename}`)
+
+    const form = new FormData()
+    form.append("file", fileBuffer, {
+      filename: apiFilename,
+      contentType: contentType,
+    })
+
+    form.append("model", "whisper-1")
+    // Use simple response format
+    form.append("response_format", "json")
+    form.append("language", "en")
+    form.append("temperature", "0.2")
+
+    console.log(`🔊 Sending audio to Whisper API with filename: ${apiFilename}`)
+
+    const response = await axios.post("https://api.openai.com/v1/audio/transcriptions", form, {
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        ...form.getHeaders(),
+      },
+      timeout: 60000,
+    })
+
+    // Check if we got a valid response
+    if (!response.data) {
+      console.error("❌ Invalid response from Whisper API:", response.data)
+      return res.status(500).json({ error: "Invalid response from transcription service" })
+    }
+
+    let fullTranscript = ""
+
+    // Handle both verbose_json and simple text responses
+    if (response.data.text) {
+      fullTranscript = response.data.text.trim()
+      console.log("📜 Full Whisper transcript:", fullTranscript)
+    } else {
+      console.error("❌ No transcript in response:", response.data)
+      return res.status(500).json({ error: "No transcript in response" })
+    }
+
+    // Clean up the temporary files
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      })
-
-      streamRef.current = stream
-      setStatus(`Microphone access granted. Device: ${isIOS ? "iOS" : "Non-iOS"}`)
-
-      // For iOS, don't specify mimeType
-      if (isIOS) {
-        try {
-          mediaRecorderRef.current = new MediaRecorder(stream)
-          setStatus("Using default recorder for iOS")
-        } catch (e) {
-          setStatus(`iOS recorder error: ${e.message}`)
-          return
-        }
-      } else {
-        // Non-iOS devices
-        try {
-          mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: "audio/webm" })
-          setStatus("Using audio/webm")
-        } catch (e) {
-          mediaRecorderRef.current = new MediaRecorder(stream)
-          setStatus("Using default recorder")
-        }
-      }
-
-      chunksRef.current = []
-
-      // Collect data more frequently on iOS
-      const timeslice = isIOS ? 100 : 1000
-
-      mediaRecorderRef.current.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunksRef.current.push(e.data)
-          setStatus(`Chunk received: ${e.data.size} bytes, total chunks: ${chunksRef.current.length}`)
-        }
-      }
-
-      mediaRecorderRef.current.onstop = async () => {
-        setStatus(`Recording stopped. Total chunks: ${chunksRef.current.length}`)
-
-        // Create blob without specifying type for iOS
-        let blob
-        let filename
-
-        if (isIOS) {
-          blob = new Blob(chunksRef.current)
-          filename = "recording.m4a"
-        } else {
-          blob = new Blob(chunksRef.current, { type: "audio/webm" })
-          filename = "recording.webm"
-        }
-
-        setStatus(`Audio blob size: ${blob.size} bytes, filename: ${filename}`)
-        setAudioBlob(blob)
-
-        // Create URL for playback
-        const url = URL.createObjectURL(blob)
-        setAudioURL(url)
-      }
-
-      mediaRecorderRef.current.start(timeslice)
-      setIsRecording(true)
-      setRecordingTime(0)
-
-      timerRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1)
-      }, 1000)
+      fs.unlinkSync(localPath)
     } catch (err) {
-      console.error("Microphone error:", err)
-      setStatus(`Microphone error: ${err.message}`)
-    }
-  }
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.requestData()
-      mediaRecorderRef.current.stop()
-
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
-      }
-
-      setIsRecording(false)
-    }
-  }
-
-  const transcribeAudio = async () => {
-    if (!audioBlob) {
-      setStatus("No audio to transcribe")
-      return
+      console.error("⚠️ Failed to clean up temp files:", err)
     }
 
-    setStatus("Transcribing...")
-    setIsTranscribing(true)
+    res.status(200).json({ text: fullTranscript })
+  } catch (err) {
+    console.error("❌ Final transcription error:", err.response?.data || err.message)
 
-    // Create FormData for API
-    const formData = new FormData()
-    formData.append("audio", audioBlob, isIOS ? "recording.m4a" : "recording.webm")
-    formData.append("isIOS", isIOS ? "true" : "false")
+    // More detailed error response
+    const errorDetails = err.response?.data || {}
+    const errorMessage = errorDetails.error?.message || err.message || "Unknown error"
 
-    try {
-      const res = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!res.ok) {
-        const errorText = await res.text()
-        throw new Error(`API returned ${res.status}: ${errorText}`)
-      }
-
-      const json = await res.json()
-      setTranscription(json.text || "No transcription returned")
-      setStatus("Transcription complete")
-    } catch (err) {
-      console.error("Transcription error:", err)
-      setStatus(`Transcription error: ${err.message}`)
-    } finally {
-      setIsTranscribing(false)
-    }
+    res.status(500).json({
+      error: "Failed to transcribe audio",
+      message: errorMessage,
+      details: errorDetails,
+    })
   }
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background-top to-background text-copy p-4 space-y-6">
-      <h1 className="text-2xl font-bold">Audio Recording Test</h1>
-      <p>Device: {isIOS ? "iOS" : "Non-iOS"}</p>
-      <p className="text-sm max-w-md text-center">{status}</p>
-
-      {isRecording ? (
-        <div className="flex flex-col items-center space-y-4">
-          <p className="text-xl">Recording... {formatTime(recordingTime)}</p>
-          <button
-            onClick={stopRecording}
-            className="bg-red-500 hover:bg-red-600 text-white py-3 px-6 rounded-full text-lg"
-          >
-            Stop Recording
-          </button>
-        </div>
-      ) : (
-        <button
-          onClick={startRecording}
-          className="bg-blue-500 hover:bg-blue-600 text-white py-3 px-6 rounded-full text-lg"
-        >
-          Start Recording
-        </button>
-      )}
-
-      {audioURL && (
-        <div className="mt-8 w-full max-w-md">
-          <h2 className="text-xl font-bold mb-2">Recording Playback</h2>
-          <audio src={audioURL} controls className="w-full" />
-
-          <button
-            onClick={transcribeAudio}
-            disabled={isTranscribing}
-            className={`mt-4 ${
-              isTranscribing ? "bg-gray-500" : "bg-green-500 hover:bg-green-600"
-            } text-white py-2 px-4 rounded-full`}
-          >
-            {isTranscribing ? "Transcribing..." : "Transcribe Audio"}
-          </button>
-        </div>
-      )}
-
-      {transcription && (
-        <div className="mt-8 w-full max-w-md">
-          <h2 className="text-xl font-bold mb-2">Transcription</h2>
-          <div className="bg-white text-black p-4 rounded">{transcription}</div>
-        </div>
-      )}
-
-      <div className="mt-8">
-        <a href="/" className="text-blue-400 hover:underline">
-          Back to Home
-        </a>
-      </div>
-    </div>
-  )
 }
-
-// Import useRef here to avoid the error
-import { useRef } from "react"

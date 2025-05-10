@@ -76,30 +76,21 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Audio file too small or corrupted" })
     }
 
-    // Determine the correct content type based on file extension
-    let contentType = mimeType
-    if (safeFilename.endsWith(".m4a")) {
+    // Convert the file to a supported format for Whisper API
+    // For iOS recordings, we'll explicitly use .m4a extension
+    // For other recordings, we'll use .webm
+    let apiFilename
+    let contentType
+
+    if (isIOS) {
+      apiFilename = "recording.m4a"
       contentType = "audio/mp4"
-    } else if (safeFilename.endsWith(".mp3")) {
-      contentType = "audio/mpeg"
-    } else if (safeFilename.endsWith(".wav")) {
-      contentType = "audio/wav"
-    } else if (safeFilename.endsWith(".webm")) {
+    } else {
+      apiFilename = "recording.webm"
       contentType = "audio/webm"
     }
 
-    // For iOS, always use mp4 content type
-    if (isIOS) {
-      contentType = "audio/mp4"
-    }
-
-    console.log(`🔊 Using content type: ${contentType} for file: ${safeFilename}`)
-
-    // Create a new filename with the correct extension for Whisper API
-    let apiFilename = safeFilename
-    if (isIOS && !safeFilename.endsWith(".m4a")) {
-      apiFilename = "recording.m4a"
-    }
+    console.log(`🔊 Using content type: ${contentType} for file: ${apiFilename}`)
 
     const form = new FormData()
     form.append("file", fileBuffer, {
@@ -108,7 +99,7 @@ export default async function handler(req, res) {
     })
 
     form.append("model", "whisper-1")
-    // Use simple response format instead of verbose_json
+    // Use simple response format
     form.append("response_format", "json")
     form.append("language", "en")
     form.append("temperature", "0.2")
