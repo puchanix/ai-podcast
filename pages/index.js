@@ -1,6 +1,5 @@
-// index.js with tap-and-hold (mobile) and click-to-toggle (desktop) voice recording
-// All previous logic preserved (Da Vinci, podcast, status, questions, UI)
-// dummy change
+// index.js with improved mobile voice recording
+// Fixes the issue of recordings getting truncated after ~5 seconds on mobile
 
 import { useEffect, useRef, useState } from "react";
 import { personas } from "../lib/personas";
@@ -16,14 +15,14 @@ export default function Home() {
   const [isDaVinciSpeaking, setIsDaVinciSpeaking] = useState(false);
   const [daVinciPaused, setDaVinciPaused] = useState(false);
   const [popularQuestions, setPopularQuestions] = useState([]);
-  const mimeType = useRef(""); // put this with other useRef declarations
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mimeType = useRef(""); 
   
-
- 
-
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const filename = useRef("input.webm");
+  const streamRef = useRef(null);
+  const timerRef = useRef(null);
 
   const podcastAudio = useRef(null);
   const daVinciAudio = useRef(null);
@@ -36,7 +35,7 @@ export default function Home() {
 
   const handleTouchEnd = () => {
     if (isTouchDevice && isRecording && mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
+      stopRecording();
     }
   };
 
@@ -45,7 +44,7 @@ export default function Home() {
       if (!isRecording) {
         startRecording();
       } else {
-        mediaRecorderRef.current?.stop();
+        stopRecording();
       }
     }
   };
@@ -76,6 +75,17 @@ export default function Home() {
     }
   }, []);
   
+  // Clean up resources when component unmounts
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
 
   const recordQuestion = async (question) => {
     if (!question) return;
@@ -90,18 +100,6 @@ export default function Home() {
       console.error("Failed to record question click", err);
     }
   };
-
-  useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.permissions && navigator.mediaDevices) {
-      navigator.permissions.query({ name: "microphone" }).then((res) => {
-        if (res.state === "prompt") {
-          navigator.mediaDevices.getUserMedia({ audio: true })
-            .then((stream) => stream.getTracks().forEach(track => track.stop()))
-            .catch(() => {});
-        }
-      }).catch(() => {});
-    }
-  }, []);
 
   useEffect(() => {
     if (!isThinking) return;
@@ -147,22 +145,42 @@ export default function Home() {
     stopPodcast();
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mimeType.current = MediaRecorder.isTypeSupported("audio/ogg; codecs=opus")
-      ? "audio/ogg; codecs=opus"
-      : "audio/webm";
-
-      const recorder = new MediaRecorder(stream, { mimeType: mimeType.current });
-      mediaRecorderRef.current = recorder; // ✅ Save it so stop() can be called later
+      // Request microphone with specific constraints for better mobile compatibility
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        } 
+      });
+      
+      streamRef.current = stream;
+      
+      // Try to use webm for better compatibility
+      try {
+        mimeType.current = "audio/webm";
+        mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: mimeType.current });
+      } catch (e) {
+        // Fallback if webm is not supported
+        try {
+          mimeType.current = "audio/mp4";
+          mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: mimeType.current });
+        } catch (e) {
+          // Last resort - use default
+          mimeType.current = "";
+          mediaRecorderRef.current = new MediaRecorder(stream);
+        }
+      }
 
       chunksRef.current = [];
 
-      recorder.ondataavailable = (e) => {
+      // Collect data more frequently to prevent loss on mobile (every 1 second)
+      mediaRecorderRef.current.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType.current });
+      mediaRecorderRef.current.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: mimeType.current || "audio/webm" });
         console.log("📦 Audio blob size:", blob.size, "bytes — Chunks:", chunksRef.current.length);
 
         chunksRef.current = [];
@@ -171,6 +189,7 @@ export default function Home() {
         formData.append("audio", blob, filename.current);
 
         setStatusMessage("📝 Transcribing...");
+        setIsTranscribing(true);
 
         try {
           const res = await fetch("/api/transcribe", { method: "POST", body: formData });
@@ -184,18 +203,53 @@ export default function Home() {
         } catch (err) {
           console.error("❌ Transcription failed:", err);
           setStatusMessage("⚠️ Could not understand your voice.");
+        } finally {
+          setIsTranscribing(false);
         }
 
         setIsRecording(false);
+        setRecordingTime(0);
+        
+        // Stop all tracks to release the microphone
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
       };
 
-      recorder.start();
+      // Start recording with 1-second intervals for data collection
+      mediaRecorderRef.current.start(1000);
       setIsRecording(true);
       setStatusMessage("🎤 Listening...");
+      setRecordingTime(0);
+      
+      // Start timer to show recording duration
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+        
+        // Auto-stop after 30 seconds to prevent issues
+        if (recordingTime >= 29) {
+          stopRecording();
+        }
+      }, 1000);
 
     } catch (err) {
       console.error("Mic error:", err);
       setStatusMessage("❌ Mic not supported");
+    }
+  };
+  
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      // Request final data chunk before stopping
+      mediaRecorderRef.current.requestData();
+      mediaRecorderRef.current.stop();
+      
+      // Clear timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
     }
   };
 
@@ -269,6 +323,12 @@ export default function Home() {
     }
   };
 
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
   const uiQuestions = ["Tell me Your Story", ...personas[selectedPersona].questions];
 
   return (
@@ -278,7 +338,7 @@ export default function Home() {
       </h1>
 
       <img
-        src={personas[selectedPersona].image}
+        src={personas[selectedPersona].image || "/placeholder.svg"}
         alt={personas[selectedPersona].name}
         className="w-32 h-32 rounded-full object-cover shadow-md"
       />
@@ -295,14 +355,16 @@ export default function Home() {
         ))}
       </select>
 
-      <p className="text-neutral-dark font-medium">{statusMessage}</p>
+      <p className="text-neutral-dark font-medium">
+        {isRecording ? `🎤 Recording... ${formatTime(recordingTime)}` : statusMessage}
+      </p>
 
       <div className="flex flex-wrap justify-center gap-3">
         {uiQuestions.map((q, i) => (
           <button
             key={i}
             onClick={() => handleAsk(q)}
-            disabled={isThinking}
+            disabled={isThinking || isRecording}
             className="bg-button-primary hover:bg-button-hover disabled:bg-neutral-dark text-white py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out"
           >
             {q}
@@ -311,20 +373,20 @@ export default function Home() {
       </div>
 
       {!isThinking && !isTranscribing && (
-  <button
-    onClick={handleClickRecord}
-    onTouchStart={handleTouchStart}
-    onTouchEnd={handleTouchEnd}
-    className="mt-6"
-  >
-    <img
-      src={isRecording ? "/mic-stop.gif" : "/mic-start.gif"} // or use .png if preferred
-      alt={isRecording ? "Stop recording" : "Start recording"}
-      className="w-20 h-20 hover:scale-105 transition-transform duration-200"
-    />
-  </button>
-)}
-
+        <button
+          onClick={handleClickRecord}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          className="mt-6"
+          disabled={isThinking || isTranscribing}
+        >
+          <img
+            src={isRecording ? "/mic-stop.gif" : "/mic-start.gif"}
+            alt={isRecording ? "Stop recording" : "Start recording"}
+            className="w-20 h-20 hover:scale-105 transition-transform duration-200"
+          />
+        </button>
+      )}
 
       {(isDaVinciSpeaking || daVinciPaused) && (
         <button
@@ -363,4 +425,3 @@ export default function Home() {
     </div>
   );
 }
-
