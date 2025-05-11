@@ -1,5 +1,11 @@
 // pages/api/continue-debate.js
-import { personas } from "../../lib/personas"
+import { characters } from "../../data/characters"
+import { generateText } from "ai"
+import { openai } from "@ai-sdk/openai"
+
+export const config = {
+  runtime: "nodejs",
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -7,162 +13,101 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { character1, character2, userQuestion, currentMessages } = req.body
+    const { character1, character2, userQuestion, currentMessages, format, historicalContext } = req.body
 
     // Get character details
-    const char1 = personas[character1]
-    const char2 = personas[character2]
+    const char1 = characters.find((c) => c.id === character1)
+    const char2 = characters.find((c) => c.id === character2)
 
     if (!char1 || !char2) {
       return res.status(400).json({ error: "Character not found" })
     }
 
     // Format previous conversation for context
-    const conversationContext = formatConversationContext(currentMessages, character1, character2)
+    const conversationContext = formatConversationContext(currentMessages, char1, char2)
+
+    // Context prompt based on historical setting
+    const contextPrompt = historicalContext
+      ? `Respond as if you only have knowledge available during your lifetime. Do not reference events, discoveries, or concepts that occurred after your death.`
+      : `You can reference modern events and discoveries even if they occurred after your lifetime.`
+
+    const formatPrompt = getFormatPrompt(format)
 
     // Generate response for character 1
-    const response1 = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are ${char1.name}. Respond as this historical figure would, with their knowledge, personality, and speaking style.`,
-          },
-          {
-            role: "user",
-            content: `Previous conversation:
-            ${conversationContext}
-            
-            The audience has asked: "${userQuestion}"
-            
-            Provide a brief response to this question. Be true to your historical character, beliefs, and speaking style.
-            Keep your response under 75 words.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      }),
+    const { text: response1 } = await generateText({
+      model: openai("gpt-4o"),
+      prompt: `You are ${char1.name}. ${char1.systemPrompt}
+      
+      ${contextPrompt}
+      
+      ${formatPrompt}
+      
+      Previous conversation:
+      ${conversationContext}
+      
+      The audience has asked: "${userQuestion}"
+      
+      Provide your response to this question. Be true to your historical character, beliefs, and speaking style.
+      Keep your response concise, under 75 words.`,
+      temperature: 0.7,
+      maxTokens: 200,
     })
-
-    if (!response1.ok) {
-      throw new Error(`OpenAI API error: ${response1.statusText}`)
-    }
-
-    const data1 = await response1.json()
-    const responseText1 = data1.choices[0].message.content
 
     // Generate response for character 2
-    const response2 = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are ${char2.name}. Respond as this historical figure would, with their knowledge, personality, and speaking style.`,
-          },
-          {
-            role: "user",
-            content: `Previous conversation:
-            ${conversationContext}
-            
-            The audience has asked: "${userQuestion}"
-            
-            ${char1.name} has just responded with:
-            "${responseText1}"
-            
-            Provide a brief response that challenges or builds upon their answer.
-            Be true to your historical character, beliefs, and speaking style.
-            Keep your response under 75 words.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      }),
+    const { text: response2 } = await generateText({
+      model: openai("gpt-4o"),
+      prompt: `You are ${char2.name}. ${char2.systemPrompt}
+      
+      ${contextPrompt}
+      
+      ${formatPrompt}
+      
+      Previous conversation:
+      ${conversationContext}
+      
+      The audience has asked: "${userQuestion}"
+      
+      ${char1.name} has just responded with:
+      "${response1}"
+      
+      Provide your response to the question, potentially addressing points made by ${char1.name}.
+      Be true to your historical character, beliefs, and speaking style.
+      Keep your response concise, under 75 words.`,
+      temperature: 0.7,
+      maxTokens: 200,
     })
 
-    if (!response2.ok) {
-      throw new Error(`OpenAI API error: ${response2.statusText}`)
-    }
-
-    const data2 = await response2.json()
-    const responseText2 = data2.choices[0].message.content
-
-    // Generate follow-up from character 1
-    const response3 = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are ${char1.name}. Respond as this historical figure would, with their knowledge, personality, and speaking style.`,
-          },
-          {
-            role: "user",
-            content: `Previous conversation:
-            ${conversationContext}
-            
-            The audience asked: "${userQuestion}"
-            
-            You responded: "${responseText1}"
-            
-            ${char2.name} then said: "${responseText2}"
-            
-            Provide a brief final thought or rebuttal to their response.
-            Keep your response under 75 words.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      }),
-    })
-
-    if (!response3.ok) {
-      throw new Error(`OpenAI API error: ${response3.statusText}`)
-    }
-
-    const data3 = await response3.json()
-    const followup1 = data3.choices[0].message.content
-
-    return res.status(200).json({ 
-      exchanges: [
-        { character: character1, content: responseText1 },
-        { character: character2, content: responseText2 },
-        { character: character1, content: followup1 }
-      ]
-    })
+    return res.status(200).json({ response1, response2 })
   } catch (error) {
     console.error("Error continuing debate:", error)
     return res.status(500).json({ error: "Internal server error" })
   }
 }
 
-function formatConversationContext(messages, char1Id, char2Id) {
+function formatConversationContext(messages, char1, char2) {
   return messages
     .map((msg) => {
       if (msg.character === "user") {
         return `Audience: ${msg.content}`
-      } else if (msg.character === char1Id) {
-        return `${personas[char1Id].name}: ${msg.content}`
-      } else if (msg.character === char2Id) {
-        return `${personas[char2Id].name}: ${msg.content}`
+      } else if (msg.character === char1.id) {
+        return `${char1.name}: ${msg.content}`
+      } else if (msg.character === char2.id) {
+        return `${char2.name}: ${msg.content}`
       }
       return ""
     })
     .join("\n\n")
+}
+
+function getFormatPrompt(format) {
+  switch (format) {
+    case "pointCounterpoint":
+      return "This is a formal point/counterpoint debate. Make clear, structured arguments with evidence."
+    case "moderated":
+      return "This is a moderated debate. Address the topic directly and be prepared to respond to questions."
+    case "freeform":
+      return "This is a free-flowing conversation. Speak naturally as you would in a discussion with a peer."
+    default:
+      return "Present your perspective on the topic clearly and concisely."
+  }
 }

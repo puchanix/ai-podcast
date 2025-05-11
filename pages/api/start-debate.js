@@ -1,5 +1,11 @@
 // pages/api/start-debate.js
-import { personas } from "../../lib/personas"
+import { characters } from "../../data/characters"
+import { generateText } from "ai"
+import { openai } from "@ai-sdk/openai"
+
+export const config = {
+  runtime: "nodejs",
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -7,174 +13,77 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { character1, character2, topic } = req.body
+    const { character1, character2, topic, format, historicalContext } = req.body
 
     // Get character details
-    const char1 = personas[character1]
-    const char2 = personas[character2]
+    const char1 = characters.find((c) => c.id === character1)
+    const char2 = characters.find((c) => c.id === character2)
 
     if (!char1 || !char2) {
       return res.status(400).json({ error: "Character not found" })
     }
 
-    // Generate opening statement for character 1 (shorter)
-    const response1 = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are ${char1.name}. Respond as this historical figure would, with their knowledge, personality, and speaking style.`,
-          },
-          {
-            role: "user",
-            content: `The topic of debate is: "${topic}"
-            
-            Provide a brief opening statement on this topic. Be concise and provocative to start a debate.
-            Keep your response under 75 words.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      }),
+    // Generate opening statements for both characters
+    const contextPrompt = historicalContext
+      ? `Respond as if you only have knowledge available during your lifetime. Do not reference events, discoveries, or concepts that occurred after your death.`
+      : `You can reference modern events and discoveries even if they occurred after your lifetime.`
+
+    const formatPrompt = getFormatPrompt(format)
+
+    // Generate opening statement for character 1
+    const { text: opening1 } = await generateText({
+      model: openai("gpt-4o"),
+      prompt: `You are ${char1.name}. ${char1.systemPrompt}
+      
+      ${contextPrompt}
+      
+      ${formatPrompt}
+      
+      The topic of debate is: "${topic}"
+      
+      Provide your opening statement on this topic. Be true to your historical character, beliefs, and speaking style.
+      Keep your response concise, under 75 words.`,
+      temperature: 0.7,
+      maxTokens: 200,
     })
 
-    if (!response1.ok) {
-      throw new Error(`OpenAI API error: ${response1.statusText}`)
-    }
-
-    const data1 = await response1.json()
-    const opening1 = data1.choices[0].message.content
-
-    // Generate opening response from character 2 (shorter)
-    const response2 = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are ${char2.name}. Respond as this historical figure would, with their knowledge, personality, and speaking style.`,
-          },
-          {
-            role: "user",
-            content: `The topic of debate is: "${topic}"
-            
-            Your debate opponent, ${char1.name}, has made the following opening statement:
-            "${opening1}"
-            
-            Provide a brief response that challenges or questions their position.
-            Keep your response under 75 words.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      }),
+    // Generate opening statement for character 2
+    const { text: opening2 } = await generateText({
+      model: openai("gpt-4o"),
+      prompt: `You are ${char2.name}. ${char2.systemPrompt}
+      
+      ${contextPrompt}
+      
+      ${formatPrompt}
+      
+      The topic of debate is: "${topic}"
+      
+      Your debate opponent, ${char1.name}, has made the following opening statement:
+      "${opening1}"
+      
+      Provide your opening statement on this topic, responding to some points made by ${char1.name} if appropriate.
+      Be true to your historical character, beliefs, and speaking style.
+      Keep your response concise, under 75 words.`,
+      temperature: 0.7,
+      maxTokens: 200,
     })
 
-    if (!response2.ok) {
-      throw new Error(`OpenAI API error: ${response2.statusText}`)
-    }
-
-    const data2 = await response2.json()
-    const opening2 = data2.choices[0].message.content
-
-    // Generate follow-up from character 1
-    const response3 = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are ${char1.name}. Respond as this historical figure would, with their knowledge, personality, and speaking style.`,
-          },
-          {
-            role: "user",
-            content: `The topic of debate is: "${topic}"
-            
-            You said: "${opening1}"
-            
-            ${char2.name} responded: "${opening2}"
-            
-            Provide a brief rebuttal or follow-up to their response.
-            Keep your response under 75 words.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      }),
-    })
-
-    if (!response3.ok) {
-      throw new Error(`OpenAI API error: ${response3.statusText}`)
-    }
-
-    const data3 = await response3.json()
-    const followup1 = data3.choices[0].message.content
-
-    // Generate final response from character 2
-    const response4 = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `You are ${char2.name}. Respond as this historical figure would, with their knowledge, personality, and speaking style.`,
-          },
-          {
-            role: "user",
-            content: `The topic of debate is: "${topic}"
-            
-            You said: "${opening2}"
-            
-            ${char1.name} responded: "${followup1}"
-            
-            Provide a brief counter-argument or closing thought.
-            Keep your response under 75 words.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 200,
-      }),
-    })
-
-    if (!response4.ok) {
-      throw new Error(`OpenAI API error: ${response4.statusText}`)
-    }
-
-    const data4 = await response4.json()
-    const followup2 = data4.choices[0].message.content
-
-    // Return all statements for the initial exchange
-    return res.status(200).json({ 
-      exchanges: [
-        { character: character1, content: opening1 },
-        { character: character2, content: opening2 },
-        { character: character1, content: followup1 },
-        { character: character2, content: followup2 }
-      ]
-    })
+    return res.status(200).json({ opening1, opening2 })
   } catch (error) {
     console.error("Error starting debate:", error)
     return res.status(500).json({ error: "Internal server error" })
+  }
+}
+
+function getFormatPrompt(format) {
+  switch (format) {
+    case "pointCounterpoint":
+      return "This is a formal point/counterpoint debate. Make clear, structured arguments with evidence."
+    case "moderated":
+      return "This is a moderated debate. Address the topic directly and be prepared to respond to questions."
+    case "freeform":
+      return "This is a free-flowing conversation. Speak naturally as you would in a discussion with a peer."
+    default:
+      return "Present your perspective on the topic clearly and concisely."
   }
 }
