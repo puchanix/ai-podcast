@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react"
 import { personas } from "../lib/personas"
+// pages/debate.js
+import { DebateInterface } from "../components/debate-interface"
+
+export default function DebatePage() {
+  return <DebateInterface />
+}
 
 export default function Home() {
   const [selectedPersona, setSelectedPersona] = useState("daVinci")
