@@ -1,4 +1,11 @@
 // pages/debate.js
+
+// pages/debate.js
+import { DebateInterface } from "../components/debate-interface"
+
+export default function DebatePage() {
+  return <DebateInterface />
+}
 import { useState, useEffect, useRef } from "react"
 import { personas } from "../lib/personas"
 import styles from "../styles/Debate.module.css"
