@@ -22,7 +22,17 @@ export default async function handler(req, res) {
 
     const opening2 = `From my perspective as ${char2.name}, I see "${topic}" through a different lens. While I appreciate ${char1.name}'s approach, I believe we must also consider the practical implications and historical context of this matter.`
 
-    return res.status(200).json({ opening1, opening2 })
+    // Generate audio URLs (in a real implementation, you would call a TTS service)
+    // For now, we'll use the podcast audio as a placeholder
+    const audioUrl1 = char1.podcast || "/silent.mp3"
+    const audioUrl2 = char2.podcast || "/silent.mp3"
+
+    return res.status(200).json({
+      opening1,
+      opening2,
+      audioUrl1,
+      audioUrl2,
+    })
   } catch (error) {
     console.error("Error starting debate:", error)
     return res.status(500).json({ error: "Internal server error" })
