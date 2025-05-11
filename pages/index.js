@@ -713,7 +713,7 @@ export default function Home() {
           <img
             src={isRecording ? "/mic-stop.jpg" : "/mic-start.jpg"}
             alt={isRecording ? "Stop recording" : "Start recording"}
-            className="w-80 h-auto hover:scale-105 transition-transform duration-200"
+            className="w-70 h-auto hover:scale-105 transition-transform duration-200"
 
 
           />
