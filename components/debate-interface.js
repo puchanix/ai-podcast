@@ -1,17 +1,10 @@
 // components/debate-interface.js
-import { useState, useEffect, useRef } from "react"
-import { characters } from "../data/characters"
-import { Button } from "../components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
-import { Input } from "../components/ui/input"
-import { Card, CardContent } from "../components/ui/card"
-import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs"
-import { Loader2, MessageSquare, History, Lightbulb, Volume2, VolumeX } from 'lucide-react'
-import Image from "next/image"
+import { useState, useEffect } from "react"
+import { personas } from "../lib/personas"
 
 export function DebateInterface() {
-  const [character1, setCharacter1] = useState(characters[0].id)
-  const [character2, setCharacter2] = useState(characters[1].id)
+  const [character1, setCharacter1] = useState("einstein")
+  const [character2, setCharacter2] = useState("curie")
   const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
   const [isDebating, setIsDebating] = useState(false)
   const [debateMessages, setDebateMessages] = useState([])
@@ -20,65 +13,26 @@ export function DebateInterface() {
   const [currentTopic, setCurrentTopic] = useState(null)
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
-  const [isMuted, setIsMuted] = useState(false)
-  const [currentAudioIndex, setCurrentAudioIndex] = useState(null)
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState(false)
+  const [audioQueue, setAudioQueue] = useState([])
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
-  const [statusMessage, setStatusMessage] = useState("")
-
-  // Refs
-  const audioRef = useRef(null)
-  const audioQueue = useRef([])
-  const isProcessingAudio = useRef(false)
-  const messagesEndRef = useRef(null)
+  const [currentAudio, setCurrentAudio] = useState(null)
 
   // Get character objects
-  const char1 = characters.find((c) => c.id === character1) || characters[0]
-  const char2 = characters.find((c) => c.id === character2) || characters[1]
-
-  // Scroll to bottom when messages change
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [debateMessages])
+  const char1 = personas[character1]
+  const char2 = personas[character2]
 
   // Generate debate topics when characters change
   useEffect(() => {
     generateDebateTopics()
   }, [character1, character2])
 
-  // Audio player event handlers
+  // Handle audio playback
   useEffect(() => {
-    if (!audioRef.current) return
-    
-    const handleEnded = () => {
-      setIsPlayingAudio(false)
-      setCurrentAudioIndex(null)
-      playNextInQueue()
+    if (audioQueue.length > 0 && !isPlayingAudio) {
+      playNextAudio()
     }
-    
-    const handlePlay = () => setIsPlayingAudio(true)
-    const handlePause = () => setIsPlayingAudio(false)
-    const handleError = (e) => {
-      console.error("Audio playback error:", e)
-      setIsPlayingAudio(false)
-      setCurrentAudioIndex(null)
-      isProcessingAudio.current = false
-      playNextInQueue() // Try the next one
-    }
-    
-    audioRef.current.addEventListener('ended', handleEnded)
-    audioRef.current.addEventListener('play', handlePlay)
-    audioRef.current.addEventListener('pause', handlePause)
-    audioRef.current.addEventListener('error', handleError)
-    
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.removeEventListener('ended', handleEnded)
-        audioRef.current.removeEventListener('play', handlePlay)
-        audioRef.current.removeEventListener('pause', handlePause)
-        audioRef.current.removeEventListener('error', handleError)
-      }
-    }
-  }, [])
+  }, [audioQueue, isPlayingAudio])
 
   // Function to generate debate topics based on selected characters
   const generateDebateTopics = async () => {
@@ -101,7 +55,7 @@ export function DebateInterface() {
       if (!response.ok) throw new Error("Failed to generate topics")
 
       const data = await response.json()
-      setSuggestedTopics(data.topics || [])
+      setSuggestedTopics(data.topics)
     } catch (error) {
       console.error("Error generating debate topics:", error)
       // Fallback topics if API fails
@@ -135,8 +89,7 @@ export function DebateInterface() {
     setCurrentTopic(topic)
     setIsDebating(true)
     setDebateMessages([])
-    setStatusMessage("Starting debate...")
-    audioQueue.current = []
+    setAudioQueue([])
 
     try {
       const response = await fetch("/api/start-debate", {
@@ -158,37 +111,25 @@ export function DebateInterface() {
       const data = await response.json()
 
       // Add initial messages
-      const newMessages = []
-      
-      // First character's opening statement
-      newMessages.push({
-        character: character1,
-        content: data.opening1,
-        timestamp: Date.now(),
-        audioUrl: null,
-        isGeneratingAudio: !isMuted
-      })
-      
-      // Second character's opening statement
-      newMessages.push({
-        character: character2,
-        content: data.opening2,
-        timestamp: Date.now() + 100,
-        audioUrl: null,
-        isGeneratingAudio: !isMuted
-      })
+      const newMessages = [
+        {
+          character: character1,
+          content: data.opening1,
+          timestamp: Date.now(),
+        },
+        {
+          character: character2,
+          content: data.opening2,
+          timestamp: Date.now() + 100,
+        },
+      ]
       
       setDebateMessages(newMessages)
-      setStatusMessage("")
       
-      // Generate audio for each message if not muted
-      if (!isMuted) {
-        generateAudioForMessage(0)
-        generateAudioForMessage(1)
-      }
+      // Generate audio for both messages
+      generateAudioForMessages(newMessages)
     } catch (error) {
       console.error("Error starting debate:", error)
-      setStatusMessage("Failed to start debate")
       setIsDebating(false)
     }
   }
@@ -199,7 +140,6 @@ export function DebateInterface() {
 
     const userQuestion = customQuestion.trim()
     setCustomQuestion("")
-    setStatusMessage("Processing question...")
 
     // Add user question as a special message
     setDebateMessages((prev) => [
@@ -232,252 +172,152 @@ export function DebateInterface() {
       const data = await response.json()
 
       // Add responses
-      setDebateMessages((prev) => {
-        const newMessages = [...prev]
-        const startIndex = newMessages.length
-        
-        // First character's response
-        newMessages.push({
+      const newMessages = [
+        {
           character: character1,
           content: data.response1,
           timestamp: Date.now() + 100,
-          audioUrl: null,
-          isGeneratingAudio: !isMuted
-        })
-        
-        // Second character's response
-        newMessages.push({
+        },
+        {
           character: character2,
           content: data.response2,
           timestamp: Date.now() + 200,
-          audioUrl: null,
-          isGeneratingAudio: !isMuted
-        })
-        
-        // Generate audio for new messages if not muted
-        if (!isMuted) {
-          setTimeout(() => {
-            generateAudioForMessage(startIndex)
-            generateAudioForMessage(startIndex + 1)
-          }, 100)
-        }
-        
-        return newMessages
-      })
+        },
+      ]
       
-      setStatusMessage("")
+      setDebateMessages((prev) => [...prev, ...newMessages])
+      
+      // Generate audio for both messages
+      generateAudioForMessages(newMessages)
     } catch (error) {
       console.error("Error continuing debate:", error)
-      setStatusMessage("Failed to process question")
     }
   }
 
-  // Generate audio for a specific message
-  const generateAudioForMessage = async (messageIndex) => {
-    if (!debateMessages[messageIndex] || debateMessages[messageIndex].character === "user") return
+  // Generate audio for messages
+  const generateAudioForMessages = async (messages) => {
+    setIsGeneratingAudio(true)
     
-    // Update message to show it's generating audio
-    setDebateMessages(prev => {
-      const updated = [...prev]
-      if (updated[messageIndex]) {
-        updated[messageIndex] = {
-          ...updated[messageIndex],
-          isGeneratingAudio: true
+    for (const message of messages) {
+      if (message.character === "user") continue
+      
+      try {
+        const character = message.character === character1 ? char1 : char2
+        
+        const response = await fetch("/api/debate-audio", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: message.content,
+            voice: character.voice || "en-US-Neural2-D",
+            characterId: message.character,
+          }),
+        })
+        
+        if (!response.ok) throw new Error("Failed to generate audio")
+        
+        const data = await response.json()
+        
+        if (data.audioUrl) {
+          setAudioQueue((prev) => [...prev, {
+            url: data.audioUrl,
+            character: message.character
+          }])
         }
+      } catch (error) {
+        console.error("Error generating audio:", error)
       }
-      return updated
-    })
-    
-    try {
-      // Create form data for the API
-      const formData = new FormData()
-      formData.append("characterId", debateMessages[messageIndex].character)
-      formData.append("text", debateMessages[messageIndex].content)
-      
-      const response = await fetch("/api/debate-audio", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Audio API error:", errorText)
-        throw new Error(`API returned ${response.status}: ${errorText}`)
-      }
-
-      const data = await response.json()
-      
-      // Update message with audio URL
-      setDebateMessages(prev => {
-        const updated = [...prev]
-        if (updated[messageIndex]) {
-          updated[messageIndex] = {
-            ...updated[messageIndex],
-            audioUrl: data.audioUrl,
-            isGeneratingAudio: false
-          }
-        }
-        return updated
-      })
-      
-      // Add to audio queue
-      audioQueue.current.push(messageIndex)
-      
-      // Play if nothing is currently playing
-      if (!isPlayingAudio && !isProcessingAudio.current) {
-        playNextInQueue()
-      }
-    } catch (error) {
-      console.error("Error generating audio:", error)
-      
-      // Update message to show audio generation failed
-      setDebateMessages(prev => {
-        const updated = [...prev]
-        if (updated[messageIndex]) {
-          updated[messageIndex] = {
-            ...updated[messageIndex],
-            isGeneratingAudio: false
-          }
-        }
-        return updated
-      })
     }
+    
+    setIsGeneratingAudio(false)
   }
 
-  // Play the next audio in the queue
-  const playNextInQueue = () => {
-    if (isMuted || audioQueue.current.length === 0 || isProcessingAudio.current) return
-    
-    isProcessingAudio.current = true
-    const nextMessageIndex = audioQueue.current.shift()
-    const message = debateMessages[nextMessageIndex]
-    
-    if (!message || !message.audioUrl) {
-      isProcessingAudio.current = false
-      playNextInQueue()
+  // Play next audio in queue
+  const playNextAudio = () => {
+    if (audioQueue.length === 0) {
+      setIsPlayingAudio(false)
+      setCurrentAudio(null)
       return
     }
     
-    setCurrentAudioIndex(nextMessageIndex)
+    const nextAudio = audioQueue[0]
+    setAudioQueue((prev) => prev.slice(1))
     
-    if (audioRef.current) {
-      audioRef.current.src = message.audioUrl
-      audioRef.current.load()
-      audioRef.current.play()
-        .then(() => {
-          isProcessingAudio.current = false
-        })
-        .catch(err => {
-          console.error("Error playing audio:", err)
-          isProcessingAudio.current = false
-          setCurrentAudioIndex(null)
-          playNextInQueue() // Try the next one
-        })
-    } else {
-      isProcessingAudio.current = false
-    }
-  }
-
-  // Toggle mute state
-  const toggleMute = () => {
-    setIsMuted(!isMuted)
-    if (audioRef.current) {
-      audioRef.current.pause()
-    }
-    setCurrentAudioIndex(null)
-    audioQueue.current = []
-  }
-
-  // Play audio for a specific message
-  const playMessageAudio = (messageIndex) => {
-    const message = debateMessages[messageIndex]
-    if (!message || !message.audioUrl || isMuted) return
+    const audio = new Audio(nextAudio.url)
+    setCurrentAudio(nextAudio.character)
     
-    // Stop current audio if playing
-    if (audioRef.current) {
-      audioRef.current.pause()
+    audio.onended = () => {
+      setIsPlayingAudio(false)
+      setCurrentAudio(null)
     }
     
-    setCurrentAudioIndex(messageIndex)
-    
-    if (audioRef.current) {
-      audioRef.current.src = message.audioUrl
-      audioRef.current.load()
-      audioRef.current.play()
-        .catch(err => {
-          console.error("Error playing audio:", err)
-          setCurrentAudioIndex(null)
-        })
+    audio.onerror = () => {
+      console.error("Error playing audio")
+      setIsPlayingAudio(false)
+      setCurrentAudio(null)
     }
+    
+    audio.play()
+      .then(() => {
+        setIsPlayingAudio(true)
+      })
+      .catch((err) => {
+        console.error("Error playing audio:", err)
+        setIsPlayingAudio(false)
+        setCurrentAudio(null)
+      })
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl">
+    <div className="container mx-auto py-8 px-4">
       <h1 className="text-3xl font-bold text-center mb-8">Historical Debates</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         {/* Character 1 Selection */}
         <div className="flex flex-col items-center">
-          <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-primary">
-            <Image
+          <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-blue-500">
+            <img
               src={char1.image || "/placeholder.svg"}
               alt={char1.name}
-              width={128}
-              height={128}
-              className="object-cover"
+              className="w-full h-full object-cover"
             />
           </div>
-          <Select value={character1} onValueChange={setCharacter1}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select character" />
-            </SelectTrigger>
-            <SelectContent>
-              {characters.map((char) => (
-                <SelectItem key={char.id} value={char.id}>
-                  {char.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select 
+            value={character1} 
+            onChange={(e) => setCharacter1(e.target.value)}
+            className="p-2 border rounded"
+          >
+            {Object.keys(personas).map((id) => (
+              <option key={id} value={id}>
+                {personas[id].name}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* Character 2 Selection */}
         <div className="flex flex-col items-center">
-          <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-secondary">
-            <Image
+          <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-red-500">
+            <img
               src={char2.image || "/placeholder.svg"}
               alt={char2.name}
-              width={128}
-              height={128}
-              className="object-cover"
+              className="w-full h-full object-cover"
             />
           </div>
-          <Select value={character2} onValueChange={setCharacter2}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select character" />
-            </SelectTrigger>
-            <SelectContent>
-              {characters.map((char) => (
-                <SelectItem key={char.id} value={char.id}>
-                  {char.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select 
+            value={character2} 
+            onChange={(e) => setCharacter2(e.target.value)}
+            className="p-2 border rounded"
+          >
+            {Object.keys(personas).map((id) => (
+              <option key={id} value={id}>
+                {personas[id].name}
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
-
-      {/* Audio Controls */}
-      <div className="flex justify-center mb-6">
-        <Button 
-          variant="outline" 
-          className="flex items-center gap-2" 
-          onClick={toggleMute}
-        >
-          {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-          {isMuted ? "Unmute" : "Mute"}
-        </Button>
-        <audio ref={audioRef} hidden />
       </div>
 
       {/* Debate Format Options */}
@@ -486,62 +326,74 @@ export function DebateInterface() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <h3 className="text-sm font-medium mb-2">Format</h3>
-            <Tabs value={debateFormat} onValueChange={(v) => setDebateFormat(v)}>
-              <TabsList className="grid grid-cols-3">
-                <TabsTrigger value="pointCounterpoint">Point/Counterpoint</TabsTrigger>
-                <TabsTrigger value="moderated">Moderated</TabsTrigger>
-                <TabsTrigger value="freeform">Free Discussion</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex space-x-2">
+              <button 
+                onClick={() => setDebateFormat("pointCounterpoint")}
+                className={`px-3 py-1 rounded ${debateFormat === "pointCounterpoint" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
+              >
+                Point/Counterpoint
+              </button>
+              <button 
+                onClick={() => setDebateFormat("moderated")}
+                className={`px-3 py-1 rounded ${debateFormat === "moderated" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
+              >
+                Moderated
+              </button>
+              <button 
+                onClick={() => setDebateFormat("freeform")}
+                className={`px-3 py-1 rounded ${debateFormat === "freeform" ? "bg-blue-500 text-white" : "bg-gray-200"}`}
+              >
+                Free Discussion
+              </button>
+            </div>
           </div>
 
           <div>
             <h3 className="text-sm font-medium mb-2">Historical Context</h3>
-            <Tabs
-              value={historicalContext ? "historical" : "modern"}
-              onValueChange={(v) => setHistoricalContext(v === "historical")}
-            >
-              <TabsList className="grid grid-cols-2">
-                <TabsTrigger value="historical">Historical Knowledge Only</TabsTrigger>
-                <TabsTrigger value="modern">Include Modern Knowledge</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex space-x-2">
+              <button 
+                onClick={() => setHistoricalContext(true)}
+                className={`px-3 py-1 rounded ${historicalContext ? "bg-blue-500 text-white" : "bg-gray-200"}`}
+              >
+                Historical Knowledge Only
+              </button>
+              <button 
+                onClick={() => setHistoricalContext(false)}
+                className={`px-3 py-1 rounded ${!historicalContext ? "bg-blue-500 text-white" : "bg-gray-200"}`}
+              >
+                Include Modern Knowledge
+              </button>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* Status Message */}
-      {statusMessage && (
-        <div className="bg-muted p-3 rounded-md text-center mb-4">
-          <Loader2 className="h-4 w-4 inline mr-2 animate-spin" />
-          {statusMessage}
-        </div>
-      )}
 
       {/* Suggested Topics */}
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Suggested Debate Topics</h2>
         {isGeneratingTopics ? (
           <div className="flex justify-center items-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             <span className="ml-2">Generating topics...</span>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {suggestedTopics.map((topic) => (
-              <Card key={topic.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="p-4" onClick={() => startDebate(topic.title)}>
-                  <div className="flex items-start">
-                    <div className={`p-2 rounded-full mr-3 ${getCategoryColor(topic.category)}`}>
-                      {getCategoryIcon(topic.category)}
-                    </div>
-                    <div>
-                      <h3 className="font-bold">{topic.title}</h3>
-                      <p className="text-sm text-gray-500">{topic.description}</p>
-                    </div>
+              <div 
+                key={topic.id} 
+                className="border rounded p-4 cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => startDebate(topic.title)}
+              >
+                <div className="flex items-start">
+                  <div className={`p-2 rounded-full mr-3 ${getCategoryColor(topic.category)}`}>
+                    {getCategoryIcon(topic.category)}
                   </div>
-                </CardContent>
-              </Card>
+                  <div>
+                    <h3 className="font-bold">{topic.title}</h3>
+                    <p className="text-sm text-gray-500">{topic.description}</p>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -551,16 +403,21 @@ export function DebateInterface() {
       <div className="mb-8">
         <h2 className="text-xl font-semibold mb-4">Ask Your Own Question</h2>
         <div className="flex gap-2">
-          <Input
+          <input
+            type="text"
             value={customQuestion}
             onChange={(e) => setCustomQuestion(e.target.value)}
             placeholder="Enter a debate question or topic..."
             disabled={!isDebating}
-            className="flex-1"
+            className="flex-1 p-2 border rounded"
           />
-          <Button onClick={submitCustomQuestion} disabled={!isDebating || !customQuestion.trim()}>
+          <button 
+            onClick={submitCustomQuestion} 
+            disabled={!isDebating || !customQuestion.trim()}
+            className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
+          >
             Submit
-          </Button>
+          </button>
         </div>
       </div>
 
@@ -570,61 +427,41 @@ export function DebateInterface() {
           {currentTopic ? `Debate: ${currentTopic}` : "Select a topic to begin"}
         </h2>
 
-        <div className="bg-muted rounded-lg p-4 min-h-[400px] max-h-[600px] overflow-y-auto">
+        <div className="bg-gray-100 rounded-lg p-4 min-h-[400px] max-h-[600px] overflow-y-auto">
           {debateMessages.length === 0 && !isDebating ? (
             <div className="flex flex-col items-center justify-center h-[400px] text-gray-500">
-              <MessageSquare className="h-12 w-12 mb-4" />
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
               <p>Select a topic above to start the debate</p>
             </div>
           ) : (
             <div className="space-y-4">
               {debateMessages.map((msg, idx) => (
-                <div 
-                  key={idx} 
-                  className={`flex ${msg.character === "user" ? "justify-center" : ""} ${
-                    currentAudioIndex === idx ? "ring-2 ring-primary ring-offset-2" : ""
-                  }`}
-                >
+                <div key={idx} className={`flex ${msg.character === "user" ? "justify-center" : ""}`}>
                   {msg.character !== "user" && (
                     <div className="flex-shrink-0 mr-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden">
-                        <Image
+                        <img
                           src={(msg.character === character1 ? char1 : char2).image || "/placeholder.svg"}
                           alt={(msg.character === character1 ? char1 : char2).name}
-                          width={40}
-                          height={40}
-                          className="object-cover"
+                          className="w-full h-full object-cover"
                         />
                       </div>
                     </div>
                   )}
                   <div className={`flex-1 ${getMessageStyle(msg.character, character1, character2)}`}>
                     {msg.character === "user" ? (
-                      <div className="text-center py-2 px-4 bg-gray-100 dark:bg-gray-800 rounded-lg inline-block">
+                      <div className="text-center py-2 px-4 bg-gray-200 rounded-lg inline-block">
                         <span className="font-medium">You asked:</span> {msg.content}
                       </div>
                     ) : (
                       <>
-                        <div className="flex items-center justify-between mb-1">
+                        <div className="flex justify-between items-center">
                           <p className="font-bold">{msg.character === character1 ? char1.name : char2.name}</p>
-                          <div className="flex items-center">
-                            {msg.isGeneratingAudio && (
-                              <span className="text-xs text-muted-foreground flex items-center">
-                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                Generating audio...
-                              </span>
-                            )}
-                            {msg.audioUrl && !isMuted && (
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 ml-2"
-                                onClick={() => playMessageAudio(idx)}
-                              >
-                                <Volume2 className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
+                          {currentAudio === msg.character && (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Speaking...</span>
+                          )}
                         </div>
                         <p>{msg.content}</p>
                       </>
@@ -632,7 +469,12 @@ export function DebateInterface() {
                   </div>
                 </div>
               ))}
-              <div ref={messagesEndRef} />
+              
+              {isGeneratingAudio && (
+                <div className="text-center py-2">
+                  <span className="text-sm text-gray-500">Generating audio...</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -644,8 +486,8 @@ export function DebateInterface() {
 // Helper function to get message style based on character
 function getMessageStyle(messageCharacter, character1, character2) {
   if (messageCharacter === "user") return "text-center"
-  if (messageCharacter === character1) return "bg-primary/10 p-4 rounded-lg"
-  if (messageCharacter === character2) return "bg-secondary/10 p-4 rounded-lg"
+  if (messageCharacter === character1) return "bg-blue-100 p-4 rounded-lg"
+  if (messageCharacter === character2) return "bg-red-100 p-4 rounded-lg"
   return "p-4 rounded-lg"
 }
 
@@ -653,19 +495,19 @@ function getMessageStyle(messageCharacter, character1, character2) {
 function getCategoryColor(category) {
   switch (category) {
     case "science":
-      return "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+      return "bg-blue-100 text-blue-700"
     case "philosophy":
-      return "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
+      return "bg-purple-100 text-purple-700"
     case "politics":
-      return "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300"
+      return "bg-red-100 text-red-700"
     case "arts":
-      return "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300"
+      return "bg-yellow-100 text-yellow-700"
     case "technology":
-      return "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
+      return "bg-green-100 text-green-700"
     case "history":
-      return "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
+      return "bg-orange-100 text-orange-700"
     default:
-      return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+      return "bg-gray-100 text-gray-700"
   }
 }
 
@@ -708,76 +550,23 @@ function getCategoryIcon(category) {
           <path d="M12 8h.01"></path>
         </svg>
       )
-    case "politics":
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M2 20h.01"></path>
-          <path d="M7 20v-4"></path>
-          <path d="M12 20v-8"></path>
-          <path d="M17 20V8"></path>
-          <path d="M22 4v16"></path>
-        </svg>
-      )
-    case "arts":
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="13.5" cy="6.5" r="2.5"></circle>
-          <path d="M17 4c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z"></path>
-          <path d="M19 8c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z"></path>
-          <path d="M15 10c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z"></path>
-          <path d="M11 12c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z"></path>
-          <path d="m3 16 2 2 4-4"></path>
-          <path d="M3 12h.01"></path>
-          <path d="M7 12h.01"></path>
-          <path d="M11 16h.01"></path>
-          <path d="M15 16h.01"></path>
-          <path d="M19 16h.01"></path>
-        </svg>
-      )
-    case "technology":
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="4" y="4" width="16" height="16" rx="2"></rect>
-          <rect x="9" y="9" width="6" height="6"></rect>
-          <path d="M15 2v2"></path>
-          <path d="M15 20v2"></path>
-          <path d="M2 15h2"></path>
-          <path d="M20 15h2"></path>
-        </svg>
-      )
-    case "history":
-      return <History className="h-4 w-4" />
     default:
-      return <Lightbulb className="h-4 w-4" />
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 16v-4"></path>
+          <path d="M12 8h.01"></path>
+        </svg>
+      )
   }
 }

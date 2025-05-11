@@ -1,23 +1,14 @@
 // pages/api/start-debate.js
-import { characters } from "../../data/characters"
-import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
-
-export const config = {
-  runtime: "nodejs",
-}
+import { personas } from "../../lib/personas"
+import { Configuration, OpenAIApi } from "openai"
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" })
-  }
-
   try {
     const { character1, character2, topic, format, historicalContext } = req.body
 
     // Get character details
-    const char1 = characters.find((c) => c.id === character1)
-    const char2 = characters.find((c) => c.id === character2)
+    const char1 = personas[character1]
+    const char2 = personas[character2]
 
     if (!char1 || !char2) {
       return res.status(400).json({ error: "Character not found" })
@@ -30,43 +21,67 @@ export default async function handler(req, res) {
 
     const formatPrompt = getFormatPrompt(format)
 
+    // Configure OpenAI
+    const configuration = new Configuration({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+    const openai = new OpenAIApi(configuration)
+
     // Generate opening statement for character 1
-    const { text: opening1 } = await generateText({
-      model: openai("gpt-4o"),
-      prompt: `You are ${char1.name}. ${char1.systemPrompt}
-      
-      ${contextPrompt}
-      
-      ${formatPrompt}
-      
-      The topic of debate is: "${topic}"
-      
-      Provide your opening statement on this topic. Be true to your historical character, beliefs, and speaking style.
-      Keep your response concise, under 75 words.`,
+    const opening1Result = await openai.createChatCompletion({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `You are ${char1.name}. You are a historical figure known for your contributions to your field.
+          
+          ${contextPrompt}
+          
+          ${formatPrompt}`
+        },
+        {
+          role: "user",
+          content: `The topic of debate is: "${topic}"
+          
+          Provide your opening statement on this topic. Be true to your historical character, beliefs, and speaking style.
+          Keep your response under 100 words.`
+        }
+      ],
       temperature: 0.7,
-      maxTokens: 200,
+      max_tokens: 300,
     })
 
+    const opening1 = opening1Result.data.choices[0]?.message?.content || "I'm sorry, I couldn't process your request."
+
     // Generate opening statement for character 2
-    const { text: opening2 } = await generateText({
-      model: openai("gpt-4o"),
-      prompt: `You are ${char2.name}. ${char2.systemPrompt}
-      
-      ${contextPrompt}
-      
-      ${formatPrompt}
-      
-      The topic of debate is: "${topic}"
-      
-      Your debate opponent, ${char1.name}, has made the following opening statement:
-      "${opening1}"
-      
-      Provide your opening statement on this topic, responding to some points made by ${char1.name} if appropriate.
-      Be true to your historical character, beliefs, and speaking style.
-      Keep your response concise, under 75 words.`,
+    const opening2Result = await openai.createChatCompletion({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `You are ${char2.name}. You are a historical figure known for your contributions to your field.
+          
+          ${contextPrompt}
+          
+          ${formatPrompt}`
+        },
+        {
+          role: "user",
+          content: `The topic of debate is: "${topic}"
+          
+          Your debate opponent, ${char1.name}, has made the following opening statement:
+          "${opening1}"
+          
+          Provide your opening statement on this topic, responding to some points made by ${char1.name} if appropriate.
+          Be true to your historical character, beliefs, and speaking style.
+          Keep your response under 100 words.`
+        }
+      ],
       temperature: 0.7,
-      maxTokens: 200,
+      max_tokens: 300,
     })
+
+    const opening2 = opening2Result.data.choices[0]?.message?.content || "I'm sorry, I couldn't process your request."
 
     return res.status(200).json({ opening1, opening2 })
   } catch (error) {

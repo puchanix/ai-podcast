@@ -1,23 +1,14 @@
 // pages/api/continue-debate.js
-import { characters } from "../../data/characters"
-import { generateText } from "ai"
-import { openai } from "@ai-sdk/openai"
-
-export const config = {
-  runtime: "nodejs",
-}
+import { personas } from "../../lib/personas"
+import { Configuration, OpenAIApi } from "openai"
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" })
-  }
-
   try {
     const { character1, character2, userQuestion, currentMessages, format, historicalContext } = req.body
 
     // Get character details
-    const char1 = characters.find((c) => c.id === character1)
-    const char2 = characters.find((c) => c.id === character2)
+    const char1 = personas[character1]
+    const char2 = personas[character2]
 
     if (!char1 || !char2) {
       return res.status(400).json({ error: "Character not found" })
@@ -33,49 +24,73 @@ export default async function handler(req, res) {
 
     const formatPrompt = getFormatPrompt(format)
 
+    // Configure OpenAI
+    const configuration = new Configuration({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+    const openai = new OpenAIApi(configuration)
+
     // Generate response for character 1
-    const { text: response1 } = await generateText({
-      model: openai("gpt-4o"),
-      prompt: `You are ${char1.name}. ${char1.systemPrompt}
-      
-      ${contextPrompt}
-      
-      ${formatPrompt}
-      
-      Previous conversation:
-      ${conversationContext}
-      
-      The audience has asked: "${userQuestion}"
-      
-      Provide your response to this question. Be true to your historical character, beliefs, and speaking style.
-      Keep your response concise, under 75 words.`,
+    const response1Result = await openai.createChatCompletion({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `You are ${char1.name}. You are a historical figure known for your contributions to your field.
+          
+          ${contextPrompt}
+          
+          ${formatPrompt}`
+        },
+        {
+          role: "user",
+          content: `Previous conversation:
+          ${conversationContext}
+          
+          The audience has asked: "${userQuestion}"
+          
+          Provide your response to this question. Be true to your historical character, beliefs, and speaking style.
+          Keep your response under 100 words.`
+        }
+      ],
       temperature: 0.7,
-      maxTokens: 200,
+      max_tokens: 300,
     })
 
+    const response1 = response1Result.data.choices[0]?.message?.content || "I'm sorry, I couldn't process your question."
+
     // Generate response for character 2
-    const { text: response2 } = await generateText({
-      model: openai("gpt-4o"),
-      prompt: `You are ${char2.name}. ${char2.systemPrompt}
-      
-      ${contextPrompt}
-      
-      ${formatPrompt}
-      
-      Previous conversation:
-      ${conversationContext}
-      
-      The audience has asked: "${userQuestion}"
-      
-      ${char1.name} has just responded with:
-      "${response1}"
-      
-      Provide your response to the question, potentially addressing points made by ${char1.name}.
-      Be true to your historical character, beliefs, and speaking style.
-      Keep your response concise, under 75 words.`,
+    const response2Result = await openai.createChatCompletion({
+      model: "gpt-4",
+      messages: [
+        {
+          role: "system",
+          content: `You are ${char2.name}. You are a historical figure known for your contributions to your field.
+          
+          ${contextPrompt}
+          
+          ${formatPrompt}`
+        },
+        {
+          role: "user",
+          content: `Previous conversation:
+          ${conversationContext}
+          
+          The audience has asked: "${userQuestion}"
+          
+          ${char1.name} has just responded with:
+          "${response1}"
+          
+          Provide your response to the question, potentially addressing points made by ${char1.name}.
+          Be true to your historical character, beliefs, and speaking style.
+          Keep your response under 100 words.`
+        }
+      ],
       temperature: 0.7,
-      maxTokens: 200,
+      max_tokens: 300,
     })
+
+    const response2 = response2Result.data.choices[0]?.message?.content || "I'm sorry, I couldn't process your question."
 
     return res.status(200).json({ response1, response2 })
   } catch (error) {
@@ -85,6 +100,8 @@ export default async function handler(req, res) {
 }
 
 function formatConversationContext(messages, char1, char2) {
+  if (!messages || !Array.isArray(messages)) return ""
+  
   return messages
     .map((msg) => {
       if (msg.character === "user") {
