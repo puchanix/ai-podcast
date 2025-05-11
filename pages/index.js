@@ -711,7 +711,7 @@ export default function Home() {
           disabled={isThinking || isTranscribing}
         >
           <img
-            src={isRecording ? "/mic-stop.gif" : "/mic-start.gif"}
+            src={isRecording ? "/mic-stop.jpg" : "/mic-start.jpg"}
             alt={isRecording ? "Stop recording" : "Start recording"}
             className="w-20 h-20 hover:scale-105 transition-transform duration-200"
           />
