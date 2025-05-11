@@ -2,12 +2,6 @@
 
 import { useEffect, useRef, useState } from "react"
 import { personas } from "../lib/personas"
-// pages/debate.js
-import { DebateInterface } from "../components/debate-interface"
-
-export default function DebatePage() {
-  return <DebateInterface />
-}
 
 export default function Home() {
   const [selectedPersona, setSelectedPersona] = useState("daVinci")
@@ -684,9 +678,9 @@ export default function Home() {
         onChange={(e) => setSelectedPersona(e.target.value)}
         className="mt-2 mb-6 p-2 rounded border border-border text-white bg-dropdown-bg bg-opacity-95 shadow-sm"
       >
-        {Object.values(personas).map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
+        {Object.keys(personas).map((id) => (
+          <option key={id} value={id}>
+            {personas[id].name}
           </option>
         ))}
       </select>
@@ -720,20 +714,19 @@ export default function Home() {
             src={isRecording ? "/mic-stop.jpg" : "/mic-start.jpg"}
             alt={isRecording ? "Stop recording" : "Start recording"}
             className="w-56 h-auto hover:scale-105 transition-transform duration-200"
-
-
-
           />
         </button>
       )}
-<div className="mt-6 text-center">
-  <a 
-    href="/debate" 
-    className="bg-button-primary hover:bg-button-hover text-white py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out inline-block"
-  >
-    Try Historical Debates
-  </a>
-</div>
+
+      <div className="mt-6 text-center">
+        <a
+          href="/debate"
+          className="bg-button-primary hover:bg-button-hover text-white py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out inline-block"
+        >
+          Try Historical Debates
+        </a>
+      </div>
+
       {(isDaVinciSpeaking || daVinciPaused) && (
         <button
           onClick={toggleDaVinci}
@@ -763,9 +756,6 @@ export default function Home() {
       <audio ref={podcastAudio} hidden preload="auto" />
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
-      
-      
-
 
       <footer className="mt-10 text-sm text-copy-soft">
         <div className="flex space-x-6 justify-center">
