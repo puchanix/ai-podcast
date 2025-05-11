@@ -1,8 +1,10 @@
-// pages/api/generate-debate-topics.js
 import { personas } from "../../lib/personas"
-import { Configuration, OpenAIApi } from "openai"
 
 export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" })
+  }
+
   try {
     const { character1, character2 } = req.body
 
@@ -14,55 +16,46 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Character not found" })
     }
 
-    // Configure OpenAI
-    const configuration = new Configuration({
-      apiKey: process.env.OPENAI_API_KEY,
-    })
-    const openai = new OpenAIApi(configuration)
-
-    // Generate debate topics using AI
-    const completion = await openai.createChatCompletion({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "user",
-          content: `Generate 6 interesting debate topics for a conversation between ${char1.name} and ${char2.name}. 
-          Consider their historical backgrounds, areas of expertise, and potential philosophical disagreements.
-          
-          For each topic, provide:
-          1. A short title (3-5 words)
-          2. A brief description (10-15 words)
-          3. A category (science, philosophy, politics, arts, technology, or history)
-          
-          Format the response as a JSON array of objects with the properties: id, title, description, and category.
-          Example:
-          [
-            {
-              "id": "unique-id-1",
-              "title": "Nature of Reality",
-              "description": "Perspectives on what constitutes true reality and human perception",
-              "category": "philosophy"
-            }
-          ]`
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000,
-    })
-
-    const text = completion.data.choices[0]?.message?.content || ""
-
-    // Parse the response
-    let topics
-    try {
-      // Extract JSON from the response if needed
-      const jsonMatch = text.match(/\[[\s\S]*\]/)
-      const jsonString = jsonMatch ? jsonMatch[0] : text
-      topics = JSON.parse(jsonString)
-    } catch (error) {
-      console.error("Error parsing topics:", error)
-      return res.status(500).json({ error: "Failed to generate topics" })
-    }
+    // For simplicity, we'll return some predefined topics
+    // In a real implementation, you would use AI to generate these
+    const topics = [
+      {
+        id: "science-method",
+        title: "Scientific Method",
+        description: "Approaches to scientific discovery and experimentation",
+        category: "science",
+      },
+      {
+        id: "human-nature",
+        title: "Human Nature",
+        description: "The fundamental characteristics of humanity",
+        category: "philosophy",
+      },
+      {
+        id: "technology-progress",
+        title: "Technological Progress",
+        description: "The benefits and risks of advancing technology",
+        category: "technology",
+      },
+      {
+        id: "art-purpose",
+        title: "Purpose of Art",
+        description: "The role of artistic expression in society",
+        category: "arts",
+      },
+      {
+        id: "education-approach",
+        title: "Education Methods",
+        description: "How to best educate future generations",
+        category: "philosophy",
+      },
+      {
+        id: "historical-impact",
+        title: "Historical Legacy",
+        description: "How history shapes our present and future",
+        category: "history",
+      },
+    ]
 
     return res.status(200).json({ topics })
   } catch (error) {
