@@ -9,7 +9,70 @@
     color: #fff;
     font-family: "Cinzel", serif;
   }
+  /* Audio-related styles */
+.audioControls {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
   
+  .audioButton {
+    background-color: #e9c46a;
+    color: #004052;
+    border: none;
+    border-radius: 30px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  .audioButton:hover {
+    background-color: #f4a261;
+    transform: translateY(-2px);
+  }
+  
+  .audioButton.muted {
+    background-color: #e76f51;
+  }
+  
+  .playButton {
+    background: none;
+    border: none;
+    color: #e9c46a;
+    cursor: pointer;
+    font-size: 1.2rem;
+    margin-left: 0.5rem;
+    transition: transform 0.2s ease;
+  }
+  
+  .playButton:hover {
+    transform: scale(1.2);
+  }
+  
+  .generatingAudio {
+    font-size: 0.8rem;
+    color: #e9c46a;
+    margin-left: 0.5rem;
+    animation: pulse 1.5s infinite;
+  }
+  
+  .activeSpeaking {
+    border: 2px solid #e9c46a !important;
+    box-shadow: 0 0 10px rgba(233, 196, 106, 0.5);
+  }
+  
+  @keyframes pulse {
+    0% {
+      opacity: 0.5;
+    }
+    50% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0.5;
+    }
+  }
   .title {
     font-size: 2.5rem;
     text-align: center;
