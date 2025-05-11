@@ -720,7 +720,14 @@ export default function Home() {
           />
         </button>
       )}
-
+<div className="mt-6 text-center">
+  <a 
+    href="/debate" 
+    className="bg-button-primary hover:bg-button-hover text-white py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out inline-block"
+  >
+    Try Historical Debates
+  </a>
+</div>
       {(isDaVinciSpeaking || daVinciPaused) && (
         <button
           onClick={toggleDaVinci}
@@ -751,14 +758,7 @@ export default function Home() {
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
       
-      <div className="mt-6 text-center">
-  <a 
-    href="/debate" 
-    className="bg-button-primary hover:bg-button-hover text-white py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out inline-block"
-  >
-    Try Historical Debates
-  </a>
-</div>
+      
 
 
       <footer className="mt-10 text-sm text-copy-soft">
