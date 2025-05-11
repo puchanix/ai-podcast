@@ -6,7 +6,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { character1, character2, userQuestion, currentMessages, format, historicalContext } = req.body
+    const { character1, character2, currentMessages, topic, format, historicalContext } = req.body
 
     // Get character details
     const char1 = personas[character1]
@@ -16,11 +16,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Character not found" })
     }
 
-    // In a real implementation, you would use AI to generate these responses
+    // In a real implementation, you would use AI to generate these responses based on the conversation history
     // For now, we'll return placeholder text
-    const response1 = `That's an excellent question. As ${char1.name}, I would say that ${userQuestion} relates directly to my work on understanding the natural world. My approach has always been to observe carefully and draw conclusions based on evidence.`
+    const response1 = `Building on our discussion about "${topic}", I, ${char1.name}, would like to emphasize that this topic has profound implications for how we understand the world. My research has consistently shown that careful observation and methodical experimentation lead to the most reliable conclusions.`
 
-    const response2 = `I find ${char1.name}'s perspective interesting, but I, ${char2.name}, would add that ${userQuestion} must also be considered in light of broader societal implications. My experience has taught me that context matters tremendously in such discussions.`
+    const response2 = `While I appreciate ${char1.name}'s methodical approach, I, ${char2.name}, believe we must also consider the human element in this discussion. The topic of "${topic}" cannot be reduced to mere formulas or experiments. There is an artistic and intuitive dimension that must be acknowledged.`
 
     // Generate audio URLs (in a real implementation, you would call a TTS service)
     // For now, we'll use the podcast audio as a placeholder
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
       audioUrl2,
     })
   } catch (error) {
-    console.error("Error continuing debate:", error)
+    console.error("Error auto-continuing debate:", error)
     return res.status(500).json({ error: "Internal server error" })
   }
 }
