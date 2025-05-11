@@ -713,7 +713,8 @@ export default function Home() {
           <img
             src={isRecording ? "/mic-stop.jpg" : "/mic-start.jpg"}
             alt={isRecording ? "Stop recording" : "Start recording"}
-            className="w-70 h-auto hover:scale-105 transition-transform duration-200"
+            className="w-56 h-auto hover:scale-105 transition-transform duration-200"
+
 
 
           />
@@ -749,6 +750,16 @@ export default function Home() {
       <audio ref={podcastAudio} hidden preload="auto" />
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
+      
+      <div className="mt-6 text-center">
+  <a 
+    href="/debate" 
+    className="bg-button-primary hover:bg-button-hover text-white py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out inline-block"
+  >
+    Try Historical Debates
+  </a>
+</div>
+
 
       <footer className="mt-10 text-sm text-copy-soft">
         <div className="flex space-x-6 justify-center">
