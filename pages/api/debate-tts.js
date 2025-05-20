@@ -1,4 +1,4 @@
-import { characters } from "../../data/characters"
+import { personas } from "./personas-data"
 
 export default async function handler(req, res) {
   try {
@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     }
 
     // Find the character to get their voice
-    const character = characters.find((c) => c.id === characterId)
+    const character = personas[characterId]
     if (!character) {
       console.error(`TTS API: Character not found: ${characterId}`)
       return res.status(400).json({ error: "Character not found" })

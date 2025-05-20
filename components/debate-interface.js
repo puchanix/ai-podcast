@@ -1,13 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { characters } from "@/data/characters"
-import { MessageSquare, Loader2 } from "lucide-react"
-import Image from "next/image"
+import { personas } from "../lib/personas"
 
 export function DebateInterface() {
-  const [character1, setCharacter1] = useState(characters[0].id)
-  const [character2, setCharacter2] = useState(characters[1].id)
+  const [character1, setCharacter1] = useState(Object.keys(personas)[0])
+  const [character2, setCharacter2] = useState(Object.keys(personas)[1])
   const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
   const [isDebating, setIsDebating] = useState(false)
   const [debateMessages, setDebateMessages] = useState([])
@@ -32,8 +30,8 @@ export function DebateInterface() {
   const audioRef = useRef(null)
 
   // Get character objects
-  const char1 = characters.find((c) => c.id === character1)
-  const char2 = characters.find((c) => c.id === character2)
+  const char1 = personas[character1]
+  const char2 = personas[character2]
 
   // Generate debate topics when characters change
   useEffect(() => {
@@ -437,19 +435,17 @@ export function DebateInterface() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl">
-      <h1 className="text-3xl font-bold text-center mb-8">Historical Debates</h1>
+    <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white min-h-screen">
+      <h1 className="text-3xl font-bold text-center mb-8 text-yellow-400">Historical Debates</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         {/* Character 1 Selection */}
         <div className="flex flex-col items-center">
           <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-blue-500">
-            <Image
-              src={char1.image || "/placeholder.svg"}
-              alt={char1.name}
-              width={128}
-              height={128}
-              className="object-cover"
+            <img
+              src={char1?.image || "/placeholder.png"}
+              alt={char1?.name || "Character 1"}
+              className="w-full h-full object-cover"
             />
           </div>
           <select
@@ -457,9 +453,9 @@ export function DebateInterface() {
             onChange={(e) => setCharacter1(e.target.value)}
             className="w-[200px] p-2 rounded border bg-gray-800 text-white border-gray-600"
           >
-            {characters.map((char) => (
-              <option key={char.id} value={char.id}>
-                {char.name}
+            {Object.keys(personas).map((id) => (
+              <option key={id} value={id}>
+                {personas[id].name}
               </option>
             ))}
           </select>
@@ -473,12 +469,10 @@ export function DebateInterface() {
         {/* Character 2 Selection */}
         <div className="flex flex-col items-center">
           <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-red-500">
-            <Image
-              src={char2.image || "/placeholder.svg"}
-              alt={char2.name}
-              width={128}
-              height={128}
-              className="object-cover"
+            <img
+              src={char2?.image || "/placeholder.png"}
+              alt={char2?.name || "Character 2"}
+              className="w-full h-full object-cover"
             />
           </div>
           <select
@@ -486,9 +480,9 @@ export function DebateInterface() {
             onChange={(e) => setCharacter2(e.target.value)}
             className="w-[200px] p-2 rounded border bg-gray-800 text-white border-gray-600"
           >
-            {characters.map((char) => (
-              <option key={char.id} value={char.id}>
-                {char.name}
+            {Object.keys(personas).map((id) => (
+              <option key={id} value={id}>
+                {personas[id].name}
               </option>
             ))}
           </select>
@@ -642,7 +636,20 @@ export function DebateInterface() {
         <div className="flex flex-col items-center justify-center p-8 bg-gray-900 rounded-lg">
           {!isDebating ? (
             <div className="flex flex-col items-center justify-center text-gray-400">
-              <MessageSquare className="h-12 w-12 mb-4" />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-12 w-12 mb-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
               <p>Select a topic above to start the debate</p>
             </div>
           ) : (
@@ -650,12 +657,10 @@ export function DebateInterface() {
               {isPlaying || isLoadingAudio ? (
                 <div className="flex items-center justify-center mb-6">
                   <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-yellow-500 p-2">
-                    <Image
-                      src={(currentSpeaker === character1 ? char1 : char2).image || "/placeholder.svg"}
-                      alt={(currentSpeaker === character1 ? char1 : char2).name}
-                      width={192}
-                      height={192}
-                      className="object-cover rounded-full"
+                    <img
+                      src={(currentSpeaker === character1 ? char1 : char2)?.image || "/placeholder.png"}
+                      alt={(currentSpeaker === character1 ? char1 : char2)?.name || "Speaking"}
+                      className="w-full h-full object-cover rounded-full"
                     />
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse rounded-full"></div>
                   </div>
@@ -663,7 +668,20 @@ export function DebateInterface() {
               ) : (
                 <div className="flex items-center justify-center mb-6">
                   <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2 flex items-center justify-center bg-gray-800">
-                    <MessageSquare className="h-16 w-16 text-gray-400" />
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-16 w-16 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                      />
+                    </svg>
                   </div>
                 </div>
               )}
@@ -673,7 +691,7 @@ export function DebateInterface() {
                   <div>
                     <h3 className="text-xl font-bold text-yellow-400">Loading audio...</h3>
                     <div className="mt-2">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-yellow-400" />
+                      <div className="animate-spin h-8 w-8 border-4 border-yellow-400 border-t-transparent rounded-full mx-auto"></div>
                     </div>
                   </div>
                 ) : isPlaying ? (

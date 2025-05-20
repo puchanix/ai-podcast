@@ -1,12 +1,12 @@
-import { characters } from "../../data/characters"
+import { personas } from "./personas-data"
 
 export default async function handler(req, res) {
   try {
     const { character1, character2, userQuestion, currentMessages, format, historicalContext } = req.body
 
     // Get character details
-    const char1 = characters.find((c) => c.id === character1)
-    const char2 = characters.find((c) => c.id === character2)
+    const char1 = personas[character1]
+    const char2 = personas[character2]
 
     if (!char1 || !char2) {
       return res.status(400).json({ error: "Character not found" })
