@@ -1,83 +1,49 @@
+// pages/api/start-debate.js
 import { personas } from "../../lib/personas";
+
 export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Method not allowed' });
-    }
-  
-    try {
-      const { character1, character2, topic, format, historicalContext } = req.body;
-  
-      // Get character details from your data source
-      const char1 = characters.find((c) => c.id === character1);
-      const char2 = characters.find((c) => c.id === character2);
-  
-      if (!char1 || !char2) {
-        return res.status(400).json({ error: "Character not found" });
-      }
-  
-      // In a real implementation, you would use AI to generate these responses
-      // For now, we'll return placeholder text
-      const opening1 = `As ${char1.name}, I would approach the topic of "${topic}" by considering the fundamental principles that have guided my work. This subject is fascinating because it touches on the core of human understanding and progress.`;
-  
-      const opening2 = `From my perspective as ${char2.name}, I see "${topic}" through a different lens. While I appreciate ${char1.name}'s approach, I believe we must also consider the practical implications and historical context of this matter.`;
-  
-      // Generate audio using our TTS endpoint
-      let audioUrl1 = "/silent.mp3";
-      let audioUrl2 = "/silent.mp3";
-  
-      try {
-        // Generate audio for character 1
-        const ttsResponse1 = await fetch(
-          `/api/debate-tts`, // Using relative URL
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              text: opening1,
-              characterId: character1,
-            }),
-          }
-        );
-  
-        if (ttsResponse1.ok) {
-          const ttsData1 = await ttsResponse1.json();
-          audioUrl1 = ttsData1.audioUrl;
-        }
-  
-        // Generate audio for character 2
-        const ttsResponse2 = await fetch(
-          `/api/debate-tts`, // Using relative URL
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              text: opening2,
-              characterId: character2,
-            }),
-          }
-        );
-  
-        if (ttsResponse2.ok) {
-          const ttsData2 = await ttsResponse2.json();
-          audioUrl2 = ttsData2.audioUrl;
-        }
-      } catch (error) {
-        console.error("Error generating TTS:", error);
-        // Use fallback audio if TTS fails
-      }
-  
-      return res.status(200).json({
-        opening1,
-        opening2,
-        audioUrl1,
-        audioUrl2,
-      });
-    } catch (error) {
-      console.error("Error starting debate:", error);
-      return res.status(500).json({ error: "Internal server error" });
-    }
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
   }
+
+  try {
+    console.log("start-debate API called with:", JSON.stringify(req.body));
+    
+    const { character1, character2, topic, format, historicalContext } = req.body;
+    
+    // Get character details
+    const char1 = personas[character1];
+    const char2 = personas[character2];
+
+    console.log("Character 1:", character1, char1 ? "found" : "not found");
+    console.log("Character 2:", character2, char2 ? "found" : "not found");
+
+    if (!char1 || !char2) {
+      return res.status(400).json({ error: "Character not found" });
+    }
+
+    // For now, skip the TTS API calls and just return hardcoded responses
+    const opening1 = `As ${char1.name}, I would approach the topic of "${topic}" by considering the fundamental principles that have guided my work.`;
+    const opening2 = `From my perspective as ${char2.name}, I see "${topic}" through a different lens.`;
+
+    // Use a simple audio file that we know exists
+    const audioUrl1 = "/silent.mp3";
+    const audioUrl2 = "/silent.mp3";
+
+    console.log("Returning response with:", { opening1, opening2 });
+    
+    return res.status(200).json({
+      opening1,
+      opening2,
+      audioUrl1,
+      audioUrl2,
+    });
+  } catch (error) {
+    console.error("Error in start-debate API:", error);
+    return res.status(500).json({ 
+      error: "Internal server error", 
+      message: error.message,
+      stack: error.stack 
+    });
+  }
+}
