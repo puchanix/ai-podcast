@@ -20,16 +20,17 @@ export function DebateInterface() {
   const [volume, setVolume] = useState(1.0)
   const [showTranscript, setShowTranscript] = useState(false)
   const [audioError, setAudioError] = useState(null)
-  const [debugMode, setDebugMode] = useState(false)
+  const [debugMode, setDebugMode] = useState(true) // Set to true by default for debugging
   const [isLoadingAudio, setIsLoadingAudio] = useState(false)
 
   // Audio queue system
   const [audioQueue, setAudioQueue] = useState([])
   const [isPlayingQueue, setIsPlayingQueue] = useState(false)
 
+  // Use the same audio ref approach as in pages/index.js
   const audioRef = useRef(null)
 
-  // Get character objects 
+  // Get character objects
   const char1 = personas[character1]
   const char2 = personas[character2]
 
@@ -64,7 +65,7 @@ export function DebateInterface() {
     }
   }, [audioQueue, isPlayingQueue])
 
-  // Handle audio element events
+  // Handle audio element events - using the same approach as in pages/index.js
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.onplay = () => {
@@ -118,7 +119,7 @@ export function DebateInterface() {
     }
   }, [])
 
-  // Play the next audio in the queue
+  // Play the next audio in the queue - simplified to match pages/index.js approach
   const playNextInQueue = () => {
     if (audioQueue.length === 0) return
 
@@ -134,54 +135,55 @@ export function DebateInterface() {
       // Reset any previous errors
       setAudioError(null)
       setIsLoadingAudio(true)
-
-      // Set the source and load the audio - use relative URL just like in the main page
-      audioRef.current.src = nextAudio.url
-      audioRef.current.volume = volume
-      audioRef.current.load()
       setCurrentSpeaker(nextAudio.character)
 
-      // Try to play the audio
-      audioRef.current.play().catch((err) => {
-        console.error("Audio playback error:", err)
-        setAudioError(`Error playing audio: ${err.message}`)
-        setIsLoadingAudio(false)
+      // Set the source and load the audio - EXACTLY as in pages/index.js
+      audioRef.current.src = nextAudio.url
+      audioRef.current.load()
 
-        // Skip to next audio on error
-        setAudioQueue((prev) => {
-          const newQueue = [...prev]
-          newQueue.shift()
-          return newQueue
+      // Play the audio - EXACTLY as in pages/index.js
+      audioRef.current
+        .play()
+        .then(() => {
+          setIsPlaying(true)
+          setIsLoadingAudio(false)
+          console.log("Audio playback started successfully")
         })
-        setIsPlayingQueue(false)
-      })
+        .catch((err) => {
+          console.error("Audio playback error:", err)
+          setAudioError(`Error playing audio: ${err.message}`)
+          setIsLoadingAudio(false)
+
+          // Skip to next audio on error
+          setAudioQueue((prev) => {
+            const newQueue = [...prev]
+            newQueue.shift()
+            return newQueue
+          })
+          setIsPlayingQueue(false)
+        })
     }
   }
 
-  // Update the testAudio function to check if silent.mp3 exists
+  // Use the EXACT same unlockAudio function as in pages/index.js
+  const unlockAudio = () => {
+    const dummy = new Audio("/silent.mp3")
+    dummy.play().catch(() => {})
+  }
+
+  // Test audio function - simplified to match the approach in pages/index.js
   const testAudio = () => {
-    // First check if silent.mp3 exists with a fetch
-    fetch("/silent.mp3")
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Silent.mp3 not found: ${response.status} ${response.statusText}`)
-        }
-        return response.blob()
-      })
-      .then((blob) => {
-        console.log("Silent.mp3 exists, size:", blob.size, "bytes")
-        setAudioError(`Silent.mp3 exists, size: ${blob.size} bytes`)
+    unlockAudio()
 
-        // Now try to play it
-        const testAudioEl = new Audio("/silent.mp3")
-        testAudioEl.volume = volume
+    // Create a simple test message
+    setAudioError("Testing audio...")
 
-        testAudioEl.onloadstart = () => console.log("Test audio loading started")
-        testAudioEl.oncanplaythrough = () => console.log("Test audio can play through")
-        testAudioEl.onerror = (e) => console.error("Test audio error:", e, testAudioEl.error)
+    // Use the same approach as in pages/index.js
+    const testAudioEl = new Audio("/test-audio.mp3")
+    testAudioEl.volume = volume
 
-        return testAudioEl.play()
-      })
+    testAudioEl
+      .play()
       .then(() => {
         console.log("Test audio playback successful")
         setAudioError("Test audio playback successful")
@@ -189,36 +191,6 @@ export function DebateInterface() {
       .catch((err) => {
         console.error("Test audio failed:", err)
         setAudioError(`Test audio failed: ${err.message}`)
-      })
-  }
-
-  const unlockAudio = () => {
-    const dummy = new Audio("/silent.mp3")
-    dummy.play().catch(() => {})
-  }
-
-  // Add a function to test the direct audio file API
-  const testDirectAudioFile = () => {
-    const audioUrl = `${window.location.origin}/api/test-audio-file`
-    console.log("Testing direct audio file with URL:", audioUrl)
-
-    const testAudioEl = new Audio(audioUrl)
-    testAudioEl.volume = volume
-
-    // Add event listeners for debugging
-    testAudioEl.onloadstart = () => console.log("Direct audio file loading started")
-    testAudioEl.oncanplaythrough = () => console.log("Direct audio file can play through")
-    testAudioEl.onerror = (e) => console.error("Direct audio file error:", e, testAudioEl.error)
-
-    testAudioEl
-      .play()
-      .then(() => {
-        console.log("Direct audio file playback successful")
-        setAudioError("Direct audio file playback successful")
-      })
-      .catch((err) => {
-        console.error("Direct audio file playback failed:", err)
-        setAudioError(`Direct audio file failed: ${err.message}`)
       })
   }
 
@@ -275,7 +247,7 @@ export function DebateInterface() {
   // Start a debate on a specific topic
   const startDebate = async (topic) => {
     resetDebateState()
-    unlockAudio() // Add this line to unlock audio
+    unlockAudio() // Use the same unlockAudio approach as in pages/index.js
     setCurrentTopic(topic)
     setIsDebating(true)
     setIsProcessing(true)
@@ -335,7 +307,7 @@ export function DebateInterface() {
   const submitCustomQuestion = async () => {
     if (!customQuestion.trim() || !isDebating || isProcessing) return
 
-    unlockAudio() // Add this line to unlock audio
+    unlockAudio() // Use the same unlockAudio approach as in pages/index.js
     const userQuestion = customQuestion.trim()
     setCustomQuestion("")
     setIsProcessing(true)
@@ -404,6 +376,7 @@ export function DebateInterface() {
   const continueDebate = async () => {
     if (!isDebating || isProcessing) return
 
+    unlockAudio() // Use the same unlockAudio approach as in pages/index.js
     setIsProcessing(true)
 
     try {
@@ -482,23 +455,6 @@ export function DebateInterface() {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
-
-  // Add a new function to check the debug API
-  const checkDebugApi = async () => {
-    try {
-      setAudioError("Checking debug API...")
-      const response = await fetch("/api/debug-audio")
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`)
-      }
-      const data = await response.json()
-      setAudioError(JSON.stringify(data, null, 2))
-    } catch (err) {
-      setAudioError(`Debug API error: ${err.message}`)
-    }
-  }
-
-  // Test audio playback
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white min-h-screen">
@@ -911,18 +867,6 @@ export function DebateInterface() {
               Clear Queue
             </button>
           </div>
-
-          <div className="mt-4">
-            <button onClick={checkDebugApi} className="px-3 py-1 bg-blue-600 rounded">
-              Check Debug API
-            </button>
-          </div>
-
-          <div className="mt-2">
-            <button onClick={testDirectAudioFile} className="px-3 py-1 bg-purple-600 rounded">
-              Test Direct Audio File
-            </button>
-          </div>
         </div>
       )}
 
@@ -964,17 +908,11 @@ export function DebateInterface() {
         </div>
       )}
 
-      {/* Audio element */}
-      <audio
-        ref={audioRef}
-        className="hidden"
-        controls={false}
-        preload="auto"
-        onError={(e) => {
-          console.error("Audio element error:", e)
-          setAudioError(`Audio element error: ${e.target.error?.message || "Unknown error"}`)
-        }}
-      />
+      {/* Audio element - EXACTLY as in pages/index.js */}
+      <audio ref={audioRef} className="hidden" controls={false} preload="auto" />
+
+      {/* Add a hidden audio element for silent.mp3 - EXACTLY as in pages/index.js */}
+      <audio hidden preload="auto" src="/silent.mp3" />
 
       <style jsx global>{`
         @keyframes soundwave {
