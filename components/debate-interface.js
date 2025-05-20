@@ -18,6 +18,7 @@ export function DebateInterface() {
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioError, setAudioError] = useState(null)
+  const [showTranscript, setShowTranscript] = useState(false)
 
   // Audio queue system
   const [audioQueue, setAudioQueue] = useState([])
@@ -51,9 +52,19 @@ export function DebateInterface() {
     // Stop any playing audio
     if (audioRef.current) {
       audioRef.current.pause()
-      audioRef.current.src = ""
+      // Don't set src to empty string, which causes the error
+      audioRef.current.removeAttribute('src')
     }
   }
+
+  // Initialize audio element with silent.mp3 to prevent empty src error
+  useEffect(() => {
+    if (audioRef.current) {
+      // Set a default audio source to prevent empty src errors
+      audioRef.current.src = "/silent.mp3"
+      audioRef.current.load()
+    }
+  }, [])
 
   // Process audio queue
   useEffect(() => {
@@ -92,7 +103,10 @@ export function DebateInterface() {
 
       audioRef.current.onerror = (e) => {
         console.error("Audio playback error", e)
-        setAudioError(`Error playing audio: ${e.target.error ? e.target.error.message : 'Unknown error'}`)
+        // Don't show error for silent.mp3 which is just a placeholder
+        if (audioRef.current.src && !audioRef.current.src.includes("silent.mp3")) {
+          setAudioError(`Error playing audio: ${e.target.error ? e.target.error.message : 'Unknown error'}`)
+        }
         
         // Continue with the next audio even if there's an error
         setIsPlaying(false)
@@ -133,7 +147,10 @@ export function DebateInterface() {
         setTimeout(() => {
           audioRef.current.play().catch((err) => {
             console.error("Audio playback error:", err)
-            setAudioError(`Error playing audio: ${err.message}`)
+            // Don't show error for silent.mp3 which is just a placeholder
+            if (!nextAudio.url.includes("silent.mp3")) {
+              setAudioError(`Error playing audio: ${err.message}`)
+            }
             
             // Skip to next audio on error
             setAudioQueue((prev) => {
@@ -668,8 +685,20 @@ export function DebateInterface() {
         </div>
       </div>
 
-      {/* Debate Transcript */}
+      {/* Transcript Toggle Button (only show when debate is active) */}
       {isDebating && debateMessages.length > 0 && (
+        <div className="mb-4 flex justify-center">
+          <button
+            onClick={() => setShowTranscript(!showTranscript)}
+            className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
+          >
+            {showTranscript ? "Hide Transcript" : "Show Transcript"}
+          </button>
+        </div>
+      )}
+
+      {/* Debate Transcript (hidden by default) */}
+      {isDebating && debateMessages.length > 0 && showTranscript && (
         <div className="mb-8 bg-gray-800 p-4 rounded-lg">
           <h2 className="text-xl font-semibold mb-4 text-yellow-400">Debate Transcript</h2>
           <div className="space-y-4 max-h-96 overflow-y-auto p-4 bg-gray-900 rounded-lg">
