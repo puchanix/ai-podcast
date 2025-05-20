@@ -12,16 +12,16 @@
     "axios": "^1.9.0",
     "busboy": "^1.6.0",
     "form-data": "^4.0.2",
+    "formidable": "^3.5.4",
     "next": "latest",
     "node-fetch": "^3.3.2",
+    "openai": "^4.97.0",
     "react": "latest",
     "react-dom": "latest",
     "redis": "^5.0.1"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.14",
-    "formidable": "^3.5.4",
-    "openai": "^3.3.0",
     "postcss": "^8.4.21",
     "tailwindcss": "^3.3.2"
   }

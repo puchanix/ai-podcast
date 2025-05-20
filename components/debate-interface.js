@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react"
 import { characters } from "@/data/characters"
-import { MessageSquare, Loader2 } from "lucide-react"
 import Image from "next/image"
 
 export function DebateInterface() {
@@ -767,7 +766,19 @@ export function DebateInterface() {
         <div className="flex flex-col items-center justify-center p-8 bg-gray-900 rounded-lg">
           {!isDebating ? (
             <div className="flex flex-col items-center justify-center text-gray-400">
-              <MessageSquare className="h-12 w-12 mb-4" />
+              <div className="h-12 w-12 mb-4">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+              </div>
               <p>Select a topic above to start the debate</p>
             </div>
           ) : (
@@ -788,7 +799,19 @@ export function DebateInterface() {
               ) : (
                 <div className="flex items-center justify-center mb-6">
                   <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2 flex items-center justify-center bg-gray-800">
-                    <MessageSquare className="h-16 w-16 text-gray-400" />
+                    <div className="h-16 w-16 text-gray-400">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                      </svg>
+                    </div>
                   </div>
                 </div>
               )}
@@ -798,7 +821,19 @@ export function DebateInterface() {
                   <div>
                     <h3 className="text-xl font-bold text-yellow-400">Loading audio...</h3>
                     <div className="mt-2">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-yellow-400" />
+                      <div className="h-8 w-8 animate-spin mx-auto text-yellow-400">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                        </svg>
+                      </div>
                     </div>
                   </div>
                 ) : isPlaying ? (
