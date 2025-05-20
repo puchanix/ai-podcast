@@ -3,11 +3,6 @@
 import { useState, useEffect, useRef } from "react"
 import { personas } from "../lib/personas"
 
-// Add this to prevent prerendering errors
-export const config = {
-  unstable_runtimeJS: true,
-}
-
 export function DebateInterface() {
   const [character1, setCharacter1] = useState(Object.keys(personas)[0])
   const [character2, setCharacter2] = useState(Object.keys(personas)[1])
@@ -69,14 +64,17 @@ export function DebateInterface() {
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.onplay = () => {
+        console.log("Audio started playing")
         setIsPlaying(true)
       }
 
       audioRef.current.onpause = () => {
+        console.log("Audio paused")
         setIsPlaying(false)
       }
 
       audioRef.current.onended = () => {
+        console.log("Audio ended")
         setIsPlaying(false)
         setCurrentSpeaker(null)
 
@@ -89,8 +87,8 @@ export function DebateInterface() {
         setIsPlayingQueue(false)
       }
 
-      audioRef.current.onerror = () => {
-        console.error("Audio playback error")
+      audioRef.current.onerror = (e) => {
+        console.error("Audio playback error", e)
         // Skip to next audio on error
         setAudioQueue((prev) => {
           const newQueue = [...prev]
@@ -108,22 +106,31 @@ export function DebateInterface() {
 
     setIsPlayingQueue(true)
     const nextAudio = audioQueue[0]
+    console.log("Playing next audio in queue:", nextAudio)
 
     if (audioRef.current) {
+      // Preload a silent audio to unlock audio on iOS
+      const unlockAudio = new Audio("/silent.mp3")
+      unlockAudio.play().catch(err => console.log("Unlock audio error:", err))
+      
+      // Set the audio source and try to play
       audioRef.current.src = nextAudio.url
       audioRef.current.load()
       setCurrentSpeaker(nextAudio.character)
 
-      audioRef.current.play().catch((err) => {
-        console.error("Audio playback error:", err)
-        // Skip to next audio on error
-        setAudioQueue((prev) => {
-          const newQueue = [...prev]
-          newQueue.shift()
-          return newQueue
+      // Add a small delay before playing to ensure the audio is loaded
+      setTimeout(() => {
+        audioRef.current.play().catch((err) => {
+          console.error("Audio playback error:", err)
+          // Skip to next audio on error
+          setAudioQueue((prev) => {
+            const newQueue = [...prev]
+            newQueue.shift()
+            return newQueue
+          })
+          setIsPlayingQueue(false)
         })
-        setIsPlayingQueue(false)
-      })
+      }, 100)
     }
   }
 
@@ -134,6 +141,7 @@ export function DebateInterface() {
     setIsGeneratingTopics(true)
 
     try {
+      console.log("Generating debate topics for", character1, "and", character2)
       const response = await fetch("/api/generate-debate-topics", {
         method: "POST",
         headers: {
@@ -148,6 +156,7 @@ export function DebateInterface() {
       if (!response.ok) throw new Error("Failed to generate topics")
 
       const data = await response.json()
+      console.log("Generated topics:", data.topics)
       setSuggestedTopics(data.topics)
     } catch (error) {
       console.error("Error generating debate topics:", error)
@@ -179,6 +188,7 @@ export function DebateInterface() {
 
   // Start a debate on a specific topic
   const startDebate = async (topic) => {
+    console.log("Starting debate on topic:", topic)
     resetDebateState()
     setCurrentTopic(topic)
     setIsDebating(true)
@@ -199,11 +209,16 @@ export function DebateInterface() {
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to start debate")
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("API error response:", errorText)
+        throw new Error("Failed to start debate")
+      }
 
       const data = await response.json()
+      console.log("Debate started with data:", data)
 
-      // Add initial messages (hidden from UI but kept for state)
+      // Add initial messages
       const messages = [
         {
           character: character1,
@@ -242,7 +257,7 @@ export function DebateInterface() {
     setCustomQuestion("")
     setIsProcessing(true)
 
-    // Add user question as a special message (hidden from UI but kept for state)
+    // Add user question as a special message
     setDebateMessages((prev) => [
       ...prev,
       {
@@ -272,7 +287,7 @@ export function DebateInterface() {
 
       const data = await response.json()
 
-      // Add responses (hidden from UI but kept for state)
+      // Add responses
       const newMessages = [
         {
           character: character1,
@@ -329,7 +344,7 @@ export function DebateInterface() {
 
       const data = await response.json()
 
-      // Add responses (hidden from UI but kept for state)
+      // Add responses
       const newMessages = [
         {
           character: character1,
@@ -661,8 +676,36 @@ export function DebateInterface() {
         </div>
       )}
 
+      {/* Debug information */}
+      <div className="mb-8 bg-gray-800 p-4 rounded-lg">
+        <h2 className="text-xl font-semibold mb-4 text-yellow-400">Debug Information</h2>
+        <div className="text-sm text-gray-400">
+          <p>Current Speaker: {currentSpeaker || "None"}</p>
+          <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
+          <p>Audio Queue Length: {audioQueue.length}</p>
+          <p>Is Processing: {isProcessing ? "Yes" : "No"}</p>
+        </div>
+      </div>
+
       {/* Hidden audio element */}
-      <audio ref={audioRef} className="hidden" />
+      <audio 
+        ref={audioRef} 
+        className="hidden" 
+        controls 
+        preload="auto"
+        onError={(e) => console.error("Audio error event:", e)}
+      />
+
+      <style jsx global>{`
+        @keyframes soundwave {
+          0%, 100% {
+            height: 4px;
+          }
+          50% {
+            height: 16px;
+          }
+        }
+      `}</style>
     </div>
   )
 }

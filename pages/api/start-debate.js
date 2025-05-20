@@ -22,11 +22,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Character not found" });
     }
 
-    // For now, skip the TTS API calls and just return hardcoded responses
-    const opening1 = `As ${char1.name}, I would approach the topic of "${topic}" by considering the fundamental principles that have guided my work.`;
-    const opening2 = `From my perspective as ${char2.name}, I see "${topic}" through a different lens.`;
+    // Generate placeholder responses
+    const opening1 = `As ${char1.name}, I would approach the topic of "${topic}" by considering the fundamental principles that have guided my work. This subject is fascinating because it touches on the core of human understanding and progress.`;
+    const opening2 = `From my perspective as ${char2.name}, I see "${topic}" through a different lens. While I appreciate ${char1.name}'s approach, I believe we must also consider the practical implications and historical context of this matter.`;
 
-    // Use a simple audio file that we know exists
+    // Use absolute URLs for audio files to avoid path issues
     const audioUrl1 = "/silent.mp3";
     const audioUrl2 = "/silent.mp3";
 
