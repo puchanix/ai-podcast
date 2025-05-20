@@ -1,23 +1,19 @@
-// pages/api/generate-debate-topics.js
-import { personas } from "../../lib/personas";
+import { characters } from "../../data/characters"
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
   try {
-    const { character1, character2 } = req.body;
-    
+    const { character1, character2 } = req.body
+
     // Get character details
-    const char1 = personas[character1];
-    const char2 = personas[character2];
+    const char1 = characters.find((c) => c.id === character1)
+    const char2 = characters.find((c) => c.id === character2)
 
     if (!char1 || !char2) {
-      return res.status(400).json({ error: "Character not found" });
+      return res.status(400).json({ error: "Character not found" })
     }
 
     // For simplicity, we'll return some predefined topics
+    // In a real implementation, you would use AI to generate these
     const topics = [
       {
         id: "science-method",
@@ -55,11 +51,11 @@ export default async function handler(req, res) {
         description: "How history shapes our present and future",
         category: "history",
       },
-    ];
+    ]
 
-    return res.status(200).json({ topics });
+    return res.json({ topics })
   } catch (error) {
-    console.error("Error generating debate topics:", error);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("Error generating debate topics:", error)
+    return res.status(500).json({ error: "Internal server error" })
   }
 }
