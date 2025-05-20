@@ -25,9 +25,11 @@ export function DebateInterface() {
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
 
-  // Audio queue system
-  const [audioQueue, setAudioQueue] = useState([])
-  const [isPlayingQueue, setIsPlayingQueue] = useState(false)
+  // Store current audio URLs
+  const [currentAudioUrls, setCurrentAudioUrls] = useState({
+    char1: "",
+    char2: "",
+  })
 
   const audioRef = useRef(null)
   const silentAudioRef = useRef(null)
@@ -104,10 +106,9 @@ export function DebateInterface() {
     setDebateMessages([])
     setCurrentTopic(null)
     setCurrentSpeaker(null)
-    setAudioQueue([])
-    setIsPlayingQueue(false)
     setIsPlaying(false)
     setAudioError(null)
+    setCurrentAudioUrls({ char1: "", char2: "" })
 
     // Stop any playing audio
     if (char1AudioRef.current) {
@@ -133,7 +134,9 @@ export function DebateInterface() {
 
       char1AudioRef.current.onpause = () => {
         console.log("Character 1 audio playback paused")
-        setIsPlaying(false)
+        if (currentSpeaker === character1) {
+          setIsPlaying(false)
+        }
       }
 
       char1AudioRef.current.onended = () => {
@@ -141,12 +144,28 @@ export function DebateInterface() {
         setIsPlaying(false)
         setCurrentSpeaker(null)
 
-        // Play character 2's audio if it's queued
-        if (char2AudioRef.current && char2AudioRef.current.src) {
+        // Play character 2's audio if it's available
+        if (char2AudioRef.current && currentAudioUrls.char2) {
+          console.log("Attempting to play character 2 audio:", currentAudioUrls.char2)
+
+          // Make sure the src is set correctly
+          if (!char2AudioRef.current.src || char2AudioRef.current.src === window.location.href) {
+            console.log("Character 2 audio src is empty, setting it now")
+            char2AudioRef.current.src = currentAudioUrls.char2
+            char2AudioRef.current.load()
+          }
+
+          // Play with error handling
           char2AudioRef.current.play().catch((err) => {
             console.error("Error playing character 2 audio:", err)
             setAudioError(`Error playing character 2: ${err.message}`)
           })
+        } else {
+          console.log(
+            "Character 2 audio not available:",
+            char2AudioRef.current ? "ref exists" : "no ref",
+            currentAudioUrls.char2 ? "URL exists" : "no URL",
+          )
         }
       }
 
@@ -171,7 +190,9 @@ export function DebateInterface() {
 
       char2AudioRef.current.onpause = () => {
         console.log("Character 2 audio playback paused")
-        setIsPlaying(false)
+        if (currentSpeaker === character2) {
+          setIsPlaying(false)
+        }
       }
 
       char2AudioRef.current.onended = () => {
@@ -190,7 +211,7 @@ export function DebateInterface() {
         setIsPlaying(false)
       }
     }
-  }, [character1, character2])
+  }, [character1, character2, currentSpeaker, currentAudioUrls])
 
   // Function to generate debate topics based on selected characters
   const generateDebateTopics = async () => {
@@ -290,6 +311,12 @@ export function DebateInterface() {
       const data = await response.json()
       console.log("Debate started with data:", data)
 
+      // Store the audio URLs
+      setCurrentAudioUrls({
+        char1: data.audioUrl1,
+        char2: data.audioUrl2,
+      })
+
       // Add initial messages
       const messages = [
         {
@@ -377,6 +404,12 @@ export function DebateInterface() {
 
       const data = await response.json()
 
+      // Store the audio URLs
+      setCurrentAudioUrls({
+        char1: data.audioUrl1,
+        char2: data.audioUrl2,
+      })
+
       // Add responses
       const newMessages = [
         {
@@ -449,6 +482,12 @@ export function DebateInterface() {
       if (!response.ok) throw new Error("Failed to continue debate")
 
       const data = await response.json()
+
+      // Store the audio URLs
+      setCurrentAudioUrls({
+        char1: data.audioUrl1,
+        char2: data.audioUrl2,
+      })
 
       // Add responses
       const newMessages = [
@@ -617,6 +656,43 @@ export function DebateInterface() {
       setAudioError(`Audio URL check results: ${JSON.stringify(results, null, 2)}`)
     } catch (err) {
       setAudioError(`Error checking audio URLs: ${err.message}`)
+    }
+  }
+
+  // Function to manually play character audio
+  const playCharacterAudio = (charNum) => {
+    if (charNum === 1) {
+      if (char1AudioRef.current && currentAudioUrls.char1) {
+        // Make sure the src is set correctly
+        if (!char1AudioRef.current.src || char1AudioRef.current.src === window.location.href) {
+          char1AudioRef.current.src = currentAudioUrls.char1
+          char1AudioRef.current.load()
+        }
+
+        char1AudioRef.current.volume = volume
+        char1AudioRef.current.play().catch((err) => {
+          console.error("Error manually playing character 1 audio:", err)
+          setAudioError(`Error playing character 1: ${err.message}`)
+        })
+      } else {
+        setAudioError("Character 1 audio not available")
+      }
+    } else if (charNum === 2) {
+      if (char2AudioRef.current && currentAudioUrls.char2) {
+        // Make sure the src is set correctly
+        if (!char2AudioRef.current.src || char2AudioRef.current.src === window.location.href) {
+          char2AudioRef.current.src = currentAudioUrls.char2
+          char2AudioRef.current.load()
+        }
+
+        char2AudioRef.current.volume = volume
+        char2AudioRef.current.play().catch((err) => {
+          console.error("Error manually playing character 2 audio:", err)
+          setAudioError(`Error playing character 2: ${err.message}`)
+        })
+      } else {
+        setAudioError("Character 2 audio not available")
+      }
     }
   }
 
@@ -936,14 +1012,6 @@ export function DebateInterface() {
                   </div>
                 )}
               </div>
-
-              <div className="flex space-x-4">
-                {audioQueue.length > 0 && (
-                  <div className="text-sm text-gray-400">
-                    {audioQueue.length} response{audioQueue.length !== 1 ? "s" : ""} in queue
-                  </div>
-                )}
-              </div>
             </div>
           )}
         </div>
@@ -1012,7 +1080,10 @@ export function DebateInterface() {
             <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
             <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
             <p>Is Unlocking Audio: {isUnlockingAudio ? "Yes" : "No"}</p>
-            {audioError && <p className="text-red-500">Error: {audioError}</p>}
+            <p>Character 1 Audio URL: {currentAudioUrls.char1 || "None"}</p>
+            <p>Character 2 Audio URL: {currentAudioUrls.char2 || "None"}</p>
+            <p>Character 1 Audio Element src: {char1AudioRef.current?.src || "None"}</p>
+            <p>Character 2 Audio Element src: {char2AudioRef.current?.src || "None"}</p>
           </div>
 
           <div className="mb-4">
@@ -1029,29 +1100,11 @@ export function DebateInterface() {
           </div>
 
           <div className="flex space-x-2 flex-wrap">
-            <button
-              onClick={() => {
-                if (char1AudioRef.current) {
-                  char1AudioRef.current.volume = volume
-                  char1AudioRef.current.muted = false
-                  char1AudioRef.current.play().catch((err) => console.error("Manual play error:", err))
-                }
-              }}
-              className="px-3 py-1 bg-green-600 rounded"
-            >
+            <button onClick={() => playCharacterAudio(1)} className="px-3 py-1 bg-green-600 rounded">
               Play Character 1
             </button>
 
-            <button
-              onClick={() => {
-                if (char2AudioRef.current) {
-                  char2AudioRef.current.volume = volume
-                  char2AudioRef.current.muted = false
-                  char2AudioRef.current.play().catch((err) => console.error("Manual play error:", err))
-                }
-              }}
-              className="px-3 py-1 bg-blue-600 rounded"
-            >
+            <button onClick={() => playCharacterAudio(2)} className="px-3 py-1 bg-blue-600 rounded">
               Play Character 2
             </button>
 
