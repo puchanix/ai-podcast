@@ -23,6 +23,7 @@ export function DebateInterface() {
   const [debugMode, setDebugMode] = useState(true) // Set to true by default for debugging
   const [isLoadingAudio, setIsLoadingAudio] = useState(false)
   const [audioInitialized, setAudioInitialized] = useState(false)
+  const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
 
   // Audio queue system
   const [audioQueue, setAudioQueue] = useState([])
@@ -36,24 +37,34 @@ export function DebateInterface() {
   const char2 = personas[character2]
 
   // Function to unlock audio on iOS
-  const unlockAudio = () => {
+  const unlockAudio = async () => {
+    // Prevent multiple simultaneous unlock attempts
+    if (isUnlockingAudio || audioInitialized) {
+      console.log("Audio already unlocked or unlocking in progress")
+      return
+    }
+
     console.log("Attempting to unlock audio...")
+    setIsUnlockingAudio(true)
+    setAudioError(null)
 
-    // Play silent audio to unlock audio on iOS
-    if (silentAudioRef.current) {
-      silentAudioRef.current.src = "/silent.mp3"
-      silentAudioRef.current.load()
+    try {
+      // Create a new audio element specifically for unlocking
+      const unlockElement = new Audio()
+      unlockElement.src = "/silent.mp3"
+      unlockElement.load()
 
-      silentAudioRef.current
-        .play()
-        .then(() => {
-          console.log("Silent audio played successfully - audio unlocked")
-          setAudioInitialized(true)
-        })
-        .catch((err) => {
-          console.error("Failed to play silent audio:", err)
-          setAudioError(`Failed to unlock audio: ${err.message}`)
-        })
+      await unlockElement.play()
+      console.log("Silent audio played successfully - audio unlocked")
+      setAudioInitialized(true)
+
+      // Wait a moment before allowing other audio operations
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    } catch (err) {
+      console.error("Failed to play silent audio:", err)
+      setAudioError(`Failed to unlock audio: ${err.message}`)
+    } finally {
+      setIsUnlockingAudio(false)
     }
   }
 
@@ -61,7 +72,7 @@ export function DebateInterface() {
   useEffect(() => {
     // Try to unlock audio on first user interaction
     const handleUserInteraction = () => {
-      if (!audioInitialized) {
+      if (!audioInitialized && !isUnlockingAudio) {
         unlockAudio()
         // Remove event listeners after first interaction
         document.removeEventListener("click", handleUserInteraction)
@@ -76,7 +87,7 @@ export function DebateInterface() {
       document.removeEventListener("click", handleUserInteraction)
       document.removeEventListener("touchstart", handleUserInteraction)
     }
-  }, [audioInitialized])
+  }, [audioInitialized, isUnlockingAudio])
 
   // Generate debate topics when characters change
   useEffect(() => {
@@ -105,10 +116,10 @@ export function DebateInterface() {
 
   // Process audio queue
   useEffect(() => {
-    if (audioQueue.length > 0 && !isPlayingQueue) {
+    if (audioQueue.length > 0 && !isPlayingQueue && audioInitialized) {
       playNextInQueue()
     }
-  }, [audioQueue, isPlayingQueue])
+  }, [audioQueue, isPlayingQueue, audioInitialized])
 
   // Handle audio element events
   useEffect(() => {
@@ -169,8 +180,18 @@ export function DebateInterface() {
   }, [])
 
   // Play the next audio in the queue
-  const playNextInQueue = () => {
+  const playNextInQueue = async () => {
     if (audioQueue.length === 0) return
+
+    // Make sure audio is unlocked first
+    if (!audioInitialized) {
+      await unlockAudio()
+      // If unlocking failed, don't proceed
+      if (!audioInitialized) {
+        setAudioError("Cannot play audio - failed to initialize audio system")
+        return
+      }
+    }
 
     setIsPlayingQueue(true)
     const nextAudio = audioQueue[0]
@@ -201,20 +222,19 @@ export function DebateInterface() {
         return
       }
 
-      // Set the source and load the audio
-      audioRef.current.src = nextAudio.url
-      audioRef.current.volume = volume
-      audioRef.current.load()
-      setCurrentSpeaker(nextAudio.character)
+      try {
+        // Set the source and load the audio
+        audioRef.current.src = nextAudio.url
+        audioRef.current.volume = volume
+        audioRef.current.load()
+        setCurrentSpeaker(nextAudio.character)
 
-      // Try to play the audio
-      audioRef.current.play().catch((err) => {
+        // Try to play the audio
+        await audioRef.current.play()
+      } catch (err) {
         console.error("Audio playback error:", err)
         setAudioError(`Error playing audio: ${err.message}`)
         setIsLoadingAudio(false)
-
-        // Try unlocking audio again
-        unlockAudio()
 
         // Skip to next audio on error
         setAudioQueue((prev) => {
@@ -223,7 +243,7 @@ export function DebateInterface() {
           return newQueue
         })
         setIsPlayingQueue(false)
-      })
+      }
     }
   }
 
@@ -303,7 +323,7 @@ export function DebateInterface() {
     setIsProcessing(true)
 
     // Ensure audio is unlocked
-    unlockAudio()
+    await unlockAudio()
 
     try {
       const response = await fetch("/api/start-debate", {
@@ -511,24 +531,33 @@ export function DebateInterface() {
   }
 
   // Test audio playback
-  const testAudio = () => {
+  const testAudio = async () => {
     // Unlock audio first
-    unlockAudio()
+    await unlockAudio()
 
-    // Then try to play test audio
-    const testAudioEl = new Audio("/test-audio.mp3")
-    testAudioEl.volume = volume
+    setAudioError("Testing audio playback...")
 
-    testAudioEl
-      .play()
-      .then(() => {
-        console.log("Test audio playback successful")
-        setAudioError("Test audio playback successful")
-      })
-      .catch((err) => {
-        console.error("Test audio playback failed:", err)
-        setAudioError(`Test audio failed: ${err.message}`)
-      })
+    try {
+      // Use the API endpoint that serves a static audio file
+      const testAudioUrl = "/api/test-audio-static"
+      const audio = new Audio(testAudioUrl)
+
+      audio.oncanplaythrough = () => {
+        setAudioError("Test audio loaded successfully")
+      }
+
+      audio.onerror = (e) => {
+        const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
+        console.error("Test audio error:", errorDetails)
+        setAudioError(`Test audio failed: ${errorDetails}`)
+      }
+
+      await audio.play()
+      setAudioError("Test audio playing successfully")
+    } catch (err) {
+      console.error("Test audio playback failed:", err)
+      setAudioError(`Test audio failed: ${err.message}`)
+    }
   }
 
   // Check if silent.mp3 exists
@@ -694,8 +723,12 @@ export function DebateInterface() {
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            <button onClick={unlockAudio} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-              Unlock Audio
+            <button
+              onClick={unlockAudio}
+              disabled={isUnlockingAudio}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-green-900 disabled:cursor-not-allowed"
+            >
+              {isUnlockingAudio ? "Unlocking..." : "Unlock Audio"}
             </button>
             <button onClick={testAudio} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
               Test Audio
@@ -926,6 +959,7 @@ export function DebateInterface() {
             <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
             <p>Queue Length: {audioQueue.length}</p>
             <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
+            <p>Is Unlocking Audio: {isUnlockingAudio ? "Yes" : "No"}</p>
             {audioError && <p className="text-red-500">Error: {audioError}</p>}
           </div>
 
@@ -980,6 +1014,15 @@ export function DebateInterface() {
             >
               Clear Queue
             </button>
+
+            <a
+              href="/audio-test"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1 bg-blue-600 rounded inline-block"
+            >
+              Open Audio Test Page
+            </a>
           </div>
         </div>
       )}
