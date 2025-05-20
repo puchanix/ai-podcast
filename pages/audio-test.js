@@ -2,87 +2,28 @@
 
 import { useState, useEffect, useRef } from "react"
 import Head from "next/head"
+import { webkitAudioContext } from "webkit-audio-context"
 
 export default function AudioTest() {
   const [testResults, setTestResults] = useState([])
-  const [silentMp3Exists, setSilentMp3Exists] = useState(null)
-  const [testAudioExists, setTestAudioExists] = useState(null)
+  const [customUrl, setCustomUrl] = useState("")
+  const [isPlaying, setIsPlaying] = useState(false)
   const [audioInitialized, setAudioInitialized] = useState(false)
-  const [browserInfo, setBrowserInfo] = useState({})
+  const [elevenlabsApiKey, setElevenlabsApiKey] = useState("")
+  const [testText, setTestText] = useState("This is a test of the audio system.")
+  const [generatedAudioUrl, setGeneratedAudioUrl] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
 
   const audioRef = useRef(null)
   const silentAudioRef = useRef(null)
 
-  // Add a test result
-  const addResult = (test, result, success = true) => {
-    setTestResults((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        test,
-        result,
-        success,
-        timestamp: new Date().toLocaleTimeString(),
-      },
-    ])
-  }
-
-  // Get browser information
-  useEffect(() => {
-    setBrowserInfo({
-      userAgent: navigator.userAgent,
-      platform: navigator.platform,
-      vendor: navigator.vendor,
-      audioContext:
-        typeof window !== "undefined" &&
-        (typeof window.AudioContext !== "undefined" || typeof window.webkitAudioContext !== "undefined"),
-    })
-  }, [])
-
-  // Check if silent.mp3 exists
-  const checkSilentMp3 = async () => {
-    try {
-      addResult("Checking silent.mp3", "Fetching...")
-      const response = await fetch("/silent.mp3")
-
-      if (response.ok) {
-        const size = response.headers.get("content-length") || "unknown size"
-        setSilentMp3Exists(true)
-        addResult("silent.mp3 check", `File exists (${size} bytes)`, true)
-      } else {
-        setSilentMp3Exists(false)
-        addResult("silent.mp3 check", `File not found: ${response.status} ${response.statusText}`, false)
-      }
-    } catch (err) {
-      setSilentMp3Exists(false)
-      addResult("silent.mp3 check", `Error: ${err.message}`, false)
-    }
-  }
-
-  // Check if test-audio.mp3 exists
-  const checkTestAudio = async () => {
-    try {
-      addResult("Checking test-audio.mp3", "Fetching...")
-      const response = await fetch("/test-audio.mp3")
-
-      if (response.ok) {
-        const size = response.headers.get("content-length") || "unknown size"
-        setTestAudioExists(true)
-        addResult("test-audio.mp3 check", `File exists (${size} bytes)`, true)
-      } else {
-        setTestAudioExists(false)
-        addResult("test-audio.mp3 check", `File not found: ${response.status} ${response.statusText}`, false)
-      }
-    } catch (err) {
-      setTestAudioExists(false)
-      addResult("test-audio.mp3 check", `Error: ${err.message}`, false)
-    }
-  }
-
-  // Unlock audio (for iOS)
+  // Function to unlock audio on iOS
   const unlockAudio = () => {
-    addResult("Unlocking audio", "Attempting to unlock audio...")
+    console.log("Attempting to unlock audio...")
+    addTestResult("Attempting to unlock audio...")
 
+    // Play silent audio to unlock audio on iOS
     if (silentAudioRef.current) {
       silentAudioRef.current.src = "/silent.mp3"
       silentAudioRef.current.load()
@@ -90,191 +31,316 @@ export default function AudioTest() {
       silentAudioRef.current
         .play()
         .then(() => {
+          console.log("Silent audio played successfully - audio unlocked")
+          addTestResult("✅ Silent audio played successfully - audio unlocked")
           setAudioInitialized(true)
-          addResult("Audio unlock", "Audio unlocked successfully", true)
         })
         .catch((err) => {
-          addResult("Audio unlock", `Failed: ${err.message}`, false)
+          console.error("Failed to play silent audio:", err)
+          addTestResult(`❌ Failed to unlock audio: ${err.message}`)
         })
-    } else {
-      addResult("Audio unlock", "Silent audio ref not available", false)
     }
   }
 
-  // Play test audio using Audio constructor
-  const playTestAudio = () => {
-    addResult("Test audio", "Attempting to play test audio...")
+  // Add a test result
+  const addTestResult = (message) => {
+    setTestResults((prev) => [...prev, { id: Date.now(), message }])
+  }
 
-    const audio = new Audio("/test-audio.mp3")
+  // Check if a file exists
+  const checkFile = async (url, name) => {
+    try {
+      addTestResult(`Checking ${name} at ${url}...`)
+      const response = await fetch(url)
 
-    audio.oncanplaythrough = () => {
-      addResult("Test audio", "Audio loaded and can play through", true)
+      if (response.ok) {
+        const contentType = response.headers.get("content-type")
+        const contentLength = response.headers.get("content-length") || "unknown"
+        addTestResult(`✅ ${name} exists: ${contentType}, ${contentLength} bytes`)
+
+        // For audio files, check if they have content
+        if (contentType && contentType.includes("audio")) {
+          const blob = await response.blob()
+          if (blob.size > 0) {
+            addTestResult(`✅ ${name} has content: ${blob.size} bytes`)
+          } else {
+            addTestResult(`❌ ${name} is empty (0 bytes)`)
+          }
+        }
+
+        return true
+      } else {
+        addTestResult(`❌ ${name} not found: ${response.status} ${response.statusText}`)
+        return false
+      }
+    } catch (err) {
+      addTestResult(`❌ Error checking ${name}: ${err.message}`)
+      return false
     }
+  }
 
-    audio.onerror = (e) => {
-      const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
-      addResult("Test audio", `Error: ${errorDetails}`, false)
-    }
+  // Play a test audio file
+  const playTestAudio = (url, name) => {
+    if (!audioRef.current) return
 
-    audio
+    addTestResult(`Playing ${name} from ${url}...`)
+
+    audioRef.current.src = url
+    audioRef.current.load()
+
+    audioRef.current
       .play()
       .then(() => {
-        addResult("Test audio", "Playback started successfully", true)
+        setIsPlaying(true)
+        addTestResult(`✅ ${name} playback started`)
       })
       .catch((err) => {
-        addResult("Test audio", `Playback failed: ${err.message}`, false)
+        addTestResult(`❌ Error playing ${name}: ${err.message}`)
       })
   }
 
-  // Play test audio using audio ref
-  const playTestAudioWithRef = () => {
-    addResult("Test audio (ref)", "Attempting to play test audio with ref...")
+  // Generate a test audio file
+  const generateTestAudio = async () => {
+    if (!testText.trim()) {
+      addTestResult("❌ Please enter some text to generate")
+      return
+    }
 
-    if (audioRef.current) {
-      audioRef.current.src = "/test-audio.mp3"
-      audioRef.current.load()
+    setIsGenerating(true)
+    setErrorMessage("")
+    addTestResult("Generating test audio...")
 
-      audioRef.current
-        .play()
-        .then(() => {
-          addResult("Test audio (ref)", "Playback started successfully", true)
-        })
-        .catch((err) => {
-          addResult("Test audio (ref)", `Playback failed: ${err.message}`, false)
-        })
-    } else {
-      addResult("Test audio (ref)", "Audio ref not available", false)
+    try {
+      const response = await fetch("/api/debate-tts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: testText,
+          characterId: "einstein", // Use Einstein as a test character
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      if (data.error) {
+        throw new Error(data.error)
+      }
+
+      setGeneratedAudioUrl(data.audioUrl)
+      addTestResult(`✅ Generated audio URL: ${data.audioUrl}`)
+
+      // Check if the file exists
+      await checkFile(data.audioUrl, "Generated audio")
+    } catch (error) {
+      setErrorMessage(error.message)
+      addTestResult(`❌ Error generating audio: ${error.message}`)
+    } finally {
+      setIsGenerating(false)
     }
   }
 
-  // Run all tests
-  const runAllTests = () => {
-    setTestResults([])
-    checkSilentMp3()
-    checkTestAudio()
-    unlockAudio()
-    setTimeout(() => {
-      playTestAudio()
-    }, 1000)
-    setTimeout(() => {
-      playTestAudioWithRef()
-    }, 2000)
+  // Check custom URL
+  const checkCustomUrl = async () => {
+    if (!customUrl.trim()) return
+    await checkFile(customUrl, "Custom URL")
   }
 
+  // Initialize audio element event listeners
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.onplay = () => {
+        setIsPlaying(true)
+        addTestResult("Audio playback started")
+      }
+
+      audioRef.current.onpause = () => {
+        setIsPlaying(false)
+        addTestResult("Audio playback paused")
+      }
+
+      audioRef.current.onended = () => {
+        setIsPlaying(false)
+        addTestResult("Audio playback ended")
+      }
+
+      audioRef.current.onerror = (e) => {
+        const errorDetails = audioRef.current.error
+          ? `${audioRef.current.error.code}: ${audioRef.current.error.message}`
+          : "Unknown error"
+        addTestResult(`❌ Audio playback error: ${errorDetails}`)
+        setIsPlaying(false)
+      }
+    }
+  }, [])
+
+  // Run initial tests
+  useEffect(() => {
+    const runInitialTests = async () => {
+      addTestResult("Starting audio tests...")
+
+      // Check browser audio support
+      addTestResult(`Browser: ${navigator.userAgent}`)
+
+      if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
+        addTestResult("✅ AudioContext is supported")
+      } else {
+        addTestResult("❌ AudioContext is NOT supported")
+      }
+
+      // Check if silent.mp3 exists
+      await checkFile("/silent.mp3", "silent.mp3")
+
+      // Check if test-audio.mp3 exists
+      await checkFile("/test-audio.mp3", "test-audio.mp3")
+    }
+
+    runInitialTests()
+  }, [])
+
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
+    <div className="min-h-screen bg-gray-900 text-white p-6">
       <Head>
-        <title>Audio Test Page</title>
+        <title>Audio Debug Page</title>
       </Head>
 
-      <h1 className="text-3xl font-bold mb-6">Audio Test Page</h1>
+      <h1 className="text-3xl font-bold mb-6">Audio Debug Page</h1>
 
-      <div className="mb-8 p-4 bg-gray-100 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4">Browser Information</h2>
-        <div className="space-y-2">
-          <p>
-            <strong>User Agent:</strong> {browserInfo.userAgent}
-          </p>
-          <p>
-            <strong>Platform:</strong> {browserInfo.platform}
-          </p>
-          <p>
-            <strong>Vendor:</strong> {browserInfo.vendor}
-          </p>
-          <p>
-            <strong>AudioContext Support:</strong> {browserInfo.audioContext ? "Yes" : "No"}
-          </p>
-        </div>
-      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <h2 className="text-xl font-bold mb-4">Audio Controls</h2>
 
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Audio Tests</h2>
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button onClick={unlockAudio} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-            Unlock Audio
-          </button>
-          <button onClick={checkSilentMp3} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-            Check silent.mp3
-          </button>
-          <button onClick={checkTestAudio} className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
-            Check test-audio.mp3
-          </button>
-          <button onClick={playTestAudio} className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700">
-            Play Test Audio
-          </button>
-          <button onClick={playTestAudioWithRef} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
-            Play Test Audio (Ref)
-          </button>
-          <button onClick={runAllTests} className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900">
-            Run All Tests
-          </button>
-        </div>
+          <div className="space-y-4">
+            <div>
+              <button
+                onClick={unlockAudio}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded mr-2"
+              >
+                Unlock Audio
+              </button>
 
-        <div className="mb-4">
-          <h3 className="font-medium mb-2">Audio Status:</h3>
-          <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
-          <p>silent.mp3 Exists: {silentMp3Exists === null ? "Unknown" : silentMp3Exists ? "Yes" : "No"}</p>
-          <p>test-audio.mp3 Exists: {testAudioExists === null ? "Unknown" : testAudioExists ? "Yes" : "No"}</p>
-        </div>
+              <button
+                onClick={() => playTestAudio("/test-audio.mp3", "Test Audio")}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded mr-2"
+                disabled={isPlaying}
+              >
+                Play Test Audio
+              </button>
 
-        <div className="border rounded-lg overflow-hidden">
-          <table className="min-w-full">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="py-2 px-4 text-left">Time</th>
-                <th className="py-2 px-4 text-left">Test</th>
-                <th className="py-2 px-4 text-left">Result</th>
-              </tr>
-            </thead>
-            <tbody>
-              {testResults.length === 0 ? (
-                <tr>
-                  <td colSpan="3" className="py-4 px-4 text-center text-gray-500">
-                    No tests run yet. Click a button above to start testing.
-                  </td>
-                </tr>
-              ) : (
-                testResults.map((result) => (
-                  <tr key={result.id} className="border-t">
-                    <td className="py-2 px-4 text-sm text-gray-600">{result.timestamp}</td>
-                    <td className="py-2 px-4">{result.test}</td>
-                    <td className={`py-2 px-4 ${result.success ? "text-green-600" : "text-red-600"}`}>
-                      {result.result}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              <button
+                onClick={() => playTestAudio("/silent.mp3", "Silent Audio")}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded"
+                disabled={isPlaying}
+              >
+                Play Silent Audio
+              </button>
+            </div>
 
-      {/* Direct audio elements for testing */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Direct Audio Elements</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <h3 className="font-medium mb-2">Test Audio:</h3>
-            <audio controls src="/test-audio.mp3" className="w-full">
-              Your browser does not support the audio element.
-            </audio>
-          </div>
-          <div>
-            <h3 className="font-medium mb-2">Silent Audio:</h3>
-            <audio controls src="/silent.mp3" className="w-full">
-              Your browser does not support the audio element.
-            </audio>
+            {isPlaying && (
+              <div>
+                <button
+                  onClick={() => {
+                    if (audioRef.current) {
+                      audioRef.current.pause()
+                    }
+                  }}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+                >
+                  Stop Playback
+                </button>
+              </div>
+            )}
+
+            <div>
+              <h3 className="text-lg font-semibold mb-2">Check Custom URL</h3>
+              <div className="flex">
+                <input
+                  type="text"
+                  value={customUrl}
+                  onChange={(e) => setCustomUrl(e.target.value)}
+                  placeholder="Enter URL to check"
+                  className="flex-1 px-3 py-2 bg-gray-700 rounded-l text-white"
+                />
+                <button
+                  onClick={checkCustomUrl}
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-r"
+                >
+                  Check
+                </button>
+              </div>
+            </div>
           </div>
         </div>
+
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <h2 className="text-xl font-bold mb-4">Generate Test Audio</h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Test Text</label>
+              <textarea
+                value={testText}
+                onChange={(e) => setTestText(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 rounded text-white"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <button
+                onClick={generateTestAudio}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                disabled={isGenerating || !testText.trim()}
+              >
+                {isGenerating ? "Generating..." : "Generate Audio"}
+              </button>
+            </div>
+
+            {errorMessage && (
+              <div className="bg-red-900 p-3 rounded">
+                <p className="text-red-300">{errorMessage}</p>
+              </div>
+            )}
+
+            {generatedAudioUrl && (
+              <div className="bg-gray-700 p-3 rounded">
+                <p className="mb-2">Generated Audio:</p>
+                <div className="flex items-center">
+                  <span className="truncate flex-1">{generatedAudioUrl}</span>
+                  <button
+                    onClick={() => playTestAudio(generatedAudioUrl, "Generated Audio")}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded ml-2"
+                    disabled={isPlaying}
+                  >
+                    Play
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Hidden audio elements for programmatic control */}
-      <audio ref={audioRef} className="hidden" controls={false} preload="auto" />
-      <audio ref={silentAudioRef} className="hidden" controls={false} preload="auto" />
+      <div className="mt-6 bg-gray-800 p-4 rounded-lg">
+        <h2 className="text-xl font-bold mb-4">Test Results</h2>
 
-      <div className="mt-8 text-center text-gray-500 text-sm">
-        <p>This page is used for testing audio playback functionality.</p>
+        <div className="bg-black p-4 rounded h-96 overflow-y-auto font-mono text-sm">
+          {testResults.map((result) => (
+            <div key={result.id} className="mb-1">
+              {result.message}
+            </div>
+          ))}
+        </div>
       </div>
+
+      {/* Audio elements */}
+      <audio ref={audioRef} className="hidden" controls />
+      <audio ref={silentAudioRef} className="hidden" />
     </div>
   )
 }
