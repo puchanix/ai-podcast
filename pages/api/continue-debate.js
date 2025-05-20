@@ -22,10 +22,54 @@ export default async function handler(req, res) {
 
     const response2 = `I find ${char1.name}'s perspective interesting, but I, ${char2.name}, would add that ${userQuestion} must also be considered in light of broader societal implications. My experience has taught me that context matters tremendously in such discussions.`
 
-    // Generate audio URLs (in a real implementation, you would call a TTS service)
-    // For now, we'll use the podcast audio as a placeholder
-    const audioUrl1 = char1.podcast || "/silent.mp3"
-    const audioUrl2 = char2.podcast || "/silent.mp3"
+    // Generate audio using our TTS endpoint
+    let audioUrl1 = "/silent.mp3"
+    let audioUrl2 = "/silent.mp3"
+
+    try {
+      // Generate audio for character 1
+      const ttsResponse1 = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/debate-tts`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: response1,
+            characterId: character1,
+          }),
+        },
+      )
+
+      if (ttsResponse1.ok) {
+        const ttsData1 = await ttsResponse1.json()
+        audioUrl1 = ttsData1.audioUrl
+      }
+
+      // Generate audio for character 2
+      const ttsResponse2 = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/api/debate-tts`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: response2,
+            characterId: character2,
+          }),
+        },
+      )
+
+      if (ttsResponse2.ok) {
+        const ttsData2 = await ttsResponse2.json()
+        audioUrl2 = ttsData2.audioUrl
+      }
+    } catch (error) {
+      console.error("Error generating TTS:", error)
+      // Use fallback audio if TTS fails
+    }
 
     return res.status(200).json({
       response1,
