@@ -31,6 +31,8 @@ export function DebateInterface() {
 
   const audioRef = useRef(null)
   const silentAudioRef = useRef(null)
+  const char1AudioRef = useRef(null)
+  const char2AudioRef = useRef(null)
 
   // Get character objects
   const char1 = personas[character1]
@@ -108,144 +110,87 @@ export function DebateInterface() {
     setAudioError(null)
 
     // Stop any playing audio
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.removeAttribute("src") // Remove src instead of setting to empty string
+    if (char1AudioRef.current) {
+      char1AudioRef.current.pause()
+      char1AudioRef.current.src = ""
+    }
+
+    if (char2AudioRef.current) {
+      char2AudioRef.current.pause()
+      char2AudioRef.current.src = ""
     }
   }
 
-  // Process audio queue
+  // Set up audio element event handlers
   useEffect(() => {
-    if (audioQueue.length > 0 && !isPlayingQueue && audioInitialized) {
-      playNextInQueue()
-    }
-  }, [audioQueue, isPlayingQueue, audioInitialized])
-
-  // Handle audio element events
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.onplay = () => {
+    if (char1AudioRef.current) {
+      char1AudioRef.current.onplay = () => {
+        console.log("Character 1 audio playback started")
         setIsPlaying(true)
         setIsLoadingAudio(false)
-        console.log("Audio playback started")
+        setCurrentSpeaker(character1)
       }
 
-      audioRef.current.onpause = () => {
+      char1AudioRef.current.onpause = () => {
+        console.log("Character 1 audio playback paused")
         setIsPlaying(false)
-        console.log("Audio playback paused")
       }
 
-      audioRef.current.onended = () => {
+      char1AudioRef.current.onended = () => {
+        console.log("Character 1 audio playback ended")
         setIsPlaying(false)
         setCurrentSpeaker(null)
-        console.log("Audio playback ended")
 
-        // Remove the current audio from the queue and play the next one
-        setAudioQueue((prev) => {
-          const newQueue = [...prev]
-          newQueue.shift()
-          return newQueue
-        })
-        setIsPlayingQueue(false)
+        // Play character 2's audio if it's queued
+        if (char2AudioRef.current && char2AudioRef.current.src) {
+          char2AudioRef.current.play().catch((err) => {
+            console.error("Error playing character 2 audio:", err)
+            setAudioError(`Error playing character 2: ${err.message}`)
+          })
+        }
       }
 
-      audioRef.current.onerror = (e) => {
-        const errorDetails = audioRef.current.error
-          ? `${audioRef.current.error.code}: ${audioRef.current.error.message}`
+      char1AudioRef.current.onerror = (e) => {
+        const errorDetails = char1AudioRef.current.error
+          ? `${char1AudioRef.current.error.code}: ${char1AudioRef.current.error.message}`
           : "Unknown error"
-
-        console.error("Audio playback error:", errorDetails)
-        setAudioError(`Error: ${errorDetails}`)
+        console.error("Character 1 audio error:", errorDetails)
+        setAudioError(`Character 1 audio error: ${errorDetails}`)
         setIsLoadingAudio(false)
-
-        // Skip to next audio on error
-        setAudioQueue((prev) => {
-          const newQueue = [...prev]
-          newQueue.shift()
-          return newQueue
-        })
-        setIsPlayingQueue(false)
-      }
-
-      audioRef.current.onloadstart = () => {
-        setIsLoadingAudio(true)
-        console.log("Audio loading started")
-      }
-
-      audioRef.current.oncanplaythrough = () => {
-        setIsLoadingAudio(false)
-        console.log("Audio can play through")
-      }
-    }
-  }, [])
-
-  // Play the next audio in the queue
-  const playNextInQueue = async () => {
-    if (audioQueue.length === 0) return
-
-    // Make sure audio is unlocked first
-    if (!audioInitialized) {
-      await unlockAudio()
-      // If unlocking failed, don't proceed
-      if (!audioInitialized) {
-        setAudioError("Cannot play audio - failed to initialize audio system")
-        return
+        setIsPlaying(false)
       }
     }
 
-    setIsPlayingQueue(true)
-    const nextAudio = audioQueue[0]
-
-    if (debugMode) {
-      console.log("Playing audio:", nextAudio)
-      console.log("Audio URL:", nextAudio.url)
-    }
-
-    if (audioRef.current) {
-      // Reset any previous errors
-      setAudioError(null)
-      setIsLoadingAudio(true)
-
-      // Make sure we have a valid URL before setting src
-      if (!nextAudio.url) {
-        console.error("Invalid audio URL:", nextAudio.url)
-        setAudioError("Error: Invalid audio URL")
+    if (char2AudioRef.current) {
+      char2AudioRef.current.onplay = () => {
+        console.log("Character 2 audio playback started")
+        setIsPlaying(true)
         setIsLoadingAudio(false)
-
-        // Skip to next audio
-        setAudioQueue((prev) => {
-          const newQueue = [...prev]
-          newQueue.shift()
-          return newQueue
-        })
-        setIsPlayingQueue(false)
-        return
+        setCurrentSpeaker(character2)
       }
 
-      try {
-        // Set the source and load the audio
-        audioRef.current.src = nextAudio.url
-        audioRef.current.volume = volume
-        audioRef.current.load()
-        setCurrentSpeaker(nextAudio.character)
+      char2AudioRef.current.onpause = () => {
+        console.log("Character 2 audio playback paused")
+        setIsPlaying(false)
+      }
 
-        // Try to play the audio
-        await audioRef.current.play()
-      } catch (err) {
-        console.error("Audio playback error:", err)
-        setAudioError(`Error playing audio: ${err.message}`)
+      char2AudioRef.current.onended = () => {
+        console.log("Character 2 audio playback ended")
+        setIsPlaying(false)
+        setCurrentSpeaker(null)
+      }
+
+      char2AudioRef.current.onerror = (e) => {
+        const errorDetails = char2AudioRef.current.error
+          ? `${char2AudioRef.current.error.code}: ${char2AudioRef.current.error.message}`
+          : "Unknown error"
+        console.error("Character 2 audio error:", errorDetails)
+        setAudioError(`Character 2 audio error: ${errorDetails}`)
         setIsLoadingAudio(false)
-
-        // Skip to next audio on error
-        setAudioQueue((prev) => {
-          const newQueue = [...prev]
-          newQueue.shift()
-          return newQueue
-        })
-        setIsPlayingQueue(false)
+        setIsPlaying(false)
       }
     }
-  }
+  }, [character1, character2])
 
   // Function to generate debate topics based on selected characters
   const generateDebateTopics = async () => {
@@ -363,11 +308,28 @@ export function DebateInterface() {
 
       setDebateMessages(messages)
 
-      // Add both audio responses to the queue
-      setAudioQueue([
-        { url: data.audioUrl1, character: character1 },
-        { url: data.audioUrl2, character: character2 },
-      ])
+      // Set up audio for both characters
+      if (char1AudioRef.current) {
+        char1AudioRef.current.src = data.audioUrl1
+        char1AudioRef.current.volume = volume
+        char1AudioRef.current.load()
+      }
+
+      if (char2AudioRef.current) {
+        char2AudioRef.current.src = data.audioUrl2
+        char2AudioRef.current.volume = volume
+        char2AudioRef.current.load()
+      }
+
+      // Start playing character 1's audio
+      if (char1AudioRef.current) {
+        setIsLoadingAudio(true)
+        char1AudioRef.current.play().catch((err) => {
+          console.error("Error playing character 1 audio:", err)
+          setAudioError(`Error playing character 1: ${err.message}`)
+          setIsLoadingAudio(false)
+        })
+      }
     } catch (error) {
       console.error("Error starting debate:", error)
       setIsDebating(false)
@@ -433,12 +395,28 @@ export function DebateInterface() {
 
       setDebateMessages((prev) => [...prev, ...newMessages])
 
-      // Add both audio responses to the queue
-      setAudioQueue((prev) => [
-        ...prev,
-        { url: data.audioUrl1, character: character1 },
-        { url: data.audioUrl2, character: character2 },
-      ])
+      // Set up audio for both characters
+      if (char1AudioRef.current) {
+        char1AudioRef.current.src = data.audioUrl1
+        char1AudioRef.current.volume = volume
+        char1AudioRef.current.load()
+      }
+
+      if (char2AudioRef.current) {
+        char2AudioRef.current.src = data.audioUrl2
+        char2AudioRef.current.volume = volume
+        char2AudioRef.current.load()
+      }
+
+      // Start playing character 1's audio
+      if (char1AudioRef.current) {
+        setIsLoadingAudio(true)
+        char1AudioRef.current.play().catch((err) => {
+          console.error("Error playing character 1 audio:", err)
+          setAudioError(`Error playing character 1: ${err.message}`)
+          setIsLoadingAudio(false)
+        })
+      }
     } catch (error) {
       console.error("Error continuing debate:", error)
       setAudioError(`Failed to continue debate: ${error.message}`)
@@ -490,12 +468,28 @@ export function DebateInterface() {
 
       setDebateMessages((prev) => [...prev, ...newMessages])
 
-      // Add both audio responses to the queue
-      setAudioQueue((prev) => [
-        ...prev,
-        { url: data.audioUrl1, character: character1 },
-        { url: data.audioUrl2, character: character2 },
-      ])
+      // Set up audio for both characters
+      if (char1AudioRef.current) {
+        char1AudioRef.current.src = data.audioUrl1
+        char1AudioRef.current.volume = volume
+        char1AudioRef.current.load()
+      }
+
+      if (char2AudioRef.current) {
+        char2AudioRef.current.src = data.audioUrl2
+        char2AudioRef.current.volume = volume
+        char2AudioRef.current.load()
+      }
+
+      // Start playing character 1's audio
+      if (char1AudioRef.current) {
+        setIsLoadingAudio(true)
+        char1AudioRef.current.play().catch((err) => {
+          console.error("Error playing character 1 audio:", err)
+          setAudioError(`Error playing character 1: ${err.message}`)
+          setIsLoadingAudio(false)
+        })
+      }
     } catch (error) {
       console.error("Error continuing debate:", error)
       setAudioError(`Failed to continue debate: ${error.message}`)
@@ -539,8 +533,9 @@ export function DebateInterface() {
 
     try {
       // Use the API endpoint that serves a static audio file
-      const testAudioUrl = "/api/test-audio-static"
+      const testAudioUrl = "/api/test-audio"
       const audio = new Audio(testAudioUrl)
+      audio.volume = volume
 
       audio.oncanplaythrough = () => {
         setAudioError("Test audio loaded successfully")
@@ -572,6 +567,56 @@ export function DebateInterface() {
       }
     } catch (err) {
       setAudioError(`Error checking silent.mp3: ${err.message}`)
+    }
+  }
+
+  // Check direct audio URLs
+  const checkAudioUrls = async () => {
+    if (debateMessages.length === 0) {
+      setAudioError("No debate messages to check")
+      return
+    }
+
+    setAudioError("Checking audio URLs...")
+
+    try {
+      // Get the first two messages with audio URLs
+      const audioMessages = debateMessages.filter((msg) => msg.audioUrl).slice(0, 2)
+
+      if (audioMessages.length === 0) {
+        setAudioError("No audio URLs found in messages")
+        return
+      }
+
+      // Check each URL
+      const results = await Promise.all(
+        audioMessages.map(async (msg) => {
+          try {
+            const response = await fetch(msg.audioUrl)
+            const contentType = response.headers.get("content-type")
+            const contentLength = response.headers.get("content-length")
+
+            return {
+              url: msg.audioUrl,
+              status: response.status,
+              contentType,
+              contentLength,
+              ok: response.ok,
+            }
+          } catch (err) {
+            return {
+              url: msg.audioUrl,
+              error: err.message,
+              ok: false,
+            }
+          }
+        }),
+      )
+
+      // Display results
+      setAudioError(`Audio URL check results: ${JSON.stringify(results, null, 2)}`)
+    } catch (err) {
+      setAudioError(`Error checking audio URLs: ${err.message}`)
     }
   }
 
@@ -715,8 +760,11 @@ export function DebateInterface() {
               onChange={(e) => {
                 const newVolume = Number.parseFloat(e.target.value)
                 setVolume(newVolume)
-                if (audioRef.current) {
-                  audioRef.current.volume = newVolume
+                if (char1AudioRef.current) {
+                  char1AudioRef.current.volume = newVolume
+                }
+                if (char2AudioRef.current) {
+                  char2AudioRef.current.volume = newVolume
                 }
               }}
               className="w-full"
@@ -736,6 +784,9 @@ export function DebateInterface() {
             <button onClick={checkSilentMp3} className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
               Check silent.mp3
             </button>
+            <button onClick={checkAudioUrls} className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700">
+              Check Audio URLs
+            </button>
             {isDebating && debateMessages.length > 0 && (
               <button
                 onClick={downloadTranscript}
@@ -747,8 +798,10 @@ export function DebateInterface() {
           </div>
         </div>
         {audioError && (
-          <div className={`mt-4 p-2 rounded ${audioError.includes("successful") ? "bg-green-800" : "bg-red-800"}`}>
-            {audioError}
+          <div
+            className={`mt-4 p-2 rounded ${audioError.includes("successful") ? "bg-green-800" : "bg-red-800"} overflow-auto max-h-40`}
+          >
+            <pre className="whitespace-pre-wrap">{audioError}</pre>
           </div>
         )}
       </div>
@@ -957,62 +1010,63 @@ export function DebateInterface() {
             <p>Current Speaker: {currentSpeaker || "None"}</p>
             <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
             <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
-            <p>Queue Length: {audioQueue.length}</p>
             <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
             <p>Is Unlocking Audio: {isUnlockingAudio ? "Yes" : "No"}</p>
             {audioError && <p className="text-red-500">Error: {audioError}</p>}
           </div>
 
           <div className="mb-4">
-            <h4 className="font-medium mb-1">Audio Queue:</h4>
+            <h4 className="font-medium mb-1">Audio URLs:</h4>
             <ul className="text-sm">
-              {audioQueue.map((item, index) => (
-                <li key={index} className="mb-1">
-                  {index === 0 && isPlaying ? "▶️ " : ""}
-                  {item.character}: {item.url}
-                </li>
-              ))}
+              {debateMessages
+                .filter((msg) => msg.audioUrl)
+                .map((msg, index) => (
+                  <li key={index} className="mb-1">
+                    {msg.character === character1 ? char1.name : char2.name}: {msg.audioUrl}
+                  </li>
+                ))}
             </ul>
           </div>
 
           <div className="flex space-x-2 flex-wrap">
             <button
               onClick={() => {
-                if (audioRef.current) {
-                  audioRef.current.volume = volume
-                  audioRef.current.muted = false
-                  audioRef.current.play().catch((err) => console.error("Manual play error:", err))
+                if (char1AudioRef.current) {
+                  char1AudioRef.current.volume = volume
+                  char1AudioRef.current.muted = false
+                  char1AudioRef.current.play().catch((err) => console.error("Manual play error:", err))
                 }
               }}
               className="px-3 py-1 bg-green-600 rounded"
             >
-              Force Play
+              Play Character 1
             </button>
 
             <button
               onClick={() => {
-                if (audioRef.current) {
-                  audioRef.current.pause()
+                if (char2AudioRef.current) {
+                  char2AudioRef.current.volume = volume
+                  char2AudioRef.current.muted = false
+                  char2AudioRef.current.play().catch((err) => console.error("Manual play error:", err))
+                }
+              }}
+              className="px-3 py-1 bg-blue-600 rounded"
+            >
+              Play Character 2
+            </button>
+
+            <button
+              onClick={() => {
+                if (char1AudioRef.current) {
+                  char1AudioRef.current.pause()
+                }
+                if (char2AudioRef.current) {
+                  char2AudioRef.current.pause()
                 }
               }}
               className="px-3 py-1 bg-red-600 rounded"
             >
-              Force Pause
-            </button>
-
-            <button
-              onClick={() => {
-                setAudioQueue([])
-                setIsPlayingQueue(false)
-                setIsPlaying(false)
-                if (audioRef.current) {
-                  audioRef.current.pause()
-                  audioRef.current.removeAttribute("src")
-                }
-              }}
-              className="px-3 py-1 bg-yellow-600 rounded"
-            >
-              Clear Queue
+              Pause All
             </button>
 
             <a
@@ -1066,9 +1120,8 @@ export function DebateInterface() {
       )}
 
       {/* Audio elements */}
-      <audio ref={audioRef} preload="auto" className="hidden" />
-
-      {/* Silent audio element for unlocking audio on iOS */}
+      <audio ref={char1AudioRef} preload="auto" className="hidden" />
+      <audio ref={char2AudioRef} preload="auto" className="hidden" />
       <audio ref={silentAudioRef} preload="auto" className="hidden" />
 
       <style jsx global>{`
