@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react"
 import Head from "next/head"
-import { AudioContext, webkitAudioContext } from "some-audio-context-library" // Placeholder for importing AudioContext and webkitAudioContext
 
 export default function AudioTest() {
   const [testResults, setTestResults] = useState([])
@@ -34,7 +33,9 @@ export default function AudioTest() {
       userAgent: navigator.userAgent,
       platform: navigator.platform,
       vendor: navigator.vendor,
-      audioContext: typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined",
+      audioContext:
+        typeof window !== "undefined" &&
+        (typeof window.AudioContext !== "undefined" || typeof window.webkitAudioContext !== "undefined"),
     })
   }, [])
 
@@ -248,7 +249,26 @@ export default function AudioTest() {
         </div>
       </div>
 
-      {/* Hidden audio elements */}
+      {/* Direct audio elements for testing */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Direct Audio Elements</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <h3 className="font-medium mb-2">Test Audio:</h3>
+            <audio controls src="/test-audio.mp3" className="w-full">
+              Your browser does not support the audio element.
+            </audio>
+          </div>
+          <div>
+            <h3 className="font-medium mb-2">Silent Audio:</h3>
+            <audio controls src="/silent.mp3" className="w-full">
+              Your browser does not support the audio element.
+            </audio>
+          </div>
+        </div>
+      </div>
+
+      {/* Hidden audio elements for programmatic control */}
       <audio ref={audioRef} className="hidden" controls={false} preload="auto" />
       <audio ref={silentAudioRef} className="hidden" controls={false} preload="auto" />
 
