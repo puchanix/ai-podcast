@@ -1,4 +1,4 @@
-import { personas } from "../../lib/personas"
+import { personas } from "../../../lib/personas"
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
