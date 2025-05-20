@@ -1,4 +1,7 @@
-import styles from "../styles/About.module.css"
+// Update the import path to match your project structure
+import styles from "../styles/About.module.css" // If styles is at the root
+// OR
+// import styles from "./About.module.css"  // If you want to keep the CSS with the component
 
 export default function AboutPage() {
   return (

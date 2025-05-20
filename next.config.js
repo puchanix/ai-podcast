@@ -1,11 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
     reactStrictMode: true,
-    // Disable static optimization for test-recording page
-    // This ensures it's always server-rendered and not statically generated
+    // Remove the unrecognized option
     experimental: {
-      // This is a workaround to prevent prerendering of pages with browser APIs
-      excludeDefaultMomentLocales: true,
+      // Remove excludeDefaultMomentLocales as it's not recognized
     },
     eslint: {
       ignoreDuringBuilds: true,
