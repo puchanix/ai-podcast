@@ -1,35 +1,39 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { personas } from "../lib/personas"
+import { characters } from "@/data/characters"
+import { MessageSquare, Loader2 } from "lucide-react"
+import Image from "next/image"
 
 export function DebateInterface() {
-  const [character1, setCharacter1] = useState(Object.keys(personas)[0])
-  const [character2, setCharacter2] = useState(Object.keys(personas)[1])
+  const [character1, setCharacter1] = useState(characters[0].id)
+  const [character2, setCharacter2] = useState(characters[1].id)
   const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
   const [isDebating, setIsDebating] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
   const [debateMessages, setDebateMessages] = useState([])
   const [suggestedTopics, setSuggestedTopics] = useState([])
   const [customQuestion, setCustomQuestion] = useState("")
   const [currentTopic, setCurrentTopic] = useState(null)
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
+  const [isProcessing, setIsProcessing] = useState(false)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [audioError, setAudioError] = useState(null)
+  const [volume, setVolume] = useState(1.0)
   const [showTranscript, setShowTranscript] = useState(false)
+  const [audioError, setAudioError] = useState(null)
+  const [debugMode, setDebugMode] = useState(false)
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false)
 
   // Audio queue system
   const [audioQueue, setAudioQueue] = useState([])
   const [isPlayingQueue, setIsPlayingQueue] = useState(false)
 
   const audioRef = useRef(null)
-  const messagesEndRef = useRef(null)
 
   // Get character objects
-  const char1 = personas[character1]
-  const char2 = personas[character2]
+  const char1 = characters.find((c) => c.id === character1)
+  const char2 = characters.find((c) => c.id === character2)
 
   // Generate debate topics when characters change
   useEffect(() => {
@@ -47,24 +51,13 @@ export function DebateInterface() {
     setAudioQueue([])
     setIsPlayingQueue(false)
     setIsPlaying(false)
-    setAudioError(null)
 
     // Stop any playing audio
     if (audioRef.current) {
       audioRef.current.pause()
-      // Don't set src to empty string, which causes the error
-      audioRef.current.removeAttribute('src')
+      audioRef.current.src = ""
     }
   }
-
-  // Initialize audio element with silent.mp3 to prevent empty src error
-  useEffect(() => {
-    if (audioRef.current) {
-      // Set a default audio source to prevent empty src errors
-      audioRef.current.src = "/silent.mp3"
-      audioRef.current.load()
-    }
-  }, [])
 
   // Process audio queue
   useEffect(() => {
@@ -77,20 +70,20 @@ export function DebateInterface() {
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.onplay = () => {
-        console.log("Audio started playing")
         setIsPlaying(true)
-        setAudioError(null)
+        setIsLoadingAudio(false)
+        console.log("Audio playback started")
       }
 
       audioRef.current.onpause = () => {
-        console.log("Audio paused")
         setIsPlaying(false)
+        console.log("Audio playback paused")
       }
 
       audioRef.current.onended = () => {
-        console.log("Audio ended")
         setIsPlaying(false)
         setCurrentSpeaker(null)
+        console.log("Audio playback ended")
 
         // Remove the current audio from the queue and play the next one
         setAudioQueue((prev) => {
@@ -102,23 +95,27 @@ export function DebateInterface() {
       }
 
       audioRef.current.onerror = (e) => {
-        console.error("Audio playback error", e)
-        // Don't show error for silent.mp3 which is just a placeholder
-        if (audioRef.current.src && !audioRef.current.src.includes("silent.mp3")) {
-          setAudioError(`Error playing audio: ${e.target.error ? e.target.error.message : 'Unknown error'}`)
-        }
-        
-        // Continue with the next audio even if there's an error
-        setIsPlaying(false)
-        setCurrentSpeaker(null)
-        
-        // Remove the current audio from the queue and play the next one
+        console.error("Audio playback error:", e)
+        setAudioError(`Error: ${audioRef.current.error ? audioRef.current.error.message : "Unknown error"}`)
+        setIsLoadingAudio(false)
+
+        // Skip to next audio on error
         setAudioQueue((prev) => {
           const newQueue = [...prev]
           newQueue.shift()
           return newQueue
         })
         setIsPlayingQueue(false)
+      }
+
+      audioRef.current.onloadstart = () => {
+        setIsLoadingAudio(true)
+        console.log("Audio loading started")
+      }
+
+      audioRef.current.oncanplaythrough = () => {
+        setIsLoadingAudio(false)
+        console.log("Audio can play through")
       }
     }
   }, [])
@@ -129,42 +126,29 @@ export function DebateInterface() {
 
     setIsPlayingQueue(true)
     const nextAudio = audioQueue[0]
-    console.log("Playing next audio in queue:", nextAudio)
+
+    if (debugMode) {
+      console.log("Playing audio:", nextAudio)
+      console.log("Audio URL:", nextAudio.url)
+    }
 
     if (audioRef.current) {
-      try {
-        // Preload a silent audio to unlock audio on iOS
-        const unlockAudio = new Audio()
-        unlockAudio.src = "/silent.mp3"
-        unlockAudio.play().catch(err => console.log("Unlock audio error:", err))
-        
-        // Set the audio source and try to play
-        audioRef.current.src = nextAudio.url
-        audioRef.current.load()
-        setCurrentSpeaker(nextAudio.character)
+      // Reset any previous errors
+      setAudioError(null)
+      setIsLoadingAudio(true)
 
-        // Add a small delay before playing to ensure the audio is loaded
-        setTimeout(() => {
-          audioRef.current.play().catch((err) => {
-            console.error("Audio playback error:", err)
-            // Don't show error for silent.mp3 which is just a placeholder
-            if (!nextAudio.url.includes("silent.mp3")) {
-              setAudioError(`Error playing audio: ${err.message}`)
-            }
-            
-            // Skip to next audio on error
-            setAudioQueue((prev) => {
-              const newQueue = [...prev]
-              newQueue.shift()
-              return newQueue
-            })
-            setIsPlayingQueue(false)
-          })
-        }, 300)
-      } catch (err) {
-        console.error("Error setting up audio:", err)
-        setAudioError(`Error setting up audio: ${err.message}`)
-        
+      // Set the source and load the audio
+      audioRef.current.src = nextAudio.url
+      audioRef.current.volume = volume
+      audioRef.current.load()
+      setCurrentSpeaker(nextAudio.character)
+
+      // Try to play the audio
+      audioRef.current.play().catch((err) => {
+        console.error("Audio playback error:", err)
+        setAudioError(`Error playing audio: ${err.message}`)
+        setIsLoadingAudio(false)
+
         // Skip to next audio on error
         setAudioQueue((prev) => {
           const newQueue = [...prev]
@@ -172,7 +156,7 @@ export function DebateInterface() {
           return newQueue
         })
         setIsPlayingQueue(false)
-      }
+      })
     }
   }
 
@@ -181,10 +165,8 @@ export function DebateInterface() {
     if (character1 === character2) return
 
     setIsGeneratingTopics(true)
-    setAudioError(null)
 
     try {
-      console.log("Generating debate topics for", character1, "and", character2)
       const response = await fetch("/api/generate-debate-topics", {
         method: "POST",
         headers: {
@@ -199,12 +181,9 @@ export function DebateInterface() {
       if (!response.ok) throw new Error("Failed to generate topics")
 
       const data = await response.json()
-      console.log("Generated topics:", data.topics)
       setSuggestedTopics(data.topics)
     } catch (error) {
       console.error("Error generating debate topics:", error)
-      setAudioError(`Error generating topics: ${error.message}`)
-      
       // Fallback topics if API fails
       setSuggestedTopics([
         {
@@ -233,12 +212,10 @@ export function DebateInterface() {
 
   // Start a debate on a specific topic
   const startDebate = async (topic) => {
-    console.log("Starting debate on topic:", topic)
     resetDebateState()
     setCurrentTopic(topic)
     setIsDebating(true)
     setIsProcessing(true)
-    setAudioError(null)
 
     try {
       const response = await fetch("/api/start-debate", {
@@ -255,11 +232,7 @@ export function DebateInterface() {
         }),
       })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("API error response:", errorText)
-        throw new Error("Failed to start debate")
-      }
+      if (!response.ok) throw new Error("Failed to start debate")
 
       const data = await response.json()
       console.log("Debate started with data:", data)
@@ -289,7 +262,6 @@ export function DebateInterface() {
       ])
     } catch (error) {
       console.error("Error starting debate:", error)
-      setAudioError(`Error starting debate: ${error.message}`)
       setIsDebating(false)
     } finally {
       setIsProcessing(false)
@@ -303,7 +275,6 @@ export function DebateInterface() {
     const userQuestion = customQuestion.trim()
     setCustomQuestion("")
     setIsProcessing(true)
-    setAudioError(null)
 
     // Add user question as a special message
     setDebateMessages((prev) => [
@@ -361,18 +332,15 @@ export function DebateInterface() {
       ])
     } catch (error) {
       console.error("Error continuing debate:", error)
-      setAudioError(`Error continuing debate: ${error.message}`)
     } finally {
       setIsProcessing(false)
     }
   }
 
-  // Continue the debate with AI-generated follow-up
   const continueDebate = async () => {
     if (!isDebating || isProcessing) return
 
     setIsProcessing(true)
-    setAudioError(null)
 
     try {
       const response = await fetch("/api/auto-continue", {
@@ -420,24 +388,68 @@ export function DebateInterface() {
       ])
     } catch (error) {
       console.error("Error continuing debate:", error)
-      setAudioError(`Error continuing debate: ${error.message}`)
     } finally {
       setIsProcessing(false)
     }
   }
 
+  // Function to download the debate transcript
+  const downloadTranscript = () => {
+    if (debateMessages.length === 0) return
+
+    let transcript = `Debate on ${currentTopic}\n\n`
+
+    debateMessages.forEach((msg) => {
+      if (msg.character === "user") {
+        transcript += `Question: ${msg.content}\n\n`
+      } else {
+        const speaker = msg.character === character1 ? char1.name : char2.name
+        transcript += `${speaker}: ${msg.content}\n\n`
+      }
+    })
+
+    const blob = new Blob([transcript], { type: "text/plain" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `debate-${currentTopic.replace(/\s+/g, "-").toLowerCase()}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  // Test audio playback
+  const testAudio = () => {
+    // Create a test audio element
+    const testAudioEl = new Audio("/silent.mp3")
+    testAudioEl.volume = volume
+    testAudioEl
+      .play()
+      .then(() => {
+        console.log("Test audio playback successful")
+        setAudioError("Test audio playback successful")
+      })
+      .catch((err) => {
+        console.error("Test audio playback failed:", err)
+        setAudioError(`Test audio failed: ${err.message}`)
+      })
+  }
+
   return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white min-h-screen">
-      <h1 className="text-3xl font-bold text-center mb-8 text-yellow-400">Historical Debates</h1>
+    <div className="container mx-auto py-8 px-4 max-w-6xl">
+      <h1 className="text-3xl font-bold text-center mb-8">Historical Debates</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         {/* Character 1 Selection */}
         <div className="flex flex-col items-center">
           <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-blue-500">
-            <img
-              src={char1?.image || "/placeholder.png"}
-              alt={char1?.name || "Character 1"}
-              className="w-full h-full object-cover"
+            <Image
+              src={char1.image || "/placeholder.svg"}
+              alt={char1.name}
+              width={128}
+              height={128}
+              className="object-cover"
             />
           </div>
           <select
@@ -445,9 +457,9 @@ export function DebateInterface() {
             onChange={(e) => setCharacter1(e.target.value)}
             className="w-[200px] p-2 rounded border bg-gray-800 text-white border-gray-600"
           >
-            {Object.keys(personas).map((id) => (
-              <option key={id} value={id}>
-                {personas[id].name}
+            {characters.map((char) => (
+              <option key={char.id} value={char.id}>
+                {char.name}
               </option>
             ))}
           </select>
@@ -461,10 +473,12 @@ export function DebateInterface() {
         {/* Character 2 Selection */}
         <div className="flex flex-col items-center">
           <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-red-500">
-            <img
-              src={char2?.image || "/placeholder.png"}
-              alt={char2?.name || "Character 2"}
-              className="w-full h-full object-cover"
+            <Image
+              src={char2.image || "/placeholder.svg"}
+              alt={char2.name}
+              width={128}
+              height={128}
+              className="object-cover"
             />
           </div>
           <select
@@ -472,9 +486,9 @@ export function DebateInterface() {
             onChange={(e) => setCharacter2(e.target.value)}
             className="w-[200px] p-2 rounded border bg-gray-800 text-white border-gray-600"
           >
-            {Object.keys(personas).map((id) => (
-              <option key={id} value={id}>
-                {personas[id].name}
+            {characters.map((char) => (
+              <option key={char.id} value={char.id}>
+                {char.name}
               </option>
             ))}
           </select>
@@ -485,17 +499,6 @@ export function DebateInterface() {
           )}
         </div>
       </div>
-
-      {/* Error message display */}
-      {audioError && (
-        <div className="mb-4 p-4 bg-red-900 text-white rounded-lg">
-          <p className="font-bold">Error:</p>
-          <p>{audioError}</p>
-          <p className="text-sm mt-2">
-            Note: The debate will continue even if there are audio playback issues.
-          </p>
-        </div>
-      )}
 
       {/* Debate Format Options */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
@@ -559,6 +562,45 @@ export function DebateInterface() {
         </div>
       </div>
 
+      {/* Audio Controls */}
+      <div className="mb-8 bg-gray-800 p-4 rounded-lg">
+        <h2 className="text-xl font-semibold mb-4 text-yellow-400">Audio Settings</h2>
+        <div className="flex items-center gap-4">
+          <div className="flex-1">
+            <label htmlFor="volume-control" className="block text-sm font-medium text-gray-300 mb-1">
+              Volume: {Math.round(volume * 100)}%
+            </label>
+            <input
+              id="volume-control"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={(e) => {
+                const newVolume = Number.parseFloat(e.target.value)
+                setVolume(newVolume)
+                if (audioRef.current) {
+                  audioRef.current.volume = newVolume
+                }
+              }}
+              className="w-full"
+            />
+          </div>
+          <button onClick={testAudio} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Test Audio
+          </button>
+          {isDebating && debateMessages.length > 0 && (
+            <button
+              onClick={downloadTranscript}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            >
+              Download Transcript
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Suggested Topics */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
         <h2 className="text-xl font-semibold mb-4 text-yellow-400">Suggested Debate Topics</h2>
@@ -600,31 +642,20 @@ export function DebateInterface() {
         <div className="flex flex-col items-center justify-center p-8 bg-gray-900 rounded-lg">
           {!isDebating ? (
             <div className="flex flex-col items-center justify-center text-gray-400">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-12 w-12 mb-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
+              <MessageSquare className="h-12 w-12 mb-4" />
               <p>Select a topic above to start the debate</p>
             </div>
           ) : (
             <div className="flex flex-col items-center">
-              {isPlaying ? (
+              {isPlaying || isLoadingAudio ? (
                 <div className="flex items-center justify-center mb-6">
                   <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-yellow-500 p-2">
-                    <img
-                      src={(currentSpeaker === character1 ? char1 : char2)?.image || "/placeholder.png"}
-                      alt={(currentSpeaker === character1 ? char1 : char2)?.name || "Speaking"}
-                      className="w-full h-full object-cover rounded-full"
+                    <Image
+                      src={(currentSpeaker === character1 ? char1 : char2).image || "/placeholder.svg"}
+                      alt={(currentSpeaker === character1 ? char1 : char2).name}
+                      width={192}
+                      height={192}
+                      className="object-cover rounded-full"
                     />
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse rounded-full"></div>
                   </div>
@@ -632,29 +663,23 @@ export function DebateInterface() {
               ) : (
                 <div className="flex items-center justify-center mb-6">
                   <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2 flex items-center justify-center bg-gray-800">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      className="h-16 w-16 text-gray-400"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                      />
-                    </svg>
+                    <MessageSquare className="h-16 w-16 text-gray-400" />
                   </div>
                 </div>
               )}
 
               <div className="text-center mb-4">
-                {isPlaying ? (
+                {isLoadingAudio ? (
+                  <div>
+                    <h3 className="text-xl font-bold text-yellow-400">Loading audio...</h3>
+                    <div className="mt-2">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto text-yellow-400" />
+                    </div>
+                  </div>
+                ) : isPlaying ? (
                   <div>
                     <h3 className="text-xl font-bold text-yellow-400">
-                      {currentSpeaker === character1 ? char1?.name : char2?.name} is speaking...
+                      {currentSpeaker === character1 ? char1.name : char2.name} is speaking...
                     </h3>
                     <div className="flex justify-center mt-2">
                       <div className="flex space-x-1">
@@ -684,49 +709,6 @@ export function DebateInterface() {
           )}
         </div>
       </div>
-
-      {/* Transcript Toggle Button (only show when debate is active) */}
-      {isDebating && debateMessages.length > 0 && (
-        <div className="mb-4 flex justify-center">
-          <button
-            onClick={() => setShowTranscript(!showTranscript)}
-            className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
-          >
-            {showTranscript ? "Hide Transcript" : "Show Transcript"}
-          </button>
-        </div>
-      )}
-
-      {/* Debate Transcript (hidden by default) */}
-      {isDebating && debateMessages.length > 0 && showTranscript && (
-        <div className="mb-8 bg-gray-800 p-4 rounded-lg">
-          <h2 className="text-xl font-semibold mb-4 text-yellow-400">Debate Transcript</h2>
-          <div className="space-y-4 max-h-96 overflow-y-auto p-4 bg-gray-900 rounded-lg">
-            {debateMessages.filter(msg => msg.character !== "user").map((message, index) => (
-              <div 
-                key={index} 
-                className={`p-4 rounded-lg ${
-                  message.character === character1 ? "bg-blue-900" : "bg-red-900"
-                }`}
-              >
-                <div className="flex items-center mb-2">
-                  <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
-                    <img 
-                      src={(message.character === character1 ? char1 : char2)?.image || "/placeholder.png"} 
-                      alt={(message.character === character1 ? char1 : char2)?.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <span className="font-bold">
-                    {(message.character === character1 ? char1 : char2)?.name}
-                  </span>
-                </div>
-                <p>{message.content}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Custom Question Input */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
@@ -781,13 +763,121 @@ export function DebateInterface() {
         </div>
       )}
 
-      {/* Hidden audio element */}
-      <audio 
-        ref={audioRef} 
-        className="hidden" 
-        controls 
+      {debugMode && (
+        <div className="mt-8 p-4 bg-gray-800 border border-gray-700 rounded-lg">
+          <h3 className="text-lg font-bold mb-2">Audio Debug Panel</h3>
+
+          <div className="mb-4">
+            <p>Current Speaker: {currentSpeaker || "None"}</p>
+            <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
+            <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
+            <p>Queue Length: {audioQueue.length}</p>
+            {audioError && <p className="text-red-500">Error: {audioError}</p>}
+          </div>
+
+          <div className="mb-4">
+            <h4 className="font-medium mb-1">Audio Queue:</h4>
+            <ul className="text-sm">
+              {audioQueue.map((item, index) => (
+                <li key={index} className="mb-1">
+                  {index === 0 && isPlaying ? "▶️ " : ""}
+                  {item.character}: {item.url}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex space-x-2">
+            <button
+              onClick={() => {
+                if (audioRef.current) {
+                  audioRef.current.volume = volume
+                  audioRef.current.muted = false
+                  audioRef.current.play().catch((err) => console.error("Manual play error:", err))
+                }
+              }}
+              className="px-3 py-1 bg-green-600 rounded"
+            >
+              Force Play
+            </button>
+
+            <button
+              onClick={() => {
+                if (audioRef.current) {
+                  audioRef.current.pause()
+                }
+              }}
+              className="px-3 py-1 bg-red-600 rounded"
+            >
+              Force Pause
+            </button>
+
+            <button
+              onClick={() => {
+                setAudioQueue([])
+                setIsPlayingQueue(false)
+                setIsPlaying(false)
+                if (audioRef.current) {
+                  audioRef.current.pause()
+                  audioRef.current.src = ""
+                }
+              }}
+              className="px-3 py-1 bg-yellow-600 rounded"
+            >
+              Clear Queue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Add a debug mode toggle button */}
+      <div className="mt-4 text-center">
+        <button onClick={() => setDebugMode(!debugMode)} className="text-sm text-gray-500 hover:text-gray-300">
+          {debugMode ? "Hide Debug Panel" : "Show Debug Panel"}
+        </button>
+      </div>
+
+      {/* Add transcript display */}
+      {showTranscript && (
+        <div className="mt-8 p-4 bg-gray-800 border border-gray-700 rounded-lg max-h-96 overflow-y-auto">
+          <h3 className="text-lg font-bold mb-2">Debate Transcript</h3>
+          {debateMessages.map((msg, idx) => {
+            if (msg.character === "user") return null
+            const speaker = msg.character === character1 ? char1.name : char2.name
+            return (
+              <div key={idx} className="mb-4">
+                <p className={`font-bold ${msg.character === character1 ? "text-blue-400" : "text-red-400"}`}>
+                  {speaker}:
+                </p>
+                <p className="text-gray-300">{msg.content}</p>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Add a transcript toggle button */}
+      {isDebating && debateMessages.length > 0 && (
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => setShowTranscript(!showTranscript)}
+            className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded"
+          >
+            {showTranscript ? "Hide Transcript" : "Show Transcript"}
+          </button>
+        </div>
+      )}
+
+      {/* Audio element */}
+      <audio
+        ref={audioRef}
+        className="hidden"
+        controls={false}
         preload="auto"
-        onError={(e) => console.error("Audio error event:", e)}
+        onError={(e) => {
+          console.error("Audio element error:", e)
+          setAudioError(`Audio element error: ${e.target.error?.message || "Unknown error"}`)
+        }}
       />
 
       <style jsx global>{`
@@ -826,6 +916,7 @@ function getCategoryColor(category) {
 
 // Helper function to get category icon
 function getCategoryIcon(category) {
+  // Simple SVG icons
   switch (category) {
     case "science":
       return (
@@ -861,90 +952,6 @@ function getCategoryIcon(category) {
           <circle cx="12" cy="12" r="10"></circle>
           <path d="M12 16v-4"></path>
           <path d="M12 8h.01"></path>
-        </svg>
-      )
-    case "politics":
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M2 20h.01"></path>
-          <path d="M7 20v-4"></path>
-          <path d="M12 20v-8"></path>
-          <path d="M17 20V8"></path>
-          <path d="M22 4v16"></path>
-        </svg>
-      )
-    case "arts":
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="13.5" cy="6.5" r="2.5"></circle>
-          <path d="M17 4c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z"></path>
-          <path d="M19 8c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z"></path>
-          <path d="M15 10c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z"></path>
-          <path d="M11 12c0 1-1 2-2 2s-2-1-2-2 1-2 2-2 2 1 2 2z"></path>
-          <path d="m3 16 2 2 4-4"></path>
-          <path d="M3 12h.01"></path>
-          <path d="M7 12h.01"></path>
-          <path d="M11 16h.01"></path>
-          <path d="M15 16h.01"></path>
-          <path d="M19 16h.01"></path>
-        </svg>
-      )
-    case "technology":
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <rect x="4" y="4" width="16" height="16" rx="2"></rect>
-          <rect x="9" y="9" width="6" height="6"></rect>
-          <path d="M15 2v2"></path>
-          <path d="M15 20v2"></path>
-          <path d="M2 15h2"></path>
-          <path d="M20 15h2"></path>
-        </svg>
-      )
-    case "history":
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 16 14"></polyline>
         </svg>
       )
     default:
