@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from "react";
 import { personas } from "../lib/personas";
 
@@ -164,8 +165,7 @@ export default function Home() {
     setDaVinciPaused(false);
 
     const encoded = encodeURIComponent(question);
-    const url = `/api/ask-audio?character=${selectedPersona}` +
-      `&question=${encoded}`;
+    const url = `/api/ask-audio?character=${selectedPersona}&question=${encoded}`;
 
     const audio = daVinciAudio.current;
     audio.src = url;
@@ -225,18 +225,21 @@ export default function Home() {
   const uiQuestions = ["Tell me Your Story", ...personas[selectedPersona].questions];
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background text-copy p-4 space-y-4 text-center">
-      <h1 className="text-h1 font-bold uppercase font-[Cinzel] tracking-wide text-heading">
-      TALK TO THE HEROES OF HISTORY</h1>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-background-top to-background text-copy p-4 space-y-6 text-center">
+      <h1 className="text-3xl sm:text-4xl font-heading font-bold tracking-wide text-heading drop-shadow-sm uppercase">
+        Talk to the Heroes of History
+      </h1>
+
       <img
-  src={personas[selectedPersona].image}
-  alt={personas[selectedPersona].name}
-  className="w-32 h-32 rounded-full object-cover mb-4 shadow-md"
-/>
+        src={personas[selectedPersona].image}
+        alt={personas[selectedPersona].name}
+        className="w-32 h-32 rounded-full object-cover shadow-md"
+      />
+
       <select
         value={selectedPersona}
         onChange={(e) => setSelectedPersona(e.target.value)}
-        className="mb-4 p-2 rounded border text-black bg-box-accent"
+        className="mt-2 mb-6 p-2 rounded border border-border text-white bg-dropdown-bg bg-opacity-95 shadow-sm"
       >
         {Object.values(personas).map((p) => (
           <option key={p.id} value={p.id}>
@@ -246,13 +249,14 @@ export default function Home() {
       </select>
 
       <p className="text-neutral-dark font-medium">{statusMessage}</p>
+
       <div className="flex flex-wrap justify-center gap-3">
         {uiQuestions.map((q, i) => (
           <button
             key={i}
             onClick={() => handleAsk(q)}
             disabled={isThinking}
-            className="bg-button hover:bg-button-dark disabled:bg-neutral-dark text-white py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out"
+            className="bg-button-primary hover:bg-button-hover disabled:bg-neutral-dark text-white py-2 px-5 rounded-full shadow-lg transition-all duration-200 ease-in-out"
           >
             {q}
           </button>
@@ -262,7 +266,7 @@ export default function Home() {
       {!isRecording && !isThinking && (
         <button
           onClick={startRecording}
-          className="bg-secondary hover:bg-secondary-dark text-white px-4 py-2 rounded shadow"
+          className="bg-voice-button text-black font-semibold py-3 px-6 mt-4 rounded-full shadow-lg ring-2 ring-heading hover:ring-offset-2 hover:scale-105 transition-all duration-200"
         >
           🎤 Ask with your voice
         </button>
@@ -271,28 +275,39 @@ export default function Home() {
       {(isDaVinciSpeaking || daVinciPaused) && (
         <button
           onClick={toggleDaVinci}
-          className="bg-secondary hover:bg-secondary-dark text-white px-4 py-2 rounded shadow"
+          className="bg-button-primary hover:bg-button-hover text-white py-2 px-5 rounded-full shadow-md"
         >
           {isDaVinciSpeaking ? "⏸️ Pause Response" : "▶️ Resume Response"}
         </button>
       )}
 
-<div className="mt-6 w-full max-w-md bg-box-accent p-4 rounded-lg shadow-lg">
-        <h2 className="text-h2 font-semibold mb-2">Popular Questions</h2>
-        {popularQuestions.map((item, idx) => (
-          <button
-            key={idx}
-            onClick={() => handleAsk(item.question)}
-            className="w-full text-left bg-box-accent hover:bg-neutral-dark py-2 px-3 mb-2 rounded text-black"
-          >
-            {item.question}
-          </button>
-        ))}
+      <div className="mt-10 w-full max-w-md bg-box-accent p-5 rounded-xl shadow-lg border border-border">
+        <h2 className="text-heading font-heading font-bold text-lg uppercase tracking-wider drop-shadow-sm opacity-90 mb-4">Popular Questions</h2>
+        <div className="space-y-2">
+          {popularQuestions.map((item, idx) => (
+            <button
+              key={idx}
+              onClick={() => handleAsk(item.question)}
+              className="w-full text-left bg-white hover:bg-neutral-dark py-2 px-3 rounded text-black"
+            >
+              {item.question}
+            </button>
+          ))}
+        </div>
       </div>
 
       <audio ref={podcastAudio} hidden preload="auto" />
       <audio ref={daVinciAudio} hidden preload="auto" />
       <audio hidden preload="auto" src="/silent.mp3" />
+
+      <footer className="mt-10 text-sm text-copy-soft">
+  <div className="flex space-x-6 justify-center">
+    <a href="/about" className="hover:underline">About</a>
+    <a href="/feedback" className="hover:underline">Feedback</a>
+  </div>
+</footer>
+
     </div>
   );
 }
+

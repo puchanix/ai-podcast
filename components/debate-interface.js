@@ -158,19 +158,36 @@ export function DebateInterface() {
     }
   }
 
+  // Update the testAudio function to check if silent.mp3 exists
   const testAudio = () => {
-    // Create a test audio element - use the same approach as in main page
-    const testAudioEl = new Audio("/silent.mp3")
-    testAudioEl.volume = volume
+    // First check if silent.mp3 exists with a fetch
+    fetch("/silent.mp3")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Silent.mp3 not found: ${response.status} ${response.statusText}`)
+        }
+        return response.blob()
+      })
+      .then((blob) => {
+        console.log("Silent.mp3 exists, size:", blob.size, "bytes")
+        setAudioError(`Silent.mp3 exists, size: ${blob.size} bytes`)
 
-    testAudioEl
-      .play()
+        // Now try to play it
+        const testAudioEl = new Audio("/silent.mp3")
+        testAudioEl.volume = volume
+
+        testAudioEl.onloadstart = () => console.log("Test audio loading started")
+        testAudioEl.oncanplaythrough = () => console.log("Test audio can play through")
+        testAudioEl.onerror = (e) => console.error("Test audio error:", e, testAudioEl.error)
+
+        return testAudioEl.play()
+      })
       .then(() => {
         console.log("Test audio playback successful")
         setAudioError("Test audio playback successful")
       })
       .catch((err) => {
-        console.error("Test audio playback failed:", err)
+        console.error("Test audio failed:", err)
         setAudioError(`Test audio failed: ${err.message}`)
       })
   }

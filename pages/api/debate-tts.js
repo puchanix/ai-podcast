@@ -1,4 +1,4 @@
-import { personas } from "./personas-data"
+import { personas } from "../../lib/personas"
 
 export default async function handler(req, res) {
   try {
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Character not found" })
     }
 
-    const voice = character.voice
+    const voice = character.voice || "en-US-Neural2-D" // Default voice if not specified
     console.log(`TTS API: Generating audio for ${character.name} with voice ${voice}`)
 
     // Check if we have an ElevenLabs API key
