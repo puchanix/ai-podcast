@@ -24,6 +24,7 @@ export function DebateInterface() {
   const [isLoadingAudio, setIsLoadingAudio] = useState(false)
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
+  const [isInitializing, setIsInitializing] = useState(true)
 
   // Store current audio URLs
   const [currentAudioUrls, setCurrentAudioUrls] = useState({
@@ -39,6 +40,24 @@ export function DebateInterface() {
   // Get character objects
   const char1 = personas[character1]
   const char2 = personas[character2]
+
+  // Initialize audio elements with silent.mp3
+  useEffect(() => {
+    if (char1AudioRef.current && char2AudioRef.current) {
+      // Set a default silent audio file to prevent "Empty src attribute" errors
+      char1AudioRef.current.src = "/silent.mp3"
+      char2AudioRef.current.src = "/silent.mp3"
+
+      // Don't actually load or play these, just set the src
+
+      // Mark initialization as complete after a short delay
+      const timer = setTimeout(() => {
+        setIsInitializing(false)
+      }, 500)
+
+      return () => clearTimeout(timer)
+    }
+  }, [])
 
   // Function to unlock audio on iOS
   const unlockAudio = async () => {
@@ -113,12 +132,12 @@ export function DebateInterface() {
     // Stop any playing audio
     if (char1AudioRef.current) {
       char1AudioRef.current.pause()
-      char1AudioRef.current.src = ""
+      char1AudioRef.current.src = "/silent.mp3" // Set to silent.mp3 instead of empty string
     }
 
     if (char2AudioRef.current) {
       char2AudioRef.current.pause()
-      char2AudioRef.current.src = ""
+      char2AudioRef.current.src = "/silent.mp3" // Set to silent.mp3 instead of empty string
     }
   }
 
@@ -149,8 +168,12 @@ export function DebateInterface() {
           console.log("Attempting to play character 2 audio:", currentAudioUrls.char2)
 
           // Make sure the src is set correctly
-          if (!char2AudioRef.current.src || char2AudioRef.current.src === window.location.href) {
-            console.log("Character 2 audio src is empty, setting it now")
+          if (
+            !char2AudioRef.current.src ||
+            char2AudioRef.current.src === window.location.href ||
+            char2AudioRef.current.src.endsWith("/silent.mp3")
+          ) {
+            console.log("Character 2 audio src is empty or silent, setting it now")
             char2AudioRef.current.src = currentAudioUrls.char2
             char2AudioRef.current.load()
           }
@@ -158,7 +181,9 @@ export function DebateInterface() {
           // Play with error handling
           char2AudioRef.current.play().catch((err) => {
             console.error("Error playing character 2 audio:", err)
-            setAudioError(`Error playing character 2: ${err.message}`)
+            if (!isInitializing) {
+              setAudioError(`Error playing character 2: ${err.message}`)
+            }
           })
         } else {
           console.log(
@@ -170,6 +195,9 @@ export function DebateInterface() {
       }
 
       char1AudioRef.current.onerror = (e) => {
+        // Only show errors if we're not in the initialization phase
+        if (isInitializing) return
+
         const errorDetails = char1AudioRef.current.error
           ? `${char1AudioRef.current.error.code}: ${char1AudioRef.current.error.message}`
           : "Unknown error"
@@ -202,6 +230,9 @@ export function DebateInterface() {
       }
 
       char2AudioRef.current.onerror = (e) => {
+        // Only show errors if we're not in the initialization phase
+        if (isInitializing) return
+
         const errorDetails = char2AudioRef.current.error
           ? `${char2AudioRef.current.error.code}: ${char2AudioRef.current.error.message}`
           : "Unknown error"
@@ -211,7 +242,7 @@ export function DebateInterface() {
         setIsPlaying(false)
       }
     }
-  }, [character1, character2, currentSpeaker, currentAudioUrls])
+  }, [character1, character2, currentSpeaker, currentAudioUrls, isInitializing])
 
   // Function to generate debate topics based on selected characters
   const generateDebateTopics = async () => {
@@ -664,7 +695,11 @@ export function DebateInterface() {
     if (charNum === 1) {
       if (char1AudioRef.current && currentAudioUrls.char1) {
         // Make sure the src is set correctly
-        if (!char1AudioRef.current.src || char1AudioRef.current.src === window.location.href) {
+        if (
+          !char1AudioRef.current.src ||
+          char1AudioRef.current.src === window.location.href ||
+          char1AudioRef.current.src.endsWith("/silent.mp3")
+        ) {
           char1AudioRef.current.src = currentAudioUrls.char1
           char1AudioRef.current.load()
         }
@@ -680,7 +715,11 @@ export function DebateInterface() {
     } else if (charNum === 2) {
       if (char2AudioRef.current && currentAudioUrls.char2) {
         // Make sure the src is set correctly
-        if (!char2AudioRef.current.src || char2AudioRef.current.src === window.location.href) {
+        if (
+          !char2AudioRef.current.src ||
+          char2AudioRef.current.src === window.location.href ||
+          char2AudioRef.current.src.endsWith("/silent.mp3")
+        ) {
           char2AudioRef.current.src = currentAudioUrls.char2
           char2AudioRef.current.load()
         }
@@ -1080,6 +1119,7 @@ export function DebateInterface() {
             <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
             <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
             <p>Is Unlocking Audio: {isUnlockingAudio ? "Yes" : "No"}</p>
+            <p>Is Initializing: {isInitializing ? "Yes" : "No"}</p>
             <p>Character 1 Audio URL: {currentAudioUrls.char1 || "None"}</p>
             <p>Character 2 Audio URL: {currentAudioUrls.char2 || "None"}</p>
             <p>Character 1 Audio Element src: {char1AudioRef.current?.src || "None"}</p>
