@@ -1,24 +1,87 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import Head from "next/head"
+import { AudioContext, webkitAudioContext } from "some-audio-context-library" // Placeholder for importing AudioContext and webkitAudioContext
 
 export default function AudioTest() {
-  const [testResult, setTestResult] = useState("")
-  const [silentResult, setSilentResult] = useState("")
-  const [fileCheckResult, setFileCheckResult] = useState("")
-  const [audioRefResult, setAudioRefResult] = useState("")
-  const [isAudioInitialized, setIsAudioInitialized] = useState(false)
+  const [testResults, setTestResults] = useState([])
+  const [silentMp3Exists, setSilentMp3Exists] = useState(null)
+  const [testAudioExists, setTestAudioExists] = useState(null)
+  const [audioInitialized, setAudioInitialized] = useState(false)
+  const [browserInfo, setBrowserInfo] = useState({})
 
   const audioRef = useRef(null)
   const silentAudioRef = useRef(null)
 
-  // Function to unlock audio on iOS
-  const unlockAudio = () => {
-    console.log("Attempting to unlock audio...")
-    setTestResult("Attempting to unlock audio...")
+  // Add a test result
+  const addResult = (test, result, success = true) => {
+    setTestResults((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        test,
+        result,
+        success,
+        timestamp: new Date().toLocaleTimeString(),
+      },
+    ])
+  }
 
-    // Play silent audio to unlock audio on iOS
+  // Get browser information
+  useEffect(() => {
+    setBrowserInfo({
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      vendor: navigator.vendor,
+      audioContext: typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined",
+    })
+  }, [])
+
+  // Check if silent.mp3 exists
+  const checkSilentMp3 = async () => {
+    try {
+      addResult("Checking silent.mp3", "Fetching...")
+      const response = await fetch("/silent.mp3")
+
+      if (response.ok) {
+        const size = response.headers.get("content-length") || "unknown size"
+        setSilentMp3Exists(true)
+        addResult("silent.mp3 check", `File exists (${size} bytes)`, true)
+      } else {
+        setSilentMp3Exists(false)
+        addResult("silent.mp3 check", `File not found: ${response.status} ${response.statusText}`, false)
+      }
+    } catch (err) {
+      setSilentMp3Exists(false)
+      addResult("silent.mp3 check", `Error: ${err.message}`, false)
+    }
+  }
+
+  // Check if test-audio.mp3 exists
+  const checkTestAudio = async () => {
+    try {
+      addResult("Checking test-audio.mp3", "Fetching...")
+      const response = await fetch("/test-audio.mp3")
+
+      if (response.ok) {
+        const size = response.headers.get("content-length") || "unknown size"
+        setTestAudioExists(true)
+        addResult("test-audio.mp3 check", `File exists (${size} bytes)`, true)
+      } else {
+        setTestAudioExists(false)
+        addResult("test-audio.mp3 check", `File not found: ${response.status} ${response.statusText}`, false)
+      }
+    } catch (err) {
+      setTestAudioExists(false)
+      addResult("test-audio.mp3 check", `Error: ${err.message}`, false)
+    }
+  }
+
+  // Unlock audio (for iOS)
+  const unlockAudio = () => {
+    addResult("Unlocking audio", "Attempting to unlock audio...")
+
     if (silentAudioRef.current) {
       silentAudioRef.current.src = "/silent.mp3"
       silentAudioRef.current.load()
@@ -26,93 +89,45 @@ export default function AudioTest() {
       silentAudioRef.current
         .play()
         .then(() => {
-          console.log("Silent audio played successfully - audio unlocked")
-          setTestResult("Silent audio played successfully - audio unlocked")
-          setIsAudioInitialized(true)
+          setAudioInitialized(true)
+          addResult("Audio unlock", "Audio unlocked successfully", true)
         })
         .catch((err) => {
-          console.error("Failed to play silent audio:", err)
-          setTestResult(`Failed to unlock audio: ${err.message}`)
+          addResult("Audio unlock", `Failed: ${err.message}`, false)
         })
+    } else {
+      addResult("Audio unlock", "Silent audio ref not available", false)
     }
   }
 
-  // Test silent.mp3
-  const testSilentMp3 = () => {
-    const audio = new Audio("/silent.mp3")
-    setSilentResult("Testing silent.mp3...")
+  // Play test audio using Audio constructor
+  const playTestAudio = () => {
+    addResult("Test audio", "Attempting to play test audio...")
 
-    audio.oncanplaythrough = () => {
-      setSilentResult("silent.mp3 loaded successfully")
-    }
-
-    audio.onerror = (e) => {
-      const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
-      setSilentResult(`Error loading silent.mp3: ${errorDetails}`)
-    }
-
-    audio.load()
-    audio
-      .play()
-      .then(() => {
-        setSilentResult("silent.mp3 played successfully")
-      })
-      .catch((err) => {
-        setSilentResult(`Error playing silent.mp3: ${err.message}`)
-      })
-  }
-
-  // Test test-audio.mp3
-  const testAudioMp3 = () => {
     const audio = new Audio("/test-audio.mp3")
-    setTestResult("Testing test-audio.mp3...")
 
     audio.oncanplaythrough = () => {
-      setTestResult("test-audio.mp3 loaded successfully")
+      addResult("Test audio", "Audio loaded and can play through", true)
     }
 
     audio.onerror = (e) => {
       const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
-      setTestResult(`Error loading test-audio.mp3: ${errorDetails}`)
+      addResult("Test audio", `Error: ${errorDetails}`, false)
     }
 
-    audio.load()
     audio
       .play()
       .then(() => {
-        setTestResult("test-audio.mp3 played successfully")
+        addResult("Test audio", "Playback started successfully", true)
       })
       .catch((err) => {
-        setTestResult(`Error playing test-audio.mp3: ${err.message}`)
+        addResult("Test audio", `Playback failed: ${err.message}`, false)
       })
   }
 
-  // Check if files exist
-  const checkFiles = async () => {
-    setFileCheckResult("Checking files...")
-
-    try {
-      // Check silent.mp3
-      const silentResponse = await fetch("/silent.mp3")
-      const silentStatus = silentResponse.ok
-        ? `silent.mp3 exists (${silentResponse.headers.get("content-length") || "unknown"} bytes)`
-        : `silent.mp3 not found: ${silentResponse.status} ${silentResponse.statusText}`
-
-      // Check test-audio.mp3
-      const testResponse = await fetch("/test-audio.mp3")
-      const testStatus = testResponse.ok
-        ? `test-audio.mp3 exists (${testResponse.headers.get("content-length") || "unknown"} bytes)`
-        : `test-audio.mp3 not found: ${testResponse.status} ${testResponse.statusText}`
-
-      setFileCheckResult(`${silentStatus}\n${testStatus}`)
-    } catch (err) {
-      setFileCheckResult(`Error checking files: ${err.message}`)
-    }
-  }
-
-  // Test audio ref
-  const testAudioRef = () => {
-    setAudioRefResult("Testing audio ref...")
+  // Play test audio using audio ref
+  const playTestAudioWithRef = () => {
+    addResult("Test audio (ref)", "Attempting to play test audio with ref...")
 
     if (audioRef.current) {
       audioRef.current.src = "/test-audio.mp3"
@@ -121,18 +136,32 @@ export default function AudioTest() {
       audioRef.current
         .play()
         .then(() => {
-          setAudioRefResult("Audio ref played successfully")
+          addResult("Test audio (ref)", "Playback started successfully", true)
         })
         .catch((err) => {
-          setAudioRefResult(`Error playing audio ref: ${err.message}`)
+          addResult("Test audio (ref)", `Playback failed: ${err.message}`, false)
         })
     } else {
-      setAudioRefResult("Audio ref not available")
+      addResult("Test audio (ref)", "Audio ref not available", false)
     }
   }
 
+  // Run all tests
+  const runAllTests = () => {
+    setTestResults([])
+    checkSilentMp3()
+    checkTestAudio()
+    unlockAudio()
+    setTimeout(() => {
+      playTestAudio()
+    }, 1000)
+    setTimeout(() => {
+      playTestAudioWithRef()
+    }, 2000)
+  }
+
   return (
-    <div className="container mx-auto p-4 max-w-3xl">
+    <div className="container mx-auto p-4 max-w-4xl">
       <Head>
         <title>Audio Test Page</title>
       </Head>
@@ -140,87 +169,92 @@ export default function AudioTest() {
       <h1 className="text-3xl font-bold mb-6">Audio Test Page</h1>
 
       <div className="mb-8 p-4 bg-gray-100 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4">Audio Initialization</h2>
-        <p className="mb-2">Status: {isAudioInitialized ? "✅ Initialized" : "❌ Not Initialized"}</p>
-        <button onClick={unlockAudio} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
-          Unlock Audio
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div className="p-4 bg-gray-100 rounded-lg">
-          <h2 className="text-xl font-semibold mb-4">Test silent.mp3</h2>
-          <button onClick={testSilentMp3} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 mb-4">
-            Test silent.mp3
-          </button>
-          <pre className="bg-gray-200 p-2 rounded whitespace-pre-wrap">{silentResult}</pre>
-        </div>
-
-        <div className="p-4 bg-gray-100 rounded-lg">
-          <h2 className="text-xl font-semibold mb-4">Test test-audio.mp3</h2>
-          <button onClick={testAudioMp3} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 mb-4">
-            Test test-audio.mp3
-          </button>
-          <pre className="bg-gray-200 p-2 rounded whitespace-pre-wrap">{testResult}</pre>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <div className="p-4 bg-gray-100 rounded-lg">
-          <h2 className="text-xl font-semibold mb-4">Check File Existence</h2>
-          <button onClick={checkFiles} className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 mb-4">
-            Check Files
-          </button>
-          <pre className="bg-gray-200 p-2 rounded whitespace-pre-wrap">{fileCheckResult}</pre>
-        </div>
-
-        <div className="p-4 bg-gray-100 rounded-lg">
-          <h2 className="text-xl font-semibold mb-4">Test Audio Ref</h2>
-          <button
-            onClick={testAudioRef}
-            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 mb-4"
-          >
-            Test Audio Ref
-          </button>
-          <pre className="bg-gray-200 p-2 rounded whitespace-pre-wrap">{audioRefResult}</pre>
-        </div>
-      </div>
-
-      <div className="p-4 bg-gray-100 rounded-lg mb-8">
-        <h2 className="text-xl font-semibold mb-4">Direct Audio Elements</h2>
-        <div className="mb-4">
-          <h3 className="font-medium mb-2">Silent Audio:</h3>
-          <audio ref={silentAudioRef} controls src="/silent.mp3" className="w-full">
-            Your browser does not support the audio element.
-          </audio>
-        </div>
-
-        <div>
-          <h3 className="font-medium mb-2">Test Audio:</h3>
-          <audio ref={audioRef} controls src="/test-audio.mp3" className="w-full">
-            Your browser does not support the audio element.
-          </audio>
-        </div>
-      </div>
-
-      <div className="p-4 bg-gray-100 rounded-lg">
         <h2 className="text-xl font-semibold mb-4">Browser Information</h2>
-        <pre className="bg-gray-200 p-2 rounded whitespace-pre-wrap" id="browser-info">
-          JavaScript is required to display browser information.
-        </pre>
+        <div className="space-y-2">
+          <p>
+            <strong>User Agent:</strong> {browserInfo.userAgent}
+          </p>
+          <p>
+            <strong>Platform:</strong> {browserInfo.platform}
+          </p>
+          <p>
+            <strong>Vendor:</strong> {browserInfo.vendor}
+          </p>
+          <p>
+            <strong>AudioContext Support:</strong> {browserInfo.audioContext ? "Yes" : "No"}
+          </p>
+        </div>
       </div>
 
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-          document.getElementById('browser-info').textContent = 
-            'User Agent: ' + navigator.userAgent + '\\n' +
-            'Platform: ' + navigator.platform + '\\n' +
-            'Vendor: ' + navigator.vendor + '\\n' +
-            'Audio Context Support: ' + (window.AudioContext || window.webkitAudioContext ? 'Yes' : 'No');
-        `,
-        }}
-      />
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Audio Tests</h2>
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button onClick={unlockAudio} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+            Unlock Audio
+          </button>
+          <button onClick={checkSilentMp3} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            Check silent.mp3
+          </button>
+          <button onClick={checkTestAudio} className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700">
+            Check test-audio.mp3
+          </button>
+          <button onClick={playTestAudio} className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700">
+            Play Test Audio
+          </button>
+          <button onClick={playTestAudioWithRef} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+            Play Test Audio (Ref)
+          </button>
+          <button onClick={runAllTests} className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-900">
+            Run All Tests
+          </button>
+        </div>
+
+        <div className="mb-4">
+          <h3 className="font-medium mb-2">Audio Status:</h3>
+          <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
+          <p>silent.mp3 Exists: {silentMp3Exists === null ? "Unknown" : silentMp3Exists ? "Yes" : "No"}</p>
+          <p>test-audio.mp3 Exists: {testAudioExists === null ? "Unknown" : testAudioExists ? "Yes" : "No"}</p>
+        </div>
+
+        <div className="border rounded-lg overflow-hidden">
+          <table className="min-w-full">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="py-2 px-4 text-left">Time</th>
+                <th className="py-2 px-4 text-left">Test</th>
+                <th className="py-2 px-4 text-left">Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              {testResults.length === 0 ? (
+                <tr>
+                  <td colSpan="3" className="py-4 px-4 text-center text-gray-500">
+                    No tests run yet. Click a button above to start testing.
+                  </td>
+                </tr>
+              ) : (
+                testResults.map((result) => (
+                  <tr key={result.id} className="border-t">
+                    <td className="py-2 px-4 text-sm text-gray-600">{result.timestamp}</td>
+                    <td className="py-2 px-4">{result.test}</td>
+                    <td className={`py-2 px-4 ${result.success ? "text-green-600" : "text-red-600"}`}>
+                      {result.result}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Hidden audio elements */}
+      <audio ref={audioRef} className="hidden" controls={false} preload="auto" />
+      <audio ref={silentAudioRef} className="hidden" controls={false} preload="auto" />
+
+      <div className="mt-8 text-center text-gray-500 text-sm">
+        <p>This page is used for testing audio playback functionality.</p>
+      </div>
     </div>
   )
 }
