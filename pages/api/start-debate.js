@@ -23,8 +23,8 @@ export default async function handler(req, res) {
     const opening2 = `From my perspective as ${char2.name}, I see "${topic}" through a different lens. While I appreciate ${char1.name}'s approach, I believe we must also consider the practical implications and historical context of this matter.`
 
     // Generate audio using our TTS endpoint
-    let audioUrl1 = char1.podcast || "/silent.mp3"
-    let audioUrl2 = char2.podcast || "/silent.mp3"
+    let audioUrl1 = "/silent.mp3"
+    let audioUrl2 = "/silent.mp3"
 
     try {
       // Generate audio for character 1

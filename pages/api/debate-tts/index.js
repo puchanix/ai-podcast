@@ -1,6 +1,10 @@
 import { personas } from "../../../lib/personas"
 
 export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" })
+  }
+
   try {
     const { text, characterId } = req.body
 
@@ -14,11 +18,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Character not found" })
     }
 
-    const voice = character.voice
+    const voice = character.voice || "en-US-Neural2-D" // Default voice if not specified
 
     // Use ElevenLabs API for high-quality TTS
     try {
-      const response = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + getVoiceId(voice), {
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${getVoiceId(voice)}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -35,24 +39,25 @@ export default async function handler(req, res) {
       })
 
       if (!response.ok) {
-        // If ElevenLabs fails, return a silent MP3 as fallback
         console.error(`ElevenLabs API error: ${await response.text()}`)
-        return res.status(200).json({ audioUrl: "/silent.mp3" })
+        return res.status(200).json({ audioUrl: "/silent.mp3" }) // Return silent audio as fallback
       }
 
-      // In a real implementation, you would store the audio file
-      // For now, we'll just return a URL to a mock API route
-      const filename = `debate_${characterId}_${Date.now()}.mp3`
-      const audioUrl = `/api/audio/${filename}`
+      // Get the audio data
+      const audioBuffer = await response.arrayBuffer()
 
-      return res.status(200).json({ audioUrl })
+      // Create a unique filename
+      const filename = `debate_${characterId}_${Date.now()}.mp3`
+
+      // Return the URL to the audio file
+      return res.status(200).json({ audioUrl: `/api/audio/${filename}` })
     } catch (error) {
-      console.error("Error calling ElevenLabs:", error)
-      return res.status(200).json({ audioUrl: "/silent.mp3" })
+      console.error("Error in TTS API:", error)
+      return res.status(200).json({ audioUrl: "/silent.mp3" }) // Return silent audio as fallback
     }
   } catch (error) {
     console.error("Error in Debate TTS API:", error)
-    return res.status(200).json({ audioUrl: "/silent.mp3" })
+    return res.status(200).json({ audioUrl: "/silent.mp3" }) // Return silent audio as fallback
   }
 }
 
