@@ -1,50 +1,24 @@
 "use client"
 
-import { useRef, useState, useEffect } from "react"
+import { useState, useRef } from "react"
+import Head from "next/head"
 
 export default function AudioTest() {
-  const [status, setStatus] = useState("Ready to test")
-  const [errorDetails, setErrorDetails] = useState(null)
-  const [audioFiles, setAudioFiles] = useState([])
+  const [testResult, setTestResult] = useState("")
+  const [silentResult, setSilentResult] = useState("")
+  const [fileCheckResult, setFileCheckResult] = useState("")
+  const [audioRefResult, setAudioRefResult] = useState("")
+  const [isAudioInitialized, setIsAudioInitialized] = useState(false)
+
   const audioRef = useRef(null)
   const silentAudioRef = useRef(null)
 
-  // Check for available audio files on mount
-  useEffect(() => {
-    const checkFiles = async () => {
-      const filesToCheck = ["/silent.mp3", "/test-audio.mp3", "/test-audio.wav"]
-
-      const results = []
-
-      for (const file of filesToCheck) {
-        try {
-          const response = await fetch(file, { method: "HEAD" })
-          results.push({
-            file,
-            exists: response.ok,
-            status: response.status,
-            contentType: response.headers.get("content-type"),
-            contentLength: response.headers.get("content-length"),
-          })
-        } catch (err) {
-          results.push({
-            file,
-            exists: false,
-            error: err.message,
-          })
-        }
-      }
-
-      setAudioFiles(results)
-    }
-
-    checkFiles()
-  }, [])
-
+  // Function to unlock audio on iOS
   const unlockAudio = () => {
-    setStatus("Attempting to unlock audio...")
-    setErrorDetails(null)
+    console.log("Attempting to unlock audio...")
+    setTestResult("Attempting to unlock audio...")
 
+    // Play silent audio to unlock audio on iOS
     if (silentAudioRef.current) {
       silentAudioRef.current.src = "/silent.mp3"
       silentAudioRef.current.load()
@@ -52,316 +26,201 @@ export default function AudioTest() {
       silentAudioRef.current
         .play()
         .then(() => {
-          setStatus("Audio unlocked successfully!")
+          console.log("Silent audio played successfully - audio unlocked")
+          setTestResult("Silent audio played successfully - audio unlocked")
+          setIsAudioInitialized(true)
         })
         .catch((err) => {
-          setStatus("Failed to unlock audio")
-          setErrorDetails(
-            JSON.stringify(
-              {
-                error: err.toString(),
-                name: err.name,
-                message: err.message,
-              },
-              null,
-              2,
-            ),
-          )
+          console.error("Failed to play silent audio:", err)
+          setTestResult(`Failed to unlock audio: ${err.message}`)
         })
-    } else {
-      setStatus("Silent audio ref not available")
     }
   }
 
+  // Test silent.mp3
   const testSilentMp3 = () => {
-    setStatus("Testing silent.mp3...")
-    setErrorDetails(null)
-
     const audio = new Audio("/silent.mp3")
-    audio.volume = 0.5
+    setSilentResult("Testing silent.mp3...")
 
     audio.oncanplaythrough = () => {
-      setStatus("silent.mp3 loaded successfully!")
+      setSilentResult("silent.mp3 loaded successfully")
     }
 
     audio.onerror = (e) => {
-      console.error("Silent.mp3 error:", e)
-      setStatus("silent.mp3 failed to load")
-      setErrorDetails(
-        JSON.stringify(
-          {
-            error: e,
-            code: audio.error ? audio.error.code : "unknown",
-            message: audio.error ? audio.error.message : "unknown error",
-          },
-          null,
-          2,
-        ),
-      )
+      const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
+      setSilentResult(`Error loading silent.mp3: ${errorDetails}`)
     }
 
+    audio.load()
     audio
       .play()
       .then(() => {
-        setStatus("silent.mp3 playing successfully!")
+        setSilentResult("silent.mp3 played successfully")
       })
       .catch((err) => {
-        setStatus("silent.mp3 play() failed")
-        setErrorDetails(
-          JSON.stringify(
-            {
-              error: err.toString(),
-              name: err.name,
-              message: err.message,
-            },
-            null,
-            2,
-          ),
-        )
+        setSilentResult(`Error playing silent.mp3: ${err.message}`)
       })
   }
 
-  const testTestAudio = () => {
-    setStatus("Testing test-audio.mp3...")
-    setErrorDetails(null)
-
+  // Test test-audio.mp3
+  const testAudioMp3 = () => {
     const audio = new Audio("/test-audio.mp3")
-    audio.volume = 0.5
+    setTestResult("Testing test-audio.mp3...")
 
     audio.oncanplaythrough = () => {
-      setStatus("test-audio.mp3 loaded successfully!")
+      setTestResult("test-audio.mp3 loaded successfully")
     }
 
     audio.onerror = (e) => {
-      console.error("Test audio error:", e)
-      setStatus("test-audio.mp3 failed to load")
-      setErrorDetails(
-        JSON.stringify(
-          {
-            error: e,
-            code: audio.error ? audio.error.code : "unknown",
-            message: audio.error ? audio.error.message : "unknown error",
-          },
-          null,
-          2,
-        ),
-      )
+      const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
+      setTestResult(`Error loading test-audio.mp3: ${errorDetails}`)
     }
 
+    audio.load()
     audio
       .play()
       .then(() => {
-        setStatus("test-audio.mp3 playing successfully!")
+        setTestResult("test-audio.mp3 played successfully")
       })
       .catch((err) => {
-        setStatus("test-audio.mp3 play() failed")
-        setErrorDetails(
-          JSON.stringify(
-            {
-              error: err.toString(),
-              name: err.name,
-              message: err.message,
-            },
-            null,
-            2,
-          ),
-        )
+        setTestResult(`Error playing test-audio.mp3: ${err.message}`)
       })
   }
 
-  const testAudioRef = () => {
-    setStatus("Testing audio ref...")
-    setErrorDetails(null)
-
-    if (!audioRef.current) {
-      setStatus("Audio ref not available")
-      return
-    }
-
-    audioRef.current.src = "/test-audio.mp3"
-    audioRef.current.volume = 0.5
-    audioRef.current.load()
-
-    audioRef.current
-      .play()
-      .then(() => {
-        setStatus("Audio ref playing successfully!")
-      })
-      .catch((err) => {
-        setStatus("Audio ref play() failed")
-        setErrorDetails(
-          JSON.stringify(
-            {
-              error: err.toString(),
-              name: err.name,
-              message: err.message,
-            },
-            null,
-            2,
-          ),
-        )
-      })
-  }
-
-  const testFetch = async () => {
-    setStatus("Testing fetch for silent.mp3...")
-    setErrorDetails(null)
+  // Check if files exist
+  const checkFiles = async () => {
+    setFileCheckResult("Checking files...")
 
     try {
-      const response = await fetch("/silent.mp3")
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const blob = await response.blob()
-      setStatus(`Fetch successful! File size: ${blob.size} bytes`)
+      // Check silent.mp3
+      const silentResponse = await fetch("/silent.mp3")
+      const silentStatus = silentResponse.ok
+        ? `silent.mp3 exists (${silentResponse.headers.get("content-length") || "unknown"} bytes)`
+        : `silent.mp3 not found: ${silentResponse.status} ${silentResponse.statusText}`
+
+      // Check test-audio.mp3
+      const testResponse = await fetch("/test-audio.mp3")
+      const testStatus = testResponse.ok
+        ? `test-audio.mp3 exists (${testResponse.headers.get("content-length") || "unknown"} bytes)`
+        : `test-audio.mp3 not found: ${testResponse.status} ${testResponse.statusText}`
+
+      setFileCheckResult(`${silentStatus}\n${testStatus}`)
     } catch (err) {
-      setStatus("Fetch failed")
-      setErrorDetails(
-        JSON.stringify(
-          {
-            error: err.toString(),
-            name: err.name,
-            message: err.message,
-          },
-          null,
-          2,
-        ),
-      )
+      setFileCheckResult(`Error checking files: ${err.message}`)
+    }
+  }
+
+  // Test audio ref
+  const testAudioRef = () => {
+    setAudioRefResult("Testing audio ref...")
+
+    if (audioRef.current) {
+      audioRef.current.src = "/test-audio.mp3"
+      audioRef.current.load()
+
+      audioRef.current
+        .play()
+        .then(() => {
+          setAudioRefResult("Audio ref played successfully")
+        })
+        .catch((err) => {
+          setAudioRefResult(`Error playing audio ref: ${err.message}`)
+        })
+    } else {
+      setAudioRefResult("Audio ref not available")
     }
   }
 
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", padding: "20px", fontFamily: "Arial, sans-serif" }}>
-      <h1>Audio Test Page</h1>
-      <p>This page helps diagnose audio playback issues in the debate interface.</p>
+    <div className="container mx-auto p-4 max-w-3xl">
+      <Head>
+        <title>Audio Test Page</title>
+      </Head>
 
-      <div style={{ marginBottom: "20px", padding: "10px", backgroundColor: "#f0f0f0", borderRadius: "5px" }}>
-        <h2>Status: {status}</h2>
-        {errorDetails && (
-          <pre style={{ backgroundColor: "#ffe0e0", padding: "10px", borderRadius: "5px", overflow: "auto" }}>
-            {errorDetails}
-          </pre>
-        )}
-      </div>
+      <h1 className="text-3xl font-bold mb-6">Audio Test Page</h1>
 
-      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
-        <button
-          onClick={unlockAudio}
-          style={{
-            padding: "10px 15px",
-            backgroundColor: "#FF5722",
-            color: "white",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
+      <div className="mb-8 p-4 bg-gray-100 rounded-lg">
+        <h2 className="text-xl font-semibold mb-4">Audio Initialization</h2>
+        <p className="mb-2">Status: {isAudioInitialized ? "✅ Initialized" : "❌ Not Initialized"}</p>
+        <button onClick={unlockAudio} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
           Unlock Audio
         </button>
-
-        <button
-          onClick={testSilentMp3}
-          style={{
-            padding: "10px 15px",
-            backgroundColor: "#4CAF50",
-            color: "white",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          Test silent.mp3
-        </button>
-
-        <button
-          onClick={testTestAudio}
-          style={{
-            padding: "10px 15px",
-            backgroundColor: "#2196F3",
-            color: "white",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          Test test-audio.mp3
-        </button>
-
-        <button
-          onClick={testAudioRef}
-          style={{
-            padding: "10px 15px",
-            backgroundColor: "#9C27B0",
-            color: "white",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          Test Audio Ref
-        </button>
-
-        <button
-          onClick={testFetch}
-          style={{
-            padding: "10px 15px",
-            backgroundColor: "#FF9800",
-            color: "white",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
-          Test Fetch
-        </button>
       </div>
 
-      <div style={{ marginBottom: "20px" }}>
-        <h3>Audio Element (visible for testing)</h3>
-        <audio ref={audioRef} controls style={{ width: "100%", marginBottom: "20px" }} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="p-4 bg-gray-100 rounded-lg">
+          <h2 className="text-xl font-semibold mb-4">Test silent.mp3</h2>
+          <button onClick={testSilentMp3} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 mb-4">
+            Test silent.mp3
+          </button>
+          <pre className="bg-gray-200 p-2 rounded whitespace-pre-wrap">{silentResult}</pre>
+        </div>
 
-        <h3>Silent Audio Element (for unlocking)</h3>
-        <audio ref={silentAudioRef} controls style={{ width: "100%", marginBottom: "20px" }} />
+        <div className="p-4 bg-gray-100 rounded-lg">
+          <h2 className="text-xl font-semibold mb-4">Test test-audio.mp3</h2>
+          <button onClick={testAudioMp3} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 mb-4">
+            Test test-audio.mp3
+          </button>
+          <pre className="bg-gray-200 p-2 rounded whitespace-pre-wrap">{testResult}</pre>
+        </div>
       </div>
 
-      <div style={{ marginBottom: "20px" }}>
-        <h3>Available Audio Files</h3>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ border: "1px solid #ddd", padding: "8px", textAlign: "left" }}>File</th>
-              <th style={{ border: "1px solid #ddd", padding: "8px", textAlign: "left" }}>Status</th>
-              <th style={{ border: "1px solid #ddd", padding: "8px", textAlign: "left" }}>Type</th>
-              <th style={{ border: "1px solid #ddd", padding: "8px", textAlign: "left" }}>Size</th>
-            </tr>
-          </thead>
-          <tbody>
-            {audioFiles.map((file, index) => (
-              <tr key={index} style={{ backgroundColor: file.exists ? "#e8f5e9" : "#ffebee" }}>
-                <td style={{ border: "1px solid #ddd", padding: "8px" }}>{file.file}</td>
-                <td style={{ border: "1px solid #ddd", padding: "8px" }}>
-                  {file.exists ? "✅ Available" : `❌ Not found (${file.status || "Error"})`}
-                </td>
-                <td style={{ border: "1px solid #ddd", padding: "8px" }}>{file.contentType || "N/A"}</td>
-                <td style={{ border: "1px solid #ddd", padding: "8px" }}>{file.contentLength || "N/A"} bytes</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div className="p-4 bg-gray-100 rounded-lg">
+          <h2 className="text-xl font-semibold mb-4">Check File Existence</h2>
+          <button onClick={checkFiles} className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 mb-4">
+            Check Files
+          </button>
+          <pre className="bg-gray-200 p-2 rounded whitespace-pre-wrap">{fileCheckResult}</pre>
+        </div>
+
+        <div className="p-4 bg-gray-100 rounded-lg">
+          <h2 className="text-xl font-semibold mb-4">Test Audio Ref</h2>
+          <button
+            onClick={testAudioRef}
+            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 mb-4"
+          >
+            Test Audio Ref
+          </button>
+          <pre className="bg-gray-200 p-2 rounded whitespace-pre-wrap">{audioRefResult}</pre>
+        </div>
       </div>
 
-      <div>
-        <h3>Browser Information</h3>
-        <pre style={{ backgroundColor: "#e0e0e0", padding: "10px", borderRadius: "5px", overflow: "auto" }}>
-          {`User Agent: ${typeof window !== "undefined" ? window.navigator.userAgent : "Not available in SSR"}`}
+      <div className="p-4 bg-gray-100 rounded-lg mb-8">
+        <h2 className="text-xl font-semibold mb-4">Direct Audio Elements</h2>
+        <div className="mb-4">
+          <h3 className="font-medium mb-2">Silent Audio:</h3>
+          <audio ref={silentAudioRef} controls src="/silent.mp3" className="w-full">
+            Your browser does not support the audio element.
+          </audio>
+        </div>
+
+        <div>
+          <h3 className="font-medium mb-2">Test Audio:</h3>
+          <audio ref={audioRef} controls src="/test-audio.mp3" className="w-full">
+            Your browser does not support the audio element.
+          </audio>
+        </div>
+      </div>
+
+      <div className="p-4 bg-gray-100 rounded-lg">
+        <h2 className="text-xl font-semibold mb-4">Browser Information</h2>
+        <pre className="bg-gray-200 p-2 rounded whitespace-pre-wrap" id="browser-info">
+          JavaScript is required to display browser information.
         </pre>
       </div>
 
-      <div style={{ marginTop: "20px" }}>
-        <a href="/debate" style={{ color: "#2196F3", textDecoration: "none" }}>
-          ← Back to Debate Interface
-        </a>
-      </div>
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+          document.getElementById('browser-info').textContent = 
+            'User Agent: ' + navigator.userAgent + '\\n' +
+            'Platform: ' + navigator.platform + '\\n' +
+            'Vendor: ' + navigator.vendor + '\\n' +
+            'Audio Context Support: ' + (window.AudioContext || window.webkitAudioContext ? 'Yes' : 'No');
+        `,
+        }}
+      />
     </div>
   )
 }
