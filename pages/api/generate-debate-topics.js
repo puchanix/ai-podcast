@@ -1,4 +1,4 @@
-import { personas } from "./personas-data"
+import { personas } from "../../lib/personas"
 
 export default async function handler(req, res) {
   try {
