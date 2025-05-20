@@ -20,9 +20,12 @@ export function DebateInterface() {
   const [currentTopic, setCurrentTopic] = useState(null)
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
-  const [audioUrl, setAudioUrl] = useState(null)
-  const [isPlaying, setIsPlaying] = useState(false)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+
+  // Audio queue system
+  const [audioQueue, setAudioQueue] = useState([])
+  const [isPlayingQueue, setIsPlayingQueue] = useState(false)
 
   const audioRef = useRef(null)
   const messagesEndRef = useRef(null)
@@ -33,27 +36,96 @@ export function DebateInterface() {
 
   // Generate debate topics when characters change
   useEffect(() => {
+    // Reset debate state when characters change
+    resetDebateState()
     generateDebateTopics()
   }, [character1, character2])
 
-  // Scroll to bottom when new messages are added
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
-    }
-  }, [debateMessages])
+  // Reset all debate state
+  const resetDebateState = () => {
+    setIsDebating(false)
+    setDebateMessages([])
+    setCurrentTopic(null)
+    setCurrentSpeaker(null)
+    setAudioQueue([])
+    setIsPlayingQueue(false)
+    setIsPlaying(false)
 
-  // Handle audio playback
+    // Stop any playing audio
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ""
+    }
+  }
+
+  // Process audio queue
+  useEffect(() => {
+    if (audioQueue.length > 0 && !isPlayingQueue) {
+      playNextInQueue()
+    }
+  }, [audioQueue, isPlayingQueue])
+
+  // Handle audio element events
   useEffect(() => {
     if (audioRef.current) {
-      audioRef.current.onplay = () => setIsPlaying(true)
-      audioRef.current.onpause = () => setIsPlaying(false)
+      audioRef.current.onplay = () => {
+        setIsPlaying(true)
+      }
+
+      audioRef.current.onpause = () => {
+        setIsPlaying(false)
+      }
+
       audioRef.current.onended = () => {
         setIsPlaying(false)
         setCurrentSpeaker(null)
+
+        // Remove the current audio from the queue and play the next one
+        setAudioQueue((prev) => {
+          const newQueue = [...prev]
+          newQueue.shift()
+          return newQueue
+        })
+        setIsPlayingQueue(false)
+      }
+
+      audioRef.current.onerror = () => {
+        console.error("Audio playback error")
+        // Skip to next audio on error
+        setAudioQueue((prev) => {
+          const newQueue = [...prev]
+          newQueue.shift()
+          return newQueue
+        })
+        setIsPlayingQueue(false)
       }
     }
-  }, [audioUrl])
+  }, [])
+
+  // Play the next audio in the queue
+  const playNextInQueue = () => {
+    if (audioQueue.length === 0) return
+
+    setIsPlayingQueue(true)
+    const nextAudio = audioQueue[0]
+
+    if (audioRef.current) {
+      audioRef.current.src = nextAudio.url
+      audioRef.current.load()
+      setCurrentSpeaker(nextAudio.character)
+
+      audioRef.current.play().catch((err) => {
+        console.error("Audio playback error:", err)
+        // Skip to next audio on error
+        setAudioQueue((prev) => {
+          const newQueue = [...prev]
+          newQueue.shift()
+          return newQueue
+        })
+        setIsPlayingQueue(false)
+      })
+    }
+  }
 
   // Function to generate debate topics based on selected characters
   const generateDebateTopics = async () => {
@@ -107,10 +179,10 @@ export function DebateInterface() {
 
   // Start a debate on a specific topic
   const startDebate = async (topic) => {
+    resetDebateState()
     setCurrentTopic(topic)
     setIsDebating(true)
     setIsProcessing(true)
-    setDebateMessages([])
 
     try {
       const response = await fetch("/api/start-debate", {
@@ -131,7 +203,7 @@ export function DebateInterface() {
 
       const data = await response.json()
 
-      // Add initial messages
+      // Add initial messages (hidden from UI but kept for state)
       const messages = [
         {
           character: character1,
@@ -149,14 +221,11 @@ export function DebateInterface() {
 
       setDebateMessages(messages)
 
-      // Play first audio
-      if (data.audioUrl1) {
-        setAudioUrl(data.audioUrl1)
-        setCurrentSpeaker(character1)
-        if (audioRef.current) {
-          audioRef.current.play().catch((err) => console.error("Audio playback error:", err))
-        }
-      }
+      // Add both audio responses to the queue
+      setAudioQueue([
+        { url: data.audioUrl1, character: character1 },
+        { url: data.audioUrl2, character: character2 },
+      ])
     } catch (error) {
       console.error("Error starting debate:", error)
       setIsDebating(false)
@@ -173,7 +242,7 @@ export function DebateInterface() {
     setCustomQuestion("")
     setIsProcessing(true)
 
-    // Add user question as a special message
+    // Add user question as a special message (hidden from UI but kept for state)
     setDebateMessages((prev) => [
       ...prev,
       {
@@ -203,7 +272,7 @@ export function DebateInterface() {
 
       const data = await response.json()
 
-      // Add responses
+      // Add responses (hidden from UI but kept for state)
       const newMessages = [
         {
           character: character1,
@@ -221,30 +290,16 @@ export function DebateInterface() {
 
       setDebateMessages((prev) => [...prev, ...newMessages])
 
-      // Play first audio
-      if (data.audioUrl1) {
-        setAudioUrl(data.audioUrl1)
-        setCurrentSpeaker(character1)
-        if (audioRef.current) {
-          audioRef.current.play().catch((err) => console.error("Audio playback error:", err))
-        }
-      }
+      // Add both audio responses to the queue
+      setAudioQueue((prev) => [
+        ...prev,
+        { url: data.audioUrl1, character: character1 },
+        { url: data.audioUrl2, character: character2 },
+      ])
     } catch (error) {
       console.error("Error continuing debate:", error)
     } finally {
       setIsProcessing(false)
-    }
-  }
-
-  // Play audio for a specific message
-  const playMessageAudio = (audioUrl, character) => {
-    if (!audioUrl) return
-
-    setAudioUrl(audioUrl)
-    setCurrentSpeaker(character)
-
-    if (audioRef.current) {
-      audioRef.current.play().catch((err) => console.error("Audio playback error:", err))
     }
   }
 
@@ -274,7 +329,7 @@ export function DebateInterface() {
 
       const data = await response.json()
 
-      // Add responses
+      // Add responses (hidden from UI but kept for state)
       const newMessages = [
         {
           character: character1,
@@ -292,14 +347,12 @@ export function DebateInterface() {
 
       setDebateMessages((prev) => [...prev, ...newMessages])
 
-      // Play first audio
-      if (data.audioUrl1) {
-        setAudioUrl(data.audioUrl1)
-        setCurrentSpeaker(character1)
-        if (audioRef.current) {
-          audioRef.current.play().catch((err) => console.error("Audio playback error:", err))
-        }
-      }
+      // Add both audio responses to the queue
+      setAudioQueue((prev) => [
+        ...prev,
+        { url: data.audioUrl1, character: character1 },
+        { url: data.audioUrl2, character: character2 },
+      ])
     } catch (error) {
       console.error("Error continuing debate:", error)
     } finally {
@@ -460,15 +513,16 @@ export function DebateInterface() {
         )}
       </div>
 
-      {/* Debate Content */}
+      {/* Current Debate Status */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
         <h2 className="text-xl font-semibold mb-4 text-yellow-400">
           {currentTopic ? `Debate: ${currentTopic}` : "Select a topic to begin"}
         </h2>
 
-        <div className="bg-gray-900 rounded-lg p-4 min-h-[400px] max-h-[600px] overflow-y-auto">
-          {debateMessages.length === 0 && !isDebating ? (
-            <div className="flex flex-col items-center justify-center h-[400px] text-gray-400">
+        {/* Voice-only interface */}
+        <div className="flex flex-col items-center justify-center p-8 bg-gray-900 rounded-lg">
+          {!isDebating ? (
+            <div className="flex flex-col items-center justify-center text-gray-400">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 className="h-12 w-12 mb-4"
@@ -486,58 +540,69 @@ export function DebateInterface() {
               <p>Select a topic above to start the debate</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {debateMessages.map((msg, idx) => (
-                <div key={idx} className={`flex ${msg.character === "user" ? "justify-center" : ""}`}>
-                  {msg.character !== "user" && (
-                    <div className="flex-shrink-0 mr-3">
-                      <div className="w-10 h-10 rounded-full overflow-hidden">
-                        <img
-                          src={(msg.character === character1 ? char1 : char2)?.image || "/placeholder.png"}
-                          alt={(msg.character === character1 ? char1 : char2)?.name || "Character"}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  <div className={`flex-1 ${getMessageStyle(msg.character, character1, character2)}`}>
-                    {msg.character === "user" ? (
-                      <div className="text-center py-2 px-4 bg-gray-700 rounded-lg inline-block text-white">
-                        <span className="font-medium">You asked:</span> {msg.content}
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex justify-between items-center mb-1">
-                          <p className="font-bold text-white">
-                            {msg.character === character1 ? char1?.name : char2?.name}
-                          </p>
-                          {msg.audioUrl && (
-                            <button
-                              onClick={() => playMessageAudio(msg.audioUrl, msg.character)}
-                              className="text-gray-300 hover:text-white"
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                className="h-5 w-5"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-gray-100">{msg.content}</p>
-                      </>
-                    )}
+            <div className="flex flex-col items-center">
+              {isPlaying ? (
+                <div className="flex items-center justify-center mb-6">
+                  <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-yellow-500 p-2">
+                    <img
+                      src={(currentSpeaker === character1 ? char1 : char2)?.image || "/placeholder.png"}
+                      alt={(currentSpeaker === character1 ? char1 : char2)?.name || "Speaking"}
+                      className="w-full h-full object-cover rounded-full"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse rounded-full"></div>
                   </div>
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
+              ) : (
+                <div className="flex items-center justify-center mb-6">
+                  <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2 flex items-center justify-center bg-gray-800">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      className="h-16 w-16 text-gray-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                      />
+                    </svg>
+                  </div>
+                </div>
+              )}
+
+              <div className="text-center mb-4">
+                {isPlaying ? (
+                  <div>
+                    <h3 className="text-xl font-bold text-yellow-400">
+                      {currentSpeaker === character1 ? char1?.name : char2?.name} is speaking...
+                    </h3>
+                    <div className="flex justify-center mt-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-8 bg-blue-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
+                        <div className="w-2 h-12 bg-yellow-500 rounded-full animate-[soundwave_0.7s_ease-in-out_infinite_0.1s]"></div>
+                        <div className="w-2 h-6 bg-green-500 rounded-full animate-[soundwave_0.4s_ease-in-out_infinite_0.2s]"></div>
+                        <div className="w-2 h-10 bg-red-500 rounded-full animate-[soundwave_0.6s_ease-in-out_infinite_0.3s]"></div>
+                        <div className="w-2 h-4 bg-purple-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite_0.4s]"></div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-400">Waiting for next speaker...</h3>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex space-x-4">
+                {audioQueue.length > 0 && (
+                  <div className="text-sm text-gray-400">
+                    {audioQueue.length} response{audioQueue.length !== 1 ? "s" : ""} in queue
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -565,7 +630,7 @@ export function DebateInterface() {
       </div>
 
       {/* Continue Debate Button */}
-      {isDebating && debateMessages.length > 0 && (
+      {isDebating && (
         <div className="flex justify-center mb-8">
           <button
             onClick={continueDebate}
@@ -597,17 +662,9 @@ export function DebateInterface() {
       )}
 
       {/* Hidden audio element */}
-      <audio ref={audioRef} src={audioUrl} className="hidden" />
+      <audio ref={audioRef} className="hidden" />
     </div>
   )
-}
-
-// Helper function to get message style based on character
-function getMessageStyle(messageCharacter, character1, character2) {
-  if (messageCharacter === "user") return "text-center"
-  if (messageCharacter === character1) return "bg-blue-900 p-4 rounded-lg"
-  if (messageCharacter === character2) return "bg-red-900 p-4 rounded-lg"
-  return "p-4 rounded-lg bg-gray-800"
 }
 
 // Helper function to get category color
