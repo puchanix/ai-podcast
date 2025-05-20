@@ -12,6 +12,7 @@ export default function AudioTest() {
   const [generatedAudioUrl, setGeneratedAudioUrl] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
   const [errorMessage, setErrorMessage] = useState("")
+  const [selectedVoice, setSelectedVoice] = useState("en-US-Neural2-J")
 
   const audioRef = useRef(null)
   const silentAudioRef = useRef(null)
@@ -97,7 +98,7 @@ export default function AudioTest() {
       })
   }
 
-  // Generate a test audio file
+  // Generate a test audio file using direct streaming
   const generateTestAudio = async () => {
     if (!testText.trim()) {
       addTestResult("❌ Please enter some text to generate")
@@ -109,32 +110,14 @@ export default function AudioTest() {
     addTestResult("Generating test audio...")
 
     try {
-      const response = await fetch("/api/debate-tts", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: testText,
-          characterId: "einstein", // Use Einstein as a test character
-        }),
-      })
+      // Generate a direct streaming URL
+      const streamUrl = `/api/stream-audio?id=test_${Date.now()}&text=${encodeURIComponent(testText)}&voice=${encodeURIComponent(selectedVoice)}`
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`)
-      }
+      setGeneratedAudioUrl(streamUrl)
+      addTestResult(`✅ Generated audio URL: ${streamUrl}`)
 
-      const data = await response.json()
-
-      if (data.error) {
-        throw new Error(data.error)
-      }
-
-      setGeneratedAudioUrl(data.audioUrl)
-      addTestResult(`✅ Generated audio URL: ${data.audioUrl}`)
-
-      // Check if the file exists
-      await checkFile(data.audioUrl, "Generated audio")
+      // Try to play the audio directly
+      playTestAudio(streamUrl, "Generated Audio")
     } catch (error) {
       setErrorMessage(error.message)
       addTestResult(`❌ Error generating audio: ${error.message}`)
@@ -282,6 +265,20 @@ export default function AudioTest() {
           <h2 className="text-xl font-bold mb-4">Generate Test Audio</h2>
 
           <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Voice</label>
+              <select
+                value={selectedVoice}
+                onChange={(e) => setSelectedVoice(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 rounded text-white"
+              >
+                <option value="en-US-Neural2-J">Male (Einstein)</option>
+                <option value="en-US-Neural2-F">Female (Curie)</option>
+                <option value="en-US-Neural2-D">Male (da Vinci)</option>
+                <option value="en-GB-Neural2-F">Female British (Lovelace)</option>
+              </select>
+            </div>
+
             <div>
               <label className="block text-sm font-medium mb-1">Test Text</label>
               <textarea

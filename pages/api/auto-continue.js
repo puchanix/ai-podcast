@@ -1,66 +1,97 @@
-import { personas } from "../../lib/personas"
+import { characters } from "../../../data/characters"
 
 export default async function handler(req, res) {
   try {
     const { character1, character2, currentMessages, topic, format, historicalContext } = req.body
 
+    if (!character1 || !character2 || !currentMessages) {
+      return res.status(400).json({ error: "Missing required parameters" })
+    }
+
     // Get character details
-    const char1 = personas[character1]
-    const char2 = personas[character2]
+    const char1 = characters.find((c) => c.id === character1)
+    const char2 = characters.find((c) => c.id === character2)
 
     if (!char1 || !char2) {
       return res.status(400).json({ error: "Character not found" })
     }
 
-    // In a real implementation, you would use AI to generate these responses based on the conversation history
-    // For now, we'll return placeholder text
-    const response1 = `Building on our discussion about "${topic}", I, ${char1.name}, would like to emphasize that this topic has profound implications for how we understand the world. My research has consistently shown that careful observation and methodical experimentation lead to the most reliable conclusions.`
-
-    const response2 = `While I appreciate ${char1.name}'s methodical approach, I, ${char2.name}, believe we must also consider the human element in this discussion. The topic of "${topic}" cannot be reduced to mere formulas or experiments. There is an artistic and intuitive dimension that must be acknowledged.`
-
-    // Generate audio using our TTS endpoint
-    let audioUrl1 = "/silent.mp3"
-    let audioUrl2 = "/silent.mp3"
-
-    try {
-      // Generate audio for character 1
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-      const ttsResponse1 = await fetch(`${baseUrl}/api/debate-tts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: response1,
-          characterId: character1,
-        }),
+    // Generate debate content using OpenAI
+    const previousExchange = currentMessages
+      .map((msg) => {
+        if (msg.character === "user") return `Question: ${msg.content}`
+        const speaker = msg.character === character1 ? char1.name : char2.name
+        return `${speaker}: ${msg.content}`
       })
+      .join("\n\n")
 
-      if (ttsResponse1.ok) {
-        const ttsData1 = await ttsResponse1.json()
-        audioUrl1 = ttsData1.audioUrl
+    const prompt = `
+      Continue a debate between ${char1.name} and ${char2.name} on the topic of "${topic}".
+      ${
+        historicalContext
+          ? "The characters should only use knowledge available during their lifetimes."
+          : "The characters can reference modern knowledge."
       }
+      Format: ${format}
+      
+      Previous exchange:
+      ${previousExchange}
+      
+      Provide the next exchange in the debate, with both characters making new points or responding to previous points.
+    `
 
-      // Generate audio for character 2
-      const ttsResponse2 = await fetch(`${baseUrl}/api/debate-tts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: response2,
-          characterId: character2,
-        }),
-      })
+    let response1, response2
 
-      if (ttsResponse2.ok) {
-        const ttsData2 = await ttsResponse2.json()
-        audioUrl2 = ttsData2.audioUrl
+    // Check if we have an OpenAI API key
+    if (!process.env.OPENAI_API_KEY) {
+      console.warn("No OpenAI API key found, using placeholder text")
+      response1 = `Building on our discussion about "${topic}", I'd like to emphasize another important aspect. The principles I've observed in my work suggest that there are deeper patterns at play here that merit further exploration.`
+      response2 = `While I appreciate the patterns you've identified, I believe we must also consider the practical implications. In my experience, theoretical frameworks must be tested against real-world conditions to verify their validity.`
+    } else {
+      try {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4",
+            messages: [
+              {
+                role: "system",
+                content: `You are creating a debate between historical figures ${char1.name} and ${char2.name}.`,
+              },
+              { role: "user", content: prompt },
+            ],
+            temperature: 0.7,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`OpenAI API error: ${response.status}`)
+        }
+
+        const data = await response.json()
+        const content = data.choices[0].message.content
+
+        // Split the content into two parts
+        const parts = content.split(/(?:Character 2:|Second character:|${char2.name}:)/i, 2)
+        response1 = parts[0].replace(/(?:Character 1:|First character:|${char1.name}:)/i, "").trim()
+        response2 = parts[1] ? parts[1].trim() : `As ${char2.name}, I have additional thoughts on this matter.`
+      } catch (error) {
+        console.error("Error generating debate content:", error)
+        response1 = `Building on our discussion about "${topic}", I'd like to emphasize another important aspect. The principles I've observed in my work suggest that there are deeper patterns at play here that merit further exploration.`
+        response2 = `While I appreciate the patterns you've identified, I believe we must also consider the practical implications. In my experience, theoretical frameworks must be tested against real-world conditions to verify their validity.`
       }
-    } catch (error) {
-      console.error("Error generating TTS:", error)
-      // Use fallback audio if TTS fails
     }
+
+    // Generate audio URLs for both characters
+    const audioUrl1 = `/api/stream-audio?id=debate_${character1}_${Date.now()}&text=${encodeURIComponent(response1)}&voice=${encodeURIComponent(char1.voice)}`
+
+    // Add a small delay to ensure unique timestamps
+    const timestamp2 = Date.now() + 100
+    const audioUrl2 = `/api/stream-audio?id=debate_${character2}_${timestamp2}&text=${encodeURIComponent(response2)}&voice=${encodeURIComponent(char2.voice)}`
 
     return res.json({
       response1,
@@ -69,7 +100,7 @@ export default async function handler(req, res) {
       audioUrl2,
     })
   } catch (error) {
-    console.error("Error auto-continuing debate:", error)
-    return res.status(500).json({ error: "Internal server error" })
+    console.error("Error in auto continue API:", error)
+    return res.status(500).json({ error: "Failed to continue debate" })
   }
 }
