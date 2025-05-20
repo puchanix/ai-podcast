@@ -135,7 +135,7 @@ export function DebateInterface() {
       setAudioError(null)
       setIsLoadingAudio(true)
 
-      // Set the source and load the audio
+      // Set the source and load the audio - use relative URL just like in the main page
       audioRef.current.src = nextAudio.url
       audioRef.current.volume = volume
       audioRef.current.load()
@@ -156,6 +156,53 @@ export function DebateInterface() {
         setIsPlayingQueue(false)
       })
     }
+  }
+
+  const testAudio = () => {
+    // Create a test audio element - use the same approach as in main page
+    const testAudioEl = new Audio("/silent.mp3")
+    testAudioEl.volume = volume
+
+    testAudioEl
+      .play()
+      .then(() => {
+        console.log("Test audio playback successful")
+        setAudioError("Test audio playback successful")
+      })
+      .catch((err) => {
+        console.error("Test audio playback failed:", err)
+        setAudioError(`Test audio failed: ${err.message}`)
+      })
+  }
+
+  const unlockAudio = () => {
+    const dummy = new Audio("/silent.mp3")
+    dummy.play().catch(() => {})
+  }
+
+  // Add a function to test the direct audio file API
+  const testDirectAudioFile = () => {
+    const audioUrl = `${window.location.origin}/api/test-audio-file`
+    console.log("Testing direct audio file with URL:", audioUrl)
+
+    const testAudioEl = new Audio(audioUrl)
+    testAudioEl.volume = volume
+
+    // Add event listeners for debugging
+    testAudioEl.onloadstart = () => console.log("Direct audio file loading started")
+    testAudioEl.oncanplaythrough = () => console.log("Direct audio file can play through")
+    testAudioEl.onerror = (e) => console.error("Direct audio file error:", e, testAudioEl.error)
+
+    testAudioEl
+      .play()
+      .then(() => {
+        console.log("Direct audio file playback successful")
+        setAudioError("Direct audio file playback successful")
+      })
+      .catch((err) => {
+        console.error("Direct audio file playback failed:", err)
+        setAudioError(`Direct audio file failed: ${err.message}`)
+      })
   }
 
   // Function to generate debate topics based on selected characters
@@ -211,6 +258,7 @@ export function DebateInterface() {
   // Start a debate on a specific topic
   const startDebate = async (topic) => {
     resetDebateState()
+    unlockAudio() // Add this line to unlock audio
     setCurrentTopic(topic)
     setIsDebating(true)
     setIsProcessing(true)
@@ -270,6 +318,7 @@ export function DebateInterface() {
   const submitCustomQuestion = async () => {
     if (!customQuestion.trim() || !isDebating || isProcessing) return
 
+    unlockAudio() // Add this line to unlock audio
     const userQuestion = customQuestion.trim()
     setCustomQuestion("")
     setIsProcessing(true)
@@ -417,22 +466,22 @@ export function DebateInterface() {
     URL.revokeObjectURL(url)
   }
 
-  // Test audio playback
-  const testAudio = () => {
-    // Create a test audio element
-    const testAudioEl = new Audio("/silent.mp3")
-    testAudioEl.volume = volume
-    testAudioEl
-      .play()
-      .then(() => {
-        console.log("Test audio playback successful")
-        setAudioError("Test audio playback successful")
-      })
-      .catch((err) => {
-        console.error("Test audio playback failed:", err)
-        setAudioError(`Test audio failed: ${err.message}`)
-      })
+  // Add a new function to check the debug API
+  const checkDebugApi = async () => {
+    try {
+      setAudioError("Checking debug API...")
+      const response = await fetch("/api/debug-audio")
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`)
+      }
+      const data = await response.json()
+      setAudioError(JSON.stringify(data, null, 2))
+    } catch (err) {
+      setAudioError(`Debug API error: ${err.message}`)
+    }
   }
+
+  // Test audio playback
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white min-h-screen">
@@ -843,6 +892,18 @@ export function DebateInterface() {
               className="px-3 py-1 bg-yellow-600 rounded"
             >
               Clear Queue
+            </button>
+          </div>
+
+          <div className="mt-4">
+            <button onClick={checkDebugApi} className="px-3 py-1 bg-blue-600 rounded">
+              Check Debug API
+            </button>
+          </div>
+
+          <div className="mt-2">
+            <button onClick={testDirectAudioFile} className="px-3 py-1 bg-purple-600 rounded">
+              Test Direct Audio File
             </button>
           </div>
         </div>
