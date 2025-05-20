@@ -17,6 +17,7 @@ export function DebateInterface() {
   const [historicalContext, setHistoricalContext] = useState(true)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [audioError, setAudioError] = useState(null)
 
   // Audio queue system
   const [audioQueue, setAudioQueue] = useState([])
@@ -45,6 +46,7 @@ export function DebateInterface() {
     setAudioQueue([])
     setIsPlayingQueue(false)
     setIsPlaying(false)
+    setAudioError(null)
 
     // Stop any playing audio
     if (audioRef.current) {
@@ -66,6 +68,7 @@ export function DebateInterface() {
       audioRef.current.onplay = () => {
         console.log("Audio started playing")
         setIsPlaying(true)
+        setAudioError(null)
       }
 
       audioRef.current.onpause = () => {
@@ -89,7 +92,13 @@ export function DebateInterface() {
 
       audioRef.current.onerror = (e) => {
         console.error("Audio playback error", e)
-        // Skip to next audio on error
+        setAudioError(`Error playing audio: ${e.target.error ? e.target.error.message : 'Unknown error'}`)
+        
+        // Continue with the next audio even if there's an error
+        setIsPlaying(false)
+        setCurrentSpeaker(null)
+        
+        // Remove the current audio from the queue and play the next one
         setAudioQueue((prev) => {
           const newQueue = [...prev]
           newQueue.shift()
@@ -109,28 +118,44 @@ export function DebateInterface() {
     console.log("Playing next audio in queue:", nextAudio)
 
     if (audioRef.current) {
-      // Preload a silent audio to unlock audio on iOS
-      const unlockAudio = new Audio("/silent.mp3")
-      unlockAudio.play().catch(err => console.log("Unlock audio error:", err))
-      
-      // Set the audio source and try to play
-      audioRef.current.src = nextAudio.url
-      audioRef.current.load()
-      setCurrentSpeaker(nextAudio.character)
+      try {
+        // Preload a silent audio to unlock audio on iOS
+        const unlockAudio = new Audio()
+        unlockAudio.src = "/silent.mp3"
+        unlockAudio.play().catch(err => console.log("Unlock audio error:", err))
+        
+        // Set the audio source and try to play
+        audioRef.current.src = nextAudio.url
+        audioRef.current.load()
+        setCurrentSpeaker(nextAudio.character)
 
-      // Add a small delay before playing to ensure the audio is loaded
-      setTimeout(() => {
-        audioRef.current.play().catch((err) => {
-          console.error("Audio playback error:", err)
-          // Skip to next audio on error
-          setAudioQueue((prev) => {
-            const newQueue = [...prev]
-            newQueue.shift()
-            return newQueue
+        // Add a small delay before playing to ensure the audio is loaded
+        setTimeout(() => {
+          audioRef.current.play().catch((err) => {
+            console.error("Audio playback error:", err)
+            setAudioError(`Error playing audio: ${err.message}`)
+            
+            // Skip to next audio on error
+            setAudioQueue((prev) => {
+              const newQueue = [...prev]
+              newQueue.shift()
+              return newQueue
+            })
+            setIsPlayingQueue(false)
           })
-          setIsPlayingQueue(false)
+        }, 300)
+      } catch (err) {
+        console.error("Error setting up audio:", err)
+        setAudioError(`Error setting up audio: ${err.message}`)
+        
+        // Skip to next audio on error
+        setAudioQueue((prev) => {
+          const newQueue = [...prev]
+          newQueue.shift()
+          return newQueue
         })
-      }, 100)
+        setIsPlayingQueue(false)
+      }
     }
   }
 
@@ -139,6 +164,7 @@ export function DebateInterface() {
     if (character1 === character2) return
 
     setIsGeneratingTopics(true)
+    setAudioError(null)
 
     try {
       console.log("Generating debate topics for", character1, "and", character2)
@@ -160,6 +186,8 @@ export function DebateInterface() {
       setSuggestedTopics(data.topics)
     } catch (error) {
       console.error("Error generating debate topics:", error)
+      setAudioError(`Error generating topics: ${error.message}`)
+      
       // Fallback topics if API fails
       setSuggestedTopics([
         {
@@ -193,6 +221,7 @@ export function DebateInterface() {
     setCurrentTopic(topic)
     setIsDebating(true)
     setIsProcessing(true)
+    setAudioError(null)
 
     try {
       const response = await fetch("/api/start-debate", {
@@ -243,6 +272,7 @@ export function DebateInterface() {
       ])
     } catch (error) {
       console.error("Error starting debate:", error)
+      setAudioError(`Error starting debate: ${error.message}`)
       setIsDebating(false)
     } finally {
       setIsProcessing(false)
@@ -256,6 +286,7 @@ export function DebateInterface() {
     const userQuestion = customQuestion.trim()
     setCustomQuestion("")
     setIsProcessing(true)
+    setAudioError(null)
 
     // Add user question as a special message
     setDebateMessages((prev) => [
@@ -313,6 +344,7 @@ export function DebateInterface() {
       ])
     } catch (error) {
       console.error("Error continuing debate:", error)
+      setAudioError(`Error continuing debate: ${error.message}`)
     } finally {
       setIsProcessing(false)
     }
@@ -323,6 +355,7 @@ export function DebateInterface() {
     if (!isDebating || isProcessing) return
 
     setIsProcessing(true)
+    setAudioError(null)
 
     try {
       const response = await fetch("/api/auto-continue", {
@@ -370,6 +403,7 @@ export function DebateInterface() {
       ])
     } catch (error) {
       console.error("Error continuing debate:", error)
+      setAudioError(`Error continuing debate: ${error.message}`)
     } finally {
       setIsProcessing(false)
     }
@@ -434,6 +468,17 @@ export function DebateInterface() {
           )}
         </div>
       </div>
+
+      {/* Error message display */}
+      {audioError && (
+        <div className="mb-4 p-4 bg-red-900 text-white rounded-lg">
+          <p className="font-bold">Error:</p>
+          <p>{audioError}</p>
+          <p className="text-sm mt-2">
+            Note: The debate will continue even if there are audio playback issues.
+          </p>
+        </div>
+      )}
 
       {/* Debate Format Options */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
@@ -623,6 +668,37 @@ export function DebateInterface() {
         </div>
       </div>
 
+      {/* Debate Transcript */}
+      {isDebating && debateMessages.length > 0 && (
+        <div className="mb-8 bg-gray-800 p-4 rounded-lg">
+          <h2 className="text-xl font-semibold mb-4 text-yellow-400">Debate Transcript</h2>
+          <div className="space-y-4 max-h-96 overflow-y-auto p-4 bg-gray-900 rounded-lg">
+            {debateMessages.filter(msg => msg.character !== "user").map((message, index) => (
+              <div 
+                key={index} 
+                className={`p-4 rounded-lg ${
+                  message.character === character1 ? "bg-blue-900" : "bg-red-900"
+                }`}
+              >
+                <div className="flex items-center mb-2">
+                  <div className="w-8 h-8 rounded-full overflow-hidden mr-2">
+                    <img 
+                      src={(message.character === character1 ? char1 : char2)?.image || "/placeholder.png"} 
+                      alt={(message.character === character1 ? char1 : char2)?.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <span className="font-bold">
+                    {(message.character === character1 ? char1 : char2)?.name}
+                  </span>
+                </div>
+                <p>{message.content}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Custom Question Input */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
         <h2 className="text-xl font-semibold mb-4 text-yellow-400">Ask Your Own Question</h2>
@@ -675,17 +751,6 @@ export function DebateInterface() {
           </button>
         </div>
       )}
-
-      {/* Debug information */}
-      <div className="mb-8 bg-gray-800 p-4 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4 text-yellow-400">Debug Information</h2>
-        <div className="text-sm text-gray-400">
-          <p>Current Speaker: {currentSpeaker || "None"}</p>
-          <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
-          <p>Audio Queue Length: {audioQueue.length}</p>
-          <p>Is Processing: {isProcessing ? "Yes" : "No"}</p>
-        </div>
-      </div>
 
       {/* Hidden audio element */}
       <audio 
