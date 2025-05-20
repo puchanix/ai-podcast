@@ -15,10 +15,11 @@
     "formidable": "^3.5.4",
     "next": "latest",
     "node-fetch": "^3.3.2",
-    "openai": "^4.97.0",
+    "openai": "^4.100.0",
     "react": "latest",
     "react-dom": "latest",
-    "redis": "^5.0.1"
+    "redis": "^5.0.1",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.14",
