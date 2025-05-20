@@ -29,7 +29,7 @@ export function DebateInterface() {
 
   const audioRef = useRef(null)
 
-  // Get character objects
+  // Get character objects 
   const char1 = personas[character1]
   const char2 = personas[character2]
 
