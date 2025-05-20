@@ -1,12 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { characters } from "@/data/characters"
-import Image from "next/image"
+import { personas } from "../lib/personas"
 
 export function DebateInterface() {
-  const [character1, setCharacter1] = useState(characters[0].id)
-  const [character2, setCharacter2] = useState(characters[1].id)
+  const [character1, setCharacter1] = useState(Object.keys(personas)[0])
+  const [character2, setCharacter2] = useState(Object.keys(personas)[1])
   const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
   const [isDebating, setIsDebating] = useState(false)
   const [debateMessages, setDebateMessages] = useState([])
@@ -33,8 +32,8 @@ export function DebateInterface() {
   const silentAudioRef = useRef(null)
 
   // Get character objects
-  const char1 = characters.find((c) => c.id === character1)
-  const char2 = characters.find((c) => c.id === character2)
+  const char1 = personas[character1]
+  const char2 = personas[character2]
 
   // Function to unlock audio on iOS
   const unlockAudio = () => {
@@ -548,19 +547,17 @@ export function DebateInterface() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl">
-      <h1 className="text-3xl font-bold text-center mb-8">Historical Debates</h1>
+    <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white min-h-screen">
+      <h1 className="text-3xl font-bold text-center mb-8 text-yellow-400">Historical Debates</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         {/* Character 1 Selection */}
         <div className="flex flex-col items-center">
           <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-blue-500">
-            <Image
-              src={char1.image || "/placeholder.svg"}
-              alt={char1.name}
-              width={128}
-              height={128}
-              className="object-cover"
+            <img
+              src={char1?.image || "/placeholder.png"}
+              alt={char1?.name || "Character 1"}
+              className="w-full h-full object-cover"
             />
           </div>
           <select
@@ -568,9 +565,9 @@ export function DebateInterface() {
             onChange={(e) => setCharacter1(e.target.value)}
             className="w-[200px] p-2 rounded border bg-gray-800 text-white border-gray-600"
           >
-            {characters.map((char) => (
-              <option key={char.id} value={char.id}>
-                {char.name}
+            {Object.keys(personas).map((id) => (
+              <option key={id} value={id}>
+                {personas[id].name}
               </option>
             ))}
           </select>
@@ -584,12 +581,10 @@ export function DebateInterface() {
         {/* Character 2 Selection */}
         <div className="flex flex-col items-center">
           <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-4 border-red-500">
-            <Image
-              src={char2.image || "/placeholder.svg"}
-              alt={char2.name}
-              width={128}
-              height={128}
-              className="object-cover"
+            <img
+              src={char2?.image || "/placeholder.png"}
+              alt={char2?.name || "Character 2"}
+              className="w-full h-full object-cover"
             />
           </div>
           <select
@@ -597,9 +592,9 @@ export function DebateInterface() {
             onChange={(e) => setCharacter2(e.target.value)}
             className="w-[200px] p-2 rounded border bg-gray-800 text-white border-gray-600"
           >
-            {characters.map((char) => (
-              <option key={char.id} value={char.id}>
-                {char.name}
+            {Object.keys(personas).map((id) => (
+              <option key={id} value={id}>
+                {personas[id].name}
               </option>
             ))}
           </select>
@@ -786,12 +781,10 @@ export function DebateInterface() {
               {isPlaying || isLoadingAudio ? (
                 <div className="flex items-center justify-center mb-6">
                   <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-yellow-500 p-2">
-                    <Image
-                      src={(currentSpeaker === character1 ? char1 : char2).image || "/placeholder.svg"}
-                      alt={(currentSpeaker === character1 ? char1 : char2).name}
-                      width={192}
-                      height={192}
-                      className="object-cover rounded-full"
+                    <img
+                      src={(currentSpeaker === character1 ? char1 : char2)?.image || "/placeholder.png"}
+                      alt={(currentSpeaker === character1 ? char1 : char2)?.name || "Speaking"}
+                      className="w-full h-full object-cover rounded-full"
                     />
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse rounded-full"></div>
                   </div>
@@ -987,15 +980,6 @@ export function DebateInterface() {
             >
               Clear Queue
             </button>
-
-            <a
-              href="/audio-test"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-3 py-1 bg-blue-600 rounded inline-block"
-            >
-              Open Audio Test Page
-            </a>
           </div>
         </div>
       )}
