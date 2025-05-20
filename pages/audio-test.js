@@ -2,14 +2,12 @@
 
 import { useState, useEffect, useRef } from "react"
 import Head from "next/head"
-import { webkitAudioContext } from "webkit-audio-context"
 
 export default function AudioTest() {
   const [testResults, setTestResults] = useState([])
   const [customUrl, setCustomUrl] = useState("")
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioInitialized, setAudioInitialized] = useState(false)
-  const [elevenlabsApiKey, setElevenlabsApiKey] = useState("")
   const [testText, setTestText] = useState("This is a test of the audio system.")
   const [generatedAudioUrl, setGeneratedAudioUrl] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
@@ -187,7 +185,10 @@ export default function AudioTest() {
       // Check browser audio support
       addTestResult(`Browser: ${navigator.userAgent}`)
 
-      if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
+      if (
+        typeof AudioContext !== "undefined" ||
+        (typeof window !== "undefined" && typeof window.webkitAudioContext !== "undefined")
+      ) {
         addTestResult("✅ AudioContext is supported")
       } else {
         addTestResult("❌ AudioContext is NOT supported")
