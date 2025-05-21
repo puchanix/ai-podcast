@@ -154,6 +154,18 @@ export function DebateInterface() {
     generateDebateTopics()
   }, [character1, character2])
 
+  // Add a useEffect to monitor isDebating state changes
+  useEffect(() => {
+    console.log("isDebating state changed to:", isDebating)
+  }, [isDebating])
+
+  // Add a useEffect to monitor debateMessages changes
+  useEffect(() => {
+    if (debateMessages.length > 0) {
+      console.log("debateMessages updated, length:", debateMessages.length)
+    }
+  }, [debateMessages])
+
   // Reset all debate state
   const resetDebateState = () => {
     setIsDebating(false)
@@ -485,8 +497,16 @@ export function DebateInterface() {
 
   // Update the continueDebate function to ensure it's not blocked by isProcessing
   const continueDebate = async () => {
-    if (!isDebating || isProcessing) {
-      console.log("Cannot continue debate: isDebating =", isDebating, "isProcessing =", isProcessing)
+    // Check if isDebating is false and log it
+    if (!isDebating) {
+      console.log("isDebating is false, forcing it to true")
+      setIsDebating(true)
+      // Add a small delay to ensure state updates before proceeding
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+
+    if (isProcessing) {
+      console.log("Cannot continue debate: isProcessing =", isProcessing)
       return
     }
 
@@ -571,6 +591,12 @@ export function DebateInterface() {
 
   // Function to play debate audio
   const playDebateAudio = async (message, allMessages, currentIndex) => {
+    // Ensure isDebating is true when playing audio
+    if (!isDebating) {
+      console.log("Setting isDebating to true in playDebateAudio")
+      setIsDebating(true)
+    }
+
     const { character, content } = message
     console.log(`Playing audio for ${character}...`)
     setIsLoadingAudio(true)
@@ -621,9 +647,15 @@ export function DebateInterface() {
         setIsLoadingAudio(false)
       }
 
+      // Add this debug log right after the audio.onended function to track state changes
       audio.onended = () => {
         console.log(`${character} audio playback ended`)
         setIsPlaying(false)
+
+        // Add this debug log to track state
+        console.log(
+          `After audio ended - isDebating: ${isDebating}, isProcessing: ${isProcessing}, isAutoplaying: ${isAutoplaying}`,
+        )
 
         // Play the next message if it exists and is not a user message
         const nextIndex = currentIndex + 1
@@ -658,6 +690,11 @@ export function DebateInterface() {
               // Otherwise, continue the debate automatically after a short delay
               console.log(`Automatically continuing to next exchange...`)
               setTimeout(() => {
+                // Add this debug log to check state right before continuing
+                console.log(
+                  `Before continuing - isDebating: ${isDebating}, isProcessing: ${isProcessing}, isAutoplaying: ${isAutoplaying}`,
+                )
+
                 if (isAutoplaying && !isProcessing) {
                   console.log(`Triggering next exchange...`)
                   continueDebate()
