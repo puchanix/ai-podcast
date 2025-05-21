@@ -27,7 +27,7 @@ export default async function handler(req, res) {
 
     if (isElevenLabsVoice) {
       // Use ElevenLabs API
-      const ELEVEN_LABS_API_KEY = process.env.ELEVENLABS_VOICE_ID || process.env.ELEVEN_LABS_API_KEY
+      const ELEVEN_LABS_API_KEY = process.env.ELEVENLABS_API_KEY || process.env.ELEVEN_LABS_API_KEY
 
       if (!ELEVEN_LABS_API_KEY) {
         console.warn("ELEVEN_LABS_API_KEY not found, falling back to OpenAI TTS")
