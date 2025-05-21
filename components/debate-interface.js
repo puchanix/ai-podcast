@@ -27,7 +27,7 @@ export function DebateInterface() {
   const [isInitializing, setIsInitializing] = useState(true)
   const [audioLoadTimeout, setAudioLoadTimeout] = useState(null)
 
-  // Store current audio URLs
+  // Store current audio URLs .
   const [currentAudioUrls, setCurrentAudioUrls] = useState({
     char1: "",
     char2: "",
