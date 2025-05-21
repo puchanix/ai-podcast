@@ -26,6 +26,8 @@ export function DebateInterface() {
   const [isInitializing, setIsInitializing] = useState(true)
   const [audioLoadTimeout, setAudioLoadTimeout] = useState(null)
   const [voiceIdsReady, setVoiceIdsReady] = useState(voiceIdsLoaded)
+  const [retryCount, setRetryCount] = useState(0)
+  const [lastError, setLastError] = useState(null)
 
   // Audio preloading state
   const [nextAudioData, setNextAudioData] = useState(null)
@@ -178,6 +180,8 @@ export function DebateInterface() {
     setNextAudioData(null)
     setExchangeCount(0)
     setIsAutoplaying(true)
+    setRetryCount(0)
+    setLastError(null)
 
     // Clear any existing timeout
     if (audioLoadTimeout) {
@@ -512,24 +516,35 @@ export function DebateInterface() {
 
     console.log("Starting next exchange...")
     setIsProcessing(true)
+    setAudioError(null) // Clear any previous errors
 
     try {
+      // Log the data being sent to the API
+      const requestData = {
+        character1,
+        character2,
+        currentMessages: debateMessages,
+        topic: currentTopic,
+        format: debateFormat,
+        historicalContext,
+      }
+
+      console.log("Sending data to auto-continue API:", JSON.stringify(requestData, null, 2))
+
       const response = await fetch("/api/auto-continue", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          character1,
-          character2,
-          currentMessages: debateMessages,
-          topic: currentTopic,
-          format: debateFormat,
-          historicalContext,
-        }),
+        body: JSON.stringify(requestData),
       })
 
-      if (!response.ok) throw new Error("Failed to continue debate")
+      // Check for non-200 response
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`API returned ${response.status}: ${errorText}`)
+        throw new Error(`API returned ${response.status}: ${errorText}`)
+      }
 
       const data = await response.json()
       console.log("Received new debate responses:", data)
@@ -552,15 +567,52 @@ export function DebateInterface() {
 
       const allMessages = [...debateMessages, ...newMessages]
       setDebateMessages(allMessages)
+      setRetryCount(0) // Reset retry count on success
 
       // Play the first character's response
       playDebateAudio(newMessages[0], allMessages, debateMessages.length)
     } catch (error) {
       console.error("Error continuing debate:", error)
-      setAudioError(`Failed to continue debate: ${error.message}`)
+      setLastError(error.message)
+
+      // Implement retry logic
+      if (retryCount < 3) {
+        const newRetryCount = retryCount + 1
+        setRetryCount(newRetryCount)
+        setAudioError(
+          `Failed to continue debate (attempt ${newRetryCount}/3): ${error.message}. Retrying in 3 seconds...`,
+        )
+
+        // Retry after a delay
+        setTimeout(() => {
+          if (isDebating) {
+            console.log(`Retry attempt ${newRetryCount}/3...`)
+            continueDebate()
+          }
+        }, 3000)
+      } else {
+        setAudioError(`Failed to continue debate after 3 attempts: ${error.message}. Please try manually continuing.`)
+      }
     } finally {
       setIsProcessing(false)
     }
+  }
+
+  // Function to manually force continue the debate
+  const forceNextExchange = async () => {
+    // Reset retry count and clear errors
+    setRetryCount(0)
+    setAudioError(null)
+    setLastError(null)
+
+    // Force isDebating to true
+    setIsDebating(true)
+
+    // Wait a moment to ensure state is updated
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    // Try to continue the debate
+    continueDebate()
   }
 
   // Function to download the debate transcript
@@ -840,6 +892,23 @@ export function DebateInterface() {
         </div>
       </div>
 
+      {/* Display any errors */}
+      {audioError && (
+        <div className="mb-4 p-4 bg-red-900 text-red-100 rounded-lg">
+          <p className="font-bold">Error:</p>
+          <p>{audioError}</p>
+          {retryCount > 0 && retryCount < 3 && <p className="mt-2">Retrying automatically ({retryCount}/3)...</p>}
+          {retryCount >= 3 && (
+            <button
+              onClick={forceNextExchange}
+              className="mt-2 bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded"
+            >
+              Force Continue
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Suggested Topics */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
         <h2 className="text-xl font-semibold mb-4 text-yellow-400">Suggested Debate Topics</h2>
@@ -1065,6 +1134,18 @@ export function DebateInterface() {
         </div>
       )}
 
+      {/* Manual Continue Button */}
+      {isDebating && !isPlaying && !isProcessing && debateMessages.length >= 2 && (
+        <div className="flex justify-center mb-8">
+          <button
+            onClick={forceNextExchange}
+            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-bold"
+          >
+            Force Next Exchange
+          </button>
+        </div>
+      )}
+
       {/* Add transcript display */}
       {showTranscript && (
         <div className="mt-8 p-4 bg-gray-800 border border-gray-700 rounded-lg max-h-96 overflow-y-auto">
@@ -1118,6 +1199,8 @@ export function DebateInterface() {
             <p>Exchange Count: {exchangeCount}</p>
             <p>Max Exchanges: {maxExchanges}</p>
             <p>Is Autoplaying: {isAutoplaying ? "Yes" : "No"}</p>
+            <p>Retry Count: {retryCount}/3</p>
+            {lastError && <p>Last Error: {lastError}</p>}
           </div>
 
           <div className="mb-4">
