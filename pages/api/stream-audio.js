@@ -7,12 +7,15 @@ const openai = new OpenAI({
 })
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
+  // Accept GET requests instead of just POST
+  if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" })
   }
 
   try {
-    const { text, voice = "alloy" } = req.body
+    // Use query parameters for GET requests
+    const text = req.method === "GET" ? req.query.text : req.body.text
+    const voice = req.method === "GET" ? req.query.voice || "alloy" : req.body.voice || "alloy"
 
     if (!text) {
       return res.status(400).json({ error: "Text is required" })
@@ -20,7 +23,7 @@ export default async function handler(req, res) {
 
     console.log(`Generating audio for text: ${text.substring(0, 50)}...`)
 
-    // Use OpenAI's TTS API instead of Google
+    // Use OpenAI's TTS API
     const mp3 = await openai.audio.speech.create({
       model: "tts-1",
       voice: voice,
@@ -34,10 +37,15 @@ export default async function handler(req, res) {
     res.setHeader("Content-Type", "audio/mpeg")
     res.setHeader("Content-Length", buffer.length)
 
+    // Add CORS headers
+    res.setHeader("Access-Control-Allow-Origin", "*")
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type")
+
     // Send the audio data
     res.status(200).send(buffer)
   } catch (error) {
     console.error("Error generating audio:", error)
-    res.status(500).json({ error: "Failed to generate audio" })
+    res.status(500).json({ error: "Failed to generate audio: " + error.message })
   }
 }
