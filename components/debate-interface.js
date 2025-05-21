@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { personas } from "../lib/personas"
+import { personas, loadVoiceIds, voiceIdsLoaded } from "../lib/personas"
 
 export function DebateInterface() {
   const [character1, setCharacter1] = useState(Object.keys(personas)[0])
@@ -26,6 +26,19 @@ export function DebateInterface() {
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
   const [audioLoadTimeout, setAudioLoadTimeout] = useState(null)
+  const [voiceIdsReady, setVoiceIdsReady] = useState(voiceIdsLoaded)
+
+  // Load voice IDs when component mounts
+  useEffect(() => {
+    async function initVoiceIds() {
+      if (!voiceIdsLoaded) {
+        const success = await loadVoiceIds()
+        console.log("Voice IDs loaded:", success)
+      }
+    }
+
+    initVoiceIds()
+  }, [])
 
   // Store current audio URLs
   const [currentAudioUrls, setCurrentAudioUrls] = useState({
@@ -42,12 +55,26 @@ export function DebateInterface() {
   const char1 = personas[character1]
   const char2 = personas[character2]
 
-  // Log the entire personas object for debugging
+  // Load voice IDs when component mounts
+  useEffect(() => {
+    async function initVoiceIds() {
+      if (!voiceIdsLoaded) {
+        const success = await loadVoiceIds()
+        setVoiceIdsReady(success)
+      }
+    }
+
+    initVoiceIds()
+  }, [])
+
+  // Log the personas object and voice IDs for debugging
   useEffect(() => {
     console.log("PERSONAS OBJECT:", personas)
     console.log("Character 1:", character1, personas[character1])
+    console.log("Character 1 Voice ID:", personas[character1]?.voiceId)
     console.log("Character 2:", character2, personas[character2])
-  }, [character1, character2])
+    console.log("Character 2 Voice ID:", personas[character2]?.voiceId)
+  }, [character1, character2, voiceIdsReady])
 
   // Initialize audio elements with silent.mp3
   useEffect(() => {
@@ -231,33 +258,36 @@ export function DebateInterface() {
       return "alloy" // Default OpenAI voice as fallback
     }
 
-    // Log the character object for debugging
-    console.log(`Character object for ${characterId}:`, personas[characterId])
+    // Get the voice ID directly from the persona object using the getter
+    const voiceId = personas[characterId].voiceId
 
-    // Get the elevenlabs voice ID directly from the personas object
-    if (personas[characterId].elevenlabs_voice_id) {
-      console.log(`Found elevenlabs_voice_id "${personas[characterId].elevenlabs_voice_id}" for ${characterId}`)
-      return personas[characterId].elevenlabs_voice_id
+    if (voiceId) {
+      console.log(`Found voice ID "${voiceId}" for ${characterId}`)
+      return voiceId
     }
 
-    // Try alternative property names
-    if (personas[characterId].voice_id) {
-      console.log(`Found voice_id "${personas[characterId].voice_id}" for ${characterId}`)
-      return personas[characterId].voice_id
-    }
-
-    if (personas[characterId].voiceId) {
-      console.log(`Found voiceId "${personas[characterId].voiceId}" for ${characterId}`)
-      return personas[characterId].voiceId
-    }
-
-    // Fallback to gender-based default OpenAI voices
+    // Fallback to default voices if no voice ID is found
     console.log(`No voice ID found for ${characterId}, using default based on gender`)
     return personas[characterId]?.gender === "female" ? "nova" : "echo"
   }
 
   // Start a debate on a specific topic
   const startDebate = async (topic) => {
+    // Make sure voice IDs are loaded before starting
+    if (!voiceIdsLoaded) {
+      await loadVoiceIds()
+    }
+
+    // Make sure voice IDs are loaded before starting
+    if (!voiceIdsReady) {
+      const success = await loadVoiceIds()
+      setVoiceIdsReady(success)
+      if (!success) {
+        setAudioError("Failed to load voice IDs. Please try again.")
+        return
+      }
+    }
+
     resetDebateState()
     setCurrentTopic(topic)
     setIsDebating(true)
@@ -562,6 +592,12 @@ export function DebateInterface() {
   return (
     <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white min-h-screen">
       <h1 className="text-3xl font-bold text-center mb-8 text-yellow-400">Historical Debates</h1>
+
+      {!voiceIdsReady && (
+        <div className="mb-4 p-4 bg-yellow-800 text-yellow-100 rounded-lg text-center">
+          Loading voice data... Please wait.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
         {/* Character 1 Selection */}
@@ -912,12 +948,24 @@ export function DebateInterface() {
           <h3 className="text-lg font-bold mb-2">Audio Debug Panel</h3>
 
           <div className="mb-4">
+            <p>Voice IDs Ready: {voiceIdsReady ? "Yes" : "No"}</p>
             <p>Current Speaker: {currentSpeaker || "None"}</p>
             <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
             <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
             <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
             <p>Is Unlocking Audio: {isUnlockingAudio ? "Yes" : "No"}</p>
             <p>Is Initializing: {isInitializing ? "Yes" : "No"}</p>
+          </div>
+
+          <div className="mb-4">
+            <h4 className="font-medium mb-1">Character Voice IDs:</h4>
+            <ul className="text-sm">
+              {Object.keys(personas).map((id) => (
+                <li key={id} className="mb-1">
+                  {personas[id].name}: {personas[id].voiceId || "Not loaded"}
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div className="mb-4">

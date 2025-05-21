@@ -21,13 +21,13 @@ export default async function handler(req, res) {
     console.log(`Generating audio with voice ID: "${voice}" for text: ${text.substring(0, 50)}...`)
 
     // Check if this is an ElevenLabs voice ID (they typically start with numbers or have a specific format)
-    const isElevenLabsVoice = /^\w{20}$/.test(voice)
+    const isElevenLabsVoice = voice && voice.length > 10 && /^[a-zA-Z0-9]+$/.test(voice)
 
     let audioUrl
 
     if (isElevenLabsVoice) {
       // Use ElevenLabs API
-      const ELEVEN_LABS_API_KEY = process.env.ELEVEN_LABS_API_KEY
+      const ELEVEN_LABS_API_KEY = process.env.ELEVENLABS_VOICE_ID || process.env.ELEVEN_LABS_API_KEY
 
       if (!ELEVEN_LABS_API_KEY) {
         console.warn("ELEVEN_LABS_API_KEY not found, falling back to OpenAI TTS")
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
         audioUrl = `data:audio/mp3;base64,${base64Audio}`
       }
     } else {
-      // Use OpenAI's TTS API as fallback
+      // Use OpenAI's TTS API
       const mp3 = await openai.audio.speech.create({
         model: "tts-1",
         voice: voice, // Use the provided voice or default to "alloy"
