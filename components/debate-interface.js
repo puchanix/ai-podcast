@@ -11,7 +11,7 @@ export function DebateInterface() {
   const [debateMessages, setDebateMessages] = useState([])
   const [suggestedTopics, setSuggestedTopics] = useState([])
   const [customQuestion, setCustomQuestion] = useState("")
-  const [currentTopic, setCurrentTopic] = useState(null)
+  const [currentTopic, setCurrentTopic] = useState("")
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -28,6 +28,7 @@ export function DebateInterface() {
   const [voiceIdsReady, setVoiceIdsReady] = useState(voiceIdsLoaded)
   const [retryCount, setRetryCount] = useState(0)
   const [lastError, setLastError] = useState(null)
+  const [requestData, setRequestData] = useState(null)
 
   // Audio preloading state
   const [nextAudioData, setNextAudioData] = useState(null)
@@ -37,7 +38,7 @@ export function DebateInterface() {
   const [exchangeCount, setExchangeCount] = useState(0)
   const [maxExchanges, setMaxExchanges] = useState(5)
   const [isAutoplaying, setIsAutoplaying] = useState(true)
-  const [debugMode, setDebugMode] = useState(false) // Change to false to hide debug panel by default
+  const [debugMode, setDebugMode] = useState(true) // Set to true to show debug panel by default
 
   // Audio element refs
   const audioRef = useRef(null)
@@ -172,7 +173,7 @@ export function DebateInterface() {
   const resetDebateState = () => {
     setIsDebating(false)
     setDebateMessages([])
-    setCurrentTopic(null)
+    setCurrentTopic("")
     setCurrentSpeaker(null)
     setIsPlaying(false)
     setAudioError(null)
@@ -182,6 +183,7 @@ export function DebateInterface() {
     setIsAutoplaying(true)
     setRetryCount(0)
     setLastError(null)
+    setRequestData(null)
 
     // Clear any existing timeout
     if (audioLoadTimeout) {
@@ -383,7 +385,7 @@ export function DebateInterface() {
     setIsProcessing(true)
 
     // If no debate is in progress, start one with the custom question as the topic
-    if (!isDebating) {
+    if (!isDebating || !currentTopic) {
       setCurrentTopic(userQuestion)
       setIsDebating(true)
 
@@ -514,13 +516,25 @@ export function DebateInterface() {
       return
     }
 
+    // Validate that we have a topic
+    if (!currentTopic) {
+      setAudioError("Cannot continue debate: No topic specified")
+      return
+    }
+
+    // Validate that we have messages
+    if (!debateMessages || debateMessages.length === 0) {
+      setAudioError("Cannot continue debate: No previous messages")
+      return
+    }
+
     console.log("Starting next exchange...")
     setIsProcessing(true)
     setAudioError(null) // Clear any previous errors
 
     try {
-      // Log the data being sent to the API
-      const requestData = {
+      // Prepare the request data
+      const data = {
         character1,
         character2,
         currentMessages: debateMessages,
@@ -529,14 +543,17 @@ export function DebateInterface() {
         historicalContext,
       }
 
-      console.log("Sending data to auto-continue API:", JSON.stringify(requestData, null, 2))
+      // Store the request data for debugging
+      setRequestData(data)
+
+      console.log("Sending data to auto-continue API:", JSON.stringify(data, null, 2))
 
       const response = await fetch("/api/auto-continue", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(requestData),
+        body: JSON.stringify(data),
       })
 
       // Check for non-200 response
@@ -546,22 +563,22 @@ export function DebateInterface() {
         throw new Error(`API returned ${response.status}: ${errorText}`)
       }
 
-      const data = await response.json()
-      console.log("Received new debate responses:", data)
+      const responseData = await response.json()
+      console.log("Received new debate responses:", responseData)
 
       // Add responses
       const newMessages = [
         {
           character: character1,
-          content: data.response1,
+          content: responseData.response1,
           timestamp: Date.now() + 100,
-          audioUrl: data.audioUrl1,
+          audioUrl: responseData.audioUrl1,
         },
         {
           character: character2,
-          content: data.response2,
+          content: responseData.response2,
           timestamp: Date.now() + 200,
-          audioUrl: data.audioUrl2,
+          audioUrl: responseData.audioUrl2,
         },
       ]
 
@@ -1186,7 +1203,7 @@ export function DebateInterface() {
 
       {debugMode && (
         <div className="mt-8 p-4 bg-gray-800 border border-gray-700 rounded-lg">
-          <h3 className="text-lg font-bold mb-2">Audio Debug Panel</h3>
+          <h3 className="text-lg font-bold mb-2">Debug Panel</h3>
 
           <div className="mb-4">
             <p>Voice IDs Ready: {voiceIdsReady ? "Yes" : "No"}</p>
@@ -1200,6 +1217,8 @@ export function DebateInterface() {
             <p>Max Exchanges: {maxExchanges}</p>
             <p>Is Autoplaying: {isAutoplaying ? "Yes" : "No"}</p>
             <p>Retry Count: {retryCount}/3</p>
+            <p>Current Topic: "{currentTopic}"</p>
+            <p>Debate Messages Count: {debateMessages.length}</p>
             {lastError && <p>Last Error: {lastError}</p>}
           </div>
 
@@ -1214,25 +1233,20 @@ export function DebateInterface() {
             </ul>
           </div>
 
+          {requestData && (
+            <div className="mb-4">
+              <h4 className="font-medium mb-1">Last Request Data:</h4>
+              <pre className="text-xs bg-gray-900 p-2 rounded overflow-auto max-h-40">
+                {JSON.stringify(requestData, null, 2)}
+              </pre>
+            </div>
+          )}
+
           <div className="mb-4">
-            <h4 className="font-medium mb-1">Audio URLs:</h4>
-            <ul className="text-sm">
-              {debateMessages
-                .filter((msg) => msg.audioUrl)
-                .map((msg, index) => (
-                  <li key={index} className="mb-1">
-                    {msg.character === character1 ? char1.name : char2.name}: {msg.audioUrl}
-                  </li>
-                ))}
-            </ul>
-          </div>
-          <div className="mb-4">
-            <h4 className="font-medium mb-1">Audio Status:</h4>
-            <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
-            <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
-            <p>Is Preloading Next Speaker: {isPreloadingAudio ? "Yes" : "No"}</p>
-            <p>Next Speaker Audio Ready: {nextAudioData ? "Yes" : "No"}</p>
-            {nextAudioData && <p>Next Speaker: {nextAudioData.character === character1 ? char1.name : char2.name}</p>}
+            <h4 className="font-medium mb-1">Debate Messages:</h4>
+            <pre className="text-xs bg-gray-900 p-2 rounded overflow-auto max-h-40">
+              {JSON.stringify(debateMessages, null, 2)}
+            </pre>
           </div>
         </div>
       )}

@@ -13,14 +13,44 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log("Auto-continue API called with data:", JSON.stringify(req.body, null, 2))
+    console.log("Auto-continue API called")
+
+    // Log the request body to help debug
+    console.log("Request body:", JSON.stringify(req.body, null, 2))
 
     const { character1, character2, currentMessages, topic, format, historicalContext } = req.body
 
-    // Validate required fields
-    if (!character1 || !character2 || !currentMessages || !topic) {
-      console.error("Missing required fields:", { character1, character2, currentMessages: !!currentMessages, topic })
-      return res.status(400).json({ error: "Missing required fields" })
+    // Detailed validation of required fields
+    const missingFields = []
+    if (!character1) missingFields.push("character1")
+    if (!character2) missingFields.push("character2")
+    if (!currentMessages) missingFields.push("currentMessages")
+    if (!topic) missingFields.push("topic")
+
+    if (missingFields.length > 0) {
+      console.error(`Missing required fields: ${missingFields.join(", ")}`)
+      return res.status(400).json({
+        error: "Missing required fields",
+        details: `The following fields are required: ${missingFields.join(", ")}`,
+      })
+    }
+
+    // Validate currentMessages is an array
+    if (!Array.isArray(currentMessages)) {
+      console.error("currentMessages is not an array:", typeof currentMessages)
+      return res.status(400).json({
+        error: "Invalid format",
+        details: "currentMessages must be an array",
+      })
+    }
+
+    // Validate currentMessages has content
+    if (currentMessages.length === 0) {
+      console.error("currentMessages array is empty")
+      return res.status(400).json({
+        error: "Invalid content",
+        details: "currentMessages array cannot be empty",
+      })
     }
 
     // Get the personas for each character
@@ -28,13 +58,15 @@ export default async function handler(req, res) {
     const persona2 = personas[character2]
 
     if (!persona1 || !persona2) {
-      console.error("Invalid character selection:", {
-        character1,
-        character2,
-        persona1: !!persona1,
-        persona2: !!persona2,
+      const missingPersonas = []
+      if (!persona1) missingPersonas.push(character1)
+      if (!persona2) missingPersonas.push(character2)
+
+      console.error(`Invalid character selection: ${missingPersonas.join(", ")} not found in personas`)
+      return res.status(400).json({
+        error: "Invalid character selection",
+        details: `The following characters were not found: ${missingPersonas.join(", ")}`,
       })
-      return res.status(400).json({ error: "Invalid character selection" })
     }
 
     // Use the character-specific system prompts from the personas object
@@ -46,11 +78,6 @@ export default async function handler(req, res) {
 
     // Format previous messages for context
     let debateContext = `Topic: ${topic}\n\n`
-
-    if (!Array.isArray(currentMessages)) {
-      console.error("currentMessages is not an array:", currentMessages)
-      return res.status(400).json({ error: "currentMessages must be an array" })
-    }
 
     currentMessages.forEach((msg) => {
       if (msg.character === "user") {
@@ -64,11 +91,6 @@ export default async function handler(req, res) {
 
     // Get the last speaker
     const lastMessage = currentMessages[currentMessages.length - 1]
-    if (!lastMessage) {
-      console.error("No messages in currentMessages array")
-      return res.status(400).json({ error: "No messages to continue from" })
-    }
-
     const lastSpeaker = lastMessage.character
 
     // Determine who speaks first in this round
