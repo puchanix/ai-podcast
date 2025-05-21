@@ -917,31 +917,29 @@ export function DebateInterface() {
     setAudioError("Testing direct audio playback...")
 
     try {
-      // Create a simple audio context and oscillator for a test tone
-      const AudioContext = window.AudioContext || window.webkitAudioContext
-      const audioContext = new AudioContext()
+      // Use our simple test audio endpoint instead of Web Audio API
+      const audio = new Audio("/api/simple-test-audio")
+      audio.volume = volume
 
-      // Create an oscillator
-      const oscillator = audioContext.createOscillator()
-      oscillator.type = "sine"
-      oscillator.frequency.setValueAtTime(440, audioContext.currentTime) // A4 note
+      audio.oncanplaythrough = () => {
+        setAudioError("Test audio loaded successfully")
+      }
 
-      // Create a gain node to control volume
-      const gainNode = audioContext.createGain()
-      gainNode.gain.setValueAtTime(0.5, audioContext.currentTime)
+      audio.onplay = () => {
+        setAudioError("Test audio playing successfully")
+      }
 
-      // Connect the oscillator to the gain node and the gain node to the destination
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
+      audio.onended = () => {
+        setAudioError("Test audio playback completed")
+      }
 
-      // Start the oscillator
-      oscillator.start()
+      audio.onerror = (e) => {
+        const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
+        console.error("Test audio error:", errorDetails)
+        setAudioError(`Test audio failed: ${errorDetails}`)
+      }
 
-      // Stop the oscillator after 1 second
-      setTimeout(() => {
-        oscillator.stop()
-        setAudioError("Direct audio test completed - you should have heard a beep")
-      }, 1000)
+      await audio.play()
     } catch (err) {
       console.error("Direct audio test failed:", err)
       setAudioError(`Direct audio test failed: ${err.message}`)
