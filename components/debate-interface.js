@@ -20,14 +20,14 @@ export function DebateInterface() {
   const [volume, setVolume] = useState(1.0)
   const [showTranscript, setShowTranscript] = useState(false)
   const [audioError, setAudioError] = useState(null)
-  const [debugMode, setDebugMode] = useState(true) // Set to true by default for debugging
+  const [debugMode, setDebugMode] = useState(false) // Set to false by default
   const [isLoadingAudio, setIsLoadingAudio] = useState(false)
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
   const [audioLoadTimeout, setAudioLoadTimeout] = useState(null)
 
-  // Store current audio URLs .
+  // Store current audio URLs
   const [currentAudioUrls, setCurrentAudioUrls] = useState({
     char1: "",
     char2: "",
@@ -1541,6 +1541,13 @@ export function DebateInterface() {
           </button>
         </div>
       )}
+
+      {/* Return to Home button */}
+      <div className="mt-8 mb-4 text-center">
+        <a href="/" className="inline-block bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-full">
+          Return to Home
+        </a>
+      </div>
 
       {/* Audio elements - hidden by default, visible in debug mode */}
       <audio ref={silentAudioRef} preload="auto" className="hidden" />
