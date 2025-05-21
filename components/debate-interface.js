@@ -216,17 +216,17 @@ export function DebateInterface() {
     }
   }
 
-  // Replace the getVoiceForCharacter function with this version that uses the voice IDs from personas.js
+  // Get the appropriate voice for a character
   const getVoiceForCharacter = (characterId) => {
-    // Get the voice ID directly from the personas object
-    if (personas[characterId] && personas[characterId].voiceId) {
-      console.log(`Using voice ID "${personas[characterId].voiceId}" for ${characterId}`)
-      return personas[characterId].voiceId
+    // In pages/index.js, voices are accessed through the voice property, not voiceId
+    if (personas[characterId] && personas[characterId].voice) {
+      console.log(`Using voice "${personas[characterId].voice}" for ${characterId}`)
+      return personas[characterId].voice
     }
 
-    // Fallback to default voices if no voice ID is found
-    console.log(`No voice ID found for ${characterId}, using default`)
-    return personas[characterId]?.gender === "female" ? "nova" : "echo"
+    // Fallback to default voices if no voice is found
+    console.log(`No voice found for ${characterId}, using default`)
+    return personas[characterId]?.gender === "female" ? "en-US-Neural2-F" : "en-US-Neural2-D"
   }
 
   // Start a debate on a specific topic
@@ -235,6 +235,9 @@ export function DebateInterface() {
     setCurrentTopic(topic)
     setIsDebating(true)
     setIsProcessing(true)
+
+    // Set the current speaker to character1 immediately to show the correct image
+    setCurrentSpeaker(character1)
 
     // Ensure audio is unlocked
     await unlockAudio()
@@ -278,7 +281,7 @@ export function DebateInterface() {
       setDebateMessages(messages)
 
       // Set the current speaker to character1 immediately to show the correct image
-      setCurrentSpeaker(character1)
+      //setCurrentSpeaker(character1)
 
       // Use the index.js approach to play audio for the first character
       // The second character will play automatically when the first one finishes
