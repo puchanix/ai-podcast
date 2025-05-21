@@ -1,23 +1,32 @@
 // pages/api/test-audio.js
-import fs from 'fs'
-import path from 'path'
-
 export default function handler(req, res) {
-  try {
-    // Path to a test MP3 file in the public directory
-    const audioPath = path.join(process.cwd(), 'public', 'silent.mp3')
-    
-    // Read the file
-    const audioData = fs.readFileSync(audioPath)
-    
-    // Set headers
-    res.setHeader('Content-Type', 'audio/mpeg')
-    res.setHeader('Content-Length', audioData.length)
-    
-    // Send the file
-    res.send(audioData)
-  } catch (error) {
-    console.error('Error serving test audio:', error)
-    res.status(500).json({ error: 'Failed to serve test audio' })
+    // Set CORS headers
+    res.setHeader("Access-Control-Allow-Origin", "*")
+    res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type")
+  
+    // Set content type for audio
+    res.setHeader("Content-Type", "audio/mpeg")
+  
+    try {
+      // Generate a simple tone as a test
+      const sampleRate = 44100
+      const duration = 2 // 2 seconds
+      const frequency = 440 // A4 note
+  
+      // Create a buffer for a simple sine wave
+      const audioBuffer = Buffer.alloc(sampleRate * duration * 2)
+  
+      for (let i = 0; i < sampleRate * duration; i++) {
+        const sample = Math.sin((2 * Math.PI * frequency * i) / sampleRate) * 32767
+        audioBuffer.writeInt16LE(Math.floor(sample), i * 2)
+      }
+  
+      res.setHeader("Content-Length", audioBuffer.length)
+      return res.send(audioBuffer)
+    } catch (error) {
+      console.error("Error generating test audio:", error)
+      res.status(500).json({ error: "Failed to generate test audio" })
+    }
   }
-}
+  
