@@ -7,7 +7,7 @@ export function DebateInterface() {
   const [character1, setCharacter1] = useState(Object.keys(personas)[0])
   const [character2, setCharacter2] = useState(Object.keys(personas)[1])
   const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
-  const [isDebating, setIsDebating] = useState(isDebating)
+  const [isDebating, setIsDebating] = useState(false)
   const [debateMessages, setDebateMessages] = useState([])
   const [suggestedTopics, setSuggestedTopics] = useState([])
   const [customQuestion, setCustomQuestion] = useState("")
