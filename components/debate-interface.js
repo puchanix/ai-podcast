@@ -3,13 +3,53 @@
 import { useState, useEffect, useRef } from "react"
 import { personas, loadVoiceIds, voiceIdsLoaded } from "../lib/personas"
 
+// Static debate topics to avoid API delay
+const staticDebateTopics = [
+  {
+    id: "science-method",
+    title: "Scientific Method",
+    description: "Approaches to scientific discovery and experimentation",
+    category: "science",
+  },
+  {
+    id: "human-nature",
+    title: "Human Nature",
+    description: "The fundamental characteristics of humanity",
+    category: "philosophy",
+  },
+  {
+    id: "technology-progress",
+    title: "Technological Progress",
+    description: "The benefits and risks of advancing technology",
+    category: "technology",
+  },
+  {
+    id: "art-purpose",
+    title: "Purpose of Art",
+    description: "The role of artistic expression in society",
+    category: "arts",
+  },
+  {
+    id: "education-methods",
+    title: "Education Methods",
+    description: "How to best educate future generations",
+    category: "education",
+  },
+  {
+    id: "historical-legacy",
+    title: "Historical Legacy",
+    description: "How history shapes our present and future",
+    category: "history",
+  },
+]
+
 export function DebateInterface() {
   const [character1, setCharacter1] = useState(Object.keys(personas)[0])
   const [character2, setCharacter2] = useState(Object.keys(personas)[1])
   const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
   const [isDebating, setIsDebating] = useState(false)
   const [debateMessages, setDebateMessages] = useState([])
-  const [suggestedTopics, setSuggestedTopics] = useState([])
+  const [suggestedTopics, setSuggestedTopics] = useState(staticDebateTopics) // Initialize with static topics
   const [customQuestion, setCustomQuestion] = useState("")
   const [currentTopic, setCurrentTopic] = useState("")
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
@@ -40,6 +80,9 @@ export function DebateInterface() {
   const [isAutoplaying, setIsAutoplaying] = useState(true)
   const [debugMode, setDebugMode] = useState(true) // Set to true to show debug panel by default
 
+  // Store the topic in a ref to ensure it persists across renders
+  const topicRef = useRef("")
+
   // Audio element refs
   const audioRef = useRef(null)
   const silentAudioRef = useRef(null)
@@ -56,6 +99,14 @@ export function DebateInterface() {
   // Get character objects
   const char1 = personas[character1]
   const char2 = personas[character2]
+
+  // Update the ref whenever currentTopic changes
+  useEffect(() => {
+    if (currentTopic) {
+      topicRef.current = currentTopic
+      console.log("Topic updated in ref:", topicRef.current)
+    }
+  }, [currentTopic])
 
   // Load voice IDs when component mounts
   useEffect(() => {
@@ -150,11 +201,14 @@ export function DebateInterface() {
     }
   }, [audioInitialized, isUnlockingAudio])
 
-  // Generate debate topics when characters change
+  // Generate debate topics when characters change - now just updates the static topics
   useEffect(() => {
     // Reset debate state when characters change
     resetDebateState()
-    generateDebateTopics()
+
+    // No need to generate topics - just use the static ones
+    // This removes the delay in "generating topics"
+    setSuggestedTopics(staticDebateTopics)
   }, [character1, character2])
 
   // Add a useEffect to monitor isDebating state changes
@@ -174,6 +228,7 @@ export function DebateInterface() {
     setIsDebating(false)
     setDebateMessages([])
     setCurrentTopic("")
+    topicRef.current = "" // Also reset the topic ref
     setCurrentSpeaker(null)
     setIsPlaying(false)
     setAudioError(null)
@@ -200,74 +255,6 @@ export function DebateInterface() {
     if (char2AudioRef.current) {
       char2AudioRef.current.pause()
       char2AudioRef.current.src = "/silent.mp3" // Set to silent.mp3 instead of empty string
-    }
-  }
-
-  // Function to generate debate topics based on selected characters
-  const generateDebateTopics = async () => {
-    if (character1 === character2) return
-
-    setIsGeneratingTopics(true)
-
-    try {
-      const response = await fetch("/api/generate-debate-topics", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          character1,
-          character2,
-        }),
-      })
-
-      if (!response.ok) throw new Error("Failed to generate topics")
-
-      const data = await response.json()
-      setSuggestedTopics(data.topics)
-    } catch (error) {
-      console.error("Error generating debate topics:", error)
-      // Fallback topics if API fails
-      setSuggestedTopics([
-        {
-          id: "science-method",
-          title: "Scientific Method",
-          description: "Approaches to scientific discovery and experimentation",
-          category: "science",
-        },
-        {
-          id: "human-nature",
-          title: "Human Nature",
-          description: "The fundamental characteristics of humanity",
-          category: "philosophy",
-        },
-        {
-          id: "technology-progress",
-          title: "Technological Progress",
-          description: "The benefits and risks of advancing technology",
-          category: "technology",
-        },
-        {
-          id: "art-purpose",
-          title: "Purpose of Art",
-          description: "The role of artistic expression in society",
-          category: "arts",
-        },
-        {
-          id: "education-methods",
-          title: "Education Methods",
-          description: "How to best educate future generations",
-          category: "education",
-        },
-        {
-          id: "historical-legacy",
-          title: "Historical Legacy",
-          description: "How history shapes our present and future",
-          category: "history",
-        },
-      ])
-    } finally {
-      setIsGeneratingTopics(false)
     }
   }
 
@@ -318,6 +305,7 @@ export function DebateInterface() {
 
     resetDebateState()
     setCurrentTopic(topic)
+    topicRef.current = topic // Store in ref as well
     setIsDebating(true)
     setIsProcessing(true)
 
@@ -387,6 +375,7 @@ export function DebateInterface() {
     // If no debate is in progress, start one with the custom question as the topic
     if (!isDebating || !currentTopic) {
       setCurrentTopic(userQuestion)
+      topicRef.current = userQuestion // Store in ref as well
       setIsDebating(true)
 
       try {
@@ -516,19 +505,24 @@ export function DebateInterface() {
       return
     }
 
+    // Use the topic from the ref to ensure it's always available
+    const topic = topicRef.current || currentTopic
+
     // Validate that we have a topic
-    if (!currentTopic) {
-      setAudioError("Cannot continue debate: No topic specified")
+    if (!topic) {
+      console.error("Cannot continue debate: No topic specified")
+      setAudioError("Cannot continue debate: No topic specified. Please select a topic or ask a question.")
       return
     }
 
     // Validate that we have messages
     if (!debateMessages || debateMessages.length === 0) {
-      setAudioError("Cannot continue debate: No previous messages")
+      console.error("Cannot continue debate: No previous messages")
+      setAudioError("Cannot continue debate: No previous messages. Please start a new debate.")
       return
     }
 
-    console.log("Starting next exchange...")
+    console.log("Starting next exchange with topic:", topic)
     setIsProcessing(true)
     setAudioError(null) // Clear any previous errors
 
@@ -538,7 +532,7 @@ export function DebateInterface() {
         character1,
         character2,
         currentMessages: debateMessages,
-        topic: currentTopic,
+        topic: topic, // Use the topic from ref or state
         format: debateFormat,
         historicalContext,
       }
@@ -636,7 +630,7 @@ export function DebateInterface() {
   const downloadTranscript = () => {
     if (debateMessages.length === 0) return
 
-    let transcript = `Debate on ${currentTopic}\n\n`
+    let transcript = `Debate on ${currentTopic || topicRef.current}\n\n`
 
     debateMessages.forEach((msg) => {
       if (msg.character === "user") {
@@ -651,7 +645,7 @@ export function DebateInterface() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `debate-${currentTopic.replace(/\s+/g, "-").toLowerCase()}.txt`
+    a.download = `debate-${(currentTopic || topicRef.current).replace(/\s+/g, "-").toLowerCase()}.txt`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -929,38 +923,31 @@ export function DebateInterface() {
       {/* Suggested Topics */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
         <h2 className="text-xl font-semibold mb-4 text-yellow-400">Suggested Debate Topics</h2>
-        {isGeneratingTopics ? (
-          <div className="flex justify-center items-center p-8 text-white">
-            <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
-            <span className="ml-2">Generating topics...</span>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {suggestedTopics.map((topic) => (
-              <div
-                key={topic.id}
-                className="border border-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-700 transition-colors bg-gray-800"
-                onClick={() => startDebate(topic.title)}
-              >
-                <div className="flex items-start">
-                  <div className={`p-2 rounded-full mr-3 ${getCategoryColor(topic.category)}`}>
-                    {getCategoryIcon(topic.category)}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white">{topic.title}</h3>
-                    <p className="text-sm text-gray-300">{topic.description}</p>
-                  </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {suggestedTopics.map((topic) => (
+            <div
+              key={topic.id}
+              className="border border-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-700 transition-colors bg-gray-800"
+              onClick={() => startDebate(topic.title)}
+            >
+              <div className="flex items-start">
+                <div className={`p-2 rounded-full mr-3 ${getCategoryColor(topic.category)}`}>
+                  {getCategoryIcon(topic.category)}
+                </div>
+                <div>
+                  <h3 className="font-bold text-white">{topic.title}</h3>
+                  <p className="text-sm text-gray-300">{topic.description}</p>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Current Debate Status */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
         <h2 className="text-xl font-semibold mb-4 text-yellow-400">
-          {currentTopic ? `Debate: ${currentTopic}` : "Select a topic to begin"}
+          {currentTopic || topicRef.current ? `Debate: ${currentTopic || topicRef.current}` : "Select a topic to begin"}
         </h2>
 
         {/* Voice-only interface */}
@@ -1217,7 +1204,8 @@ export function DebateInterface() {
             <p>Max Exchanges: {maxExchanges}</p>
             <p>Is Autoplaying: {isAutoplaying ? "Yes" : "No"}</p>
             <p>Retry Count: {retryCount}/3</p>
-            <p>Current Topic: "{currentTopic}"</p>
+            <p>Current Topic (state): "{currentTopic}"</p>
+            <p>Current Topic (ref): "{topicRef.current}"</p>
             <p>Debate Messages Count: {debateMessages.length}</p>
             {lastError && <p>Last Error: {lastError}</p>}
           </div>
