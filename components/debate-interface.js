@@ -216,47 +216,17 @@ export function DebateInterface() {
     }
   }
 
-  // Get the appropriate voice for a character
+  // Replace the getVoiceForCharacter function with this version that uses the voice IDs from personas.js
   const getVoiceForCharacter = (characterId) => {
-    // Map characters to specific voices
-    const voiceMap = {
-      // Male voices with distinct personalities
-      aristotle: "onyx", // Deep, authoritative
-      daVinci: "echo", // Balanced, thoughtful
-      einstein: "echo", // Balanced, thoughtful
-      tesla: "onyx", // Deep, authoritative
-      darwin: "echo", // Balanced, thoughtful
-      newton: "onyx", // Deep, authoritative
-      galileo: "echo", // Balanced, thoughtful
-      socrates: "onyx", // Deep, authoritative
-      plato: "echo", // Balanced, thoughtful
-      shakespeare: "onyx", // Deep, authoritative for Shakespeare
-      mozart: "echo", // Balanced, thoughtful for Mozart
-      beethoven: "onyx", // Deep, authoritative
-      freud: "echo", // Balanced, thoughtful
-      jung: "onyx", // Deep, authoritative
-      nietzsche: "echo", // Balanced, thoughtful
-      kant: "onyx", // Deep, authoritative
-
-      // Female voices
-      curie: "nova", // Clear, professional
-      lovelace: "alloy", // Neutral, balanced
-      nightingale: "nova", // Clear, professional
-      franklin: "alloy", // Neutral, balanced
-      austen: "nova", // Clear, professional
-      woolf: "alloy", // Neutral, balanced
-
-      // Default fallbacks
-      default_male: "echo",
-      default_female: "nova",
+    // Get the voice ID directly from the personas object
+    if (personas[characterId] && personas[characterId].voiceId) {
+      console.log(`Using voice ID "${personas[characterId].voiceId}" for ${characterId}`)
+      return personas[characterId].voiceId
     }
 
-    console.log(
-      `Getting voice for character: ${characterId}, mapped to: ${voiceMap[characterId] || "not found in map"}`,
-    )
-
-    // Return the mapped voice or a default based on gender
-    return voiceMap[characterId] || (personas[characterId]?.gender === "female" ? "nova" : "echo")
+    // Fallback to default voices if no voice ID is found
+    console.log(`No voice ID found for ${characterId}, using default`)
+    return personas[characterId]?.gender === "female" ? "nova" : "echo"
   }
 
   // Start a debate on a specific topic
@@ -306,6 +276,9 @@ export function DebateInterface() {
       ]
 
       setDebateMessages(messages)
+
+      // Set the current speaker to character1 immediately to show the correct image
+      setCurrentSpeaker(character1)
 
       // Use the index.js approach to play audio for the first character
       // The second character will play automatically when the first one finishes
