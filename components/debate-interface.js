@@ -873,7 +873,42 @@ export function DebateInterface() {
       setAudioError(`Error checking audio URLs: ${err.message}`)
     }
   }
-
+// Test direct audio using Web Audio API
+const testDirectAudio = async () => {
+  setAudioError("Testing direct audio playback...");
+  
+  try {
+    // Create a simple audio context and oscillator for a test tone
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioContext();
+    
+    // Create an oscillator
+    const oscillator = audioContext.createOscillator();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+    
+    // Create a gain node to control volume
+    const gainNode = audioContext.createGain();
+    gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+    
+    // Connect the oscillator to the gain node and the gain node to the destination
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    // Start the oscillator
+    oscillator.start();
+    
+    // Stop the oscillator after 1 second
+    setTimeout(() => {
+      oscillator.stop();
+      setAudioError("Direct audio test completed - you should have heard a beep");
+    }, 1000);
+    
+  } catch (err) {
+    console.error("Direct audio test failed:", err);
+    setAudioError(`Direct audio test failed: ${err.message}`);
+  }
+};
   // Function to manually play character audio
   const playCharacterAudio = (charNum) => {
     if (charNum === 1) {
@@ -1351,7 +1386,9 @@ export function DebateInterface() {
             >
               Pause All
             </button>
-
+            <button onClick={testDirectAudio} className="px-3 py-1 bg-yellow-600 rounded">
+  Test Direct Audio
+</button>
             <a
               href="/audio-test"
               target="_blank"
