@@ -504,56 +504,8 @@ export function DebateInterface() {
 
       setDebateMessages(messages)
 
-      // Simplified audio setup for character 1 (similar to index.js approach)
-      if (char1AudioRef.current) {
-        try {
-          // Make the URL absolute to avoid any path issues
-          const audioUrl = data.audioUrl1.startsWith("/") ? window.location.origin + data.audioUrl1 : data.audioUrl1
-
-          char1AudioRef.current.src = audioUrl
-          char1AudioRef.current.volume = volume
-
-          // Play with simpler error handling
-          setIsLoadingAudio(true)
-
-          char1AudioRef.current
-            .play()
-            .then(() => {
-              setIsPlaying(true)
-              setIsLoadingAudio(false)
-              setCurrentSpeaker(character1)
-              console.log("Character 1 audio playback started successfully")
-            })
-            .catch((err) => {
-              console.error("Error playing character 1 audio:", err)
-              setAudioError(`Error playing character 1: ${err.message}`)
-              setIsLoadingAudio(false)
-
-              // Try direct fetch as fallback
-              tryDirectAudioFetch(data.audioUrl1, "character1")
-            })
-        } catch (err) {
-          console.error("Error setting up character 1 audio:", err)
-          setAudioError(`Error setting up character 1 audio: ${err.message}`)
-          setIsLoadingAudio(false)
-        }
-      }
-
-      // Set up character 2 audio
-      if (char2AudioRef.current) {
-        try {
-          // Make the URL absolute to avoid any path issues
-          const audioUrl = data.audioUrl2.startsWith("/") ? window.location.origin + data.audioUrl2 : data.audioUrl2
-
-          char2AudioRef.current.src = audioUrl
-          char2AudioRef.current.volume = volume
-          char2AudioRef.current.load()
-          console.log("Character 2 audio source set:", audioUrl)
-        } catch (err) {
-          console.error("Error setting up character 2 audio:", err)
-          setAudioError(`Error setting up character 2 audio: ${err.message}`)
-        }
-      }
+      // Use the index.js approach to play audio
+      playAudioLikeIndex(data.opening1, character1)
     } catch (error) {
       console.error("Error starting debate:", error)
       setIsDebating(false)
@@ -818,11 +770,32 @@ export function DebateInterface() {
 
   // Update the testDirectAudio function to use the simple-tone endpoint
   const testDirectAudio = async () => {
-    setAudioError("Testing direct audio playback...")
+    setAudioError("Testing audio using index.js approach...")
 
     try {
-      // Use our simple tone endpoint that doesn't rely on any external APIs
-      const audio = new Audio("/api/simple-tone")
+      // Create a new audio element (like in index.js)
+      const audio = new Audio()
+
+      // Use a simple text for testing
+      const text = "This is a test of the audio system using the index.js approach."
+
+      // Use the speak endpoint that works in index.js
+      const response = await fetch("/api/speak", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Speak API returned ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      // The speak API returns a data URL
+      audio.src = data.audioUrl
       audio.volume = volume
 
       audio.oncanplaythrough = () => {
@@ -845,8 +818,8 @@ export function DebateInterface() {
 
       await audio.play()
     } catch (err) {
-      console.error("Direct audio test failed:", err)
-      setAudioError(`Direct audio test failed: ${err.message}`)
+      console.error("Test audio failed:", err)
+      setAudioError(`Test audio failed: ${err.message}`)
     }
   }
 
@@ -952,50 +925,18 @@ export function DebateInterface() {
   // Function to manually play character audio
   const playCharacterAudio = (charNum) => {
     if (charNum === 1) {
-      if (char1AudioRef.current && currentAudioUrls.char1) {
-        // Make sure the src is set correctly
-        if (
-          !char1AudioRef.current.src ||
-          char1AudioRef.current.src === window.location.href ||
-          char1AudioRef.current.src.endsWith("/silent.mp3")
-        ) {
-          char1AudioRef.current.src = currentAudioUrls.char1
-          char1AudioRef.current.load()
-        }
-
-        char1AudioRef.current.volume = volume
-        char1AudioRef.current.play().catch((err) => {
-          console.error("Error manually playing character 1 audio:", err)
-          setAudioError(`Error playing character 1: ${err.message}`)
-
-          // Try direct fetch as fallback
-          tryDirectAudioFetch(currentAudioUrls.char1, "character1")
-        })
+      const char1Text = debateMessages.find((msg) => msg.character === character1)?.content
+      if (char1Text) {
+        playAudioLikeIndex(char1Text, character1)
       } else {
-        setAudioError("Character 1 audio not available")
+        setAudioError("Character 1 text not available")
       }
     } else if (charNum === 2) {
-      if (char2AudioRef.current && currentAudioUrls.char2) {
-        // Make sure the src is set correctly
-        if (
-          !char2AudioRef.current.src ||
-          char2AudioRef.current.src === window.location.href ||
-          char2AudioRef.current.src.endsWith("/silent.mp3")
-        ) {
-          char2AudioRef.current.src = currentAudioUrls.char2
-          char2AudioRef.current.load()
-        }
-
-        char2AudioRef.current.volume = volume
-        char2AudioRef.current.play().catch((err) => {
-          console.error("Error manually playing character 2 audio:", err)
-          setAudioError(`Error playing character 2: ${err.message}`)
-
-          // Try direct fetch as fallback
-          tryDirectAudioFetch(currentAudioUrls.char2, "character2")
-        })
+      const char2Text = debateMessages.find((msg) => msg.character === character2)?.content
+      if (char2Text) {
+        playAudioLikeIndex(char2Text, character2)
       } else {
-        setAudioError("Character 2 audio not available")
+        setAudioError("Character 2 text not available")
       }
     }
   }
@@ -1028,6 +969,79 @@ export function DebateInterface() {
     } catch (err) {
       console.error("Direct audio test failed:", err)
       setAudioError(`Direct audio test failed: ${err.message}`)
+    }
+  }
+
+  // Add this function to the DebateInterface component
+  const playAudioLikeIndex = async (text, character) => {
+    setAudioError(`Trying to play audio for ${character} using index.js approach...`)
+    setIsLoadingAudio(true)
+
+    try {
+      // Create a new audio element each time (like in index.js)
+      const audio = new Audio()
+
+      // Use the speak endpoint that works in index.js
+      const response = await fetch("/api/speak", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Speak API returned ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      // The speak API returns a data URL
+      audio.src = data.audioUrl
+      audio.volume = volume
+
+      // Set up event handlers
+      audio.oncanplaythrough = () => {
+        console.log(`${character} audio loaded successfully via index.js approach`)
+      }
+
+      audio.onplay = () => {
+        console.log(`${character} audio playing via index.js approach`)
+        setIsPlaying(true)
+        setIsLoadingAudio(false)
+        setCurrentSpeaker(character)
+        setAudioError(`${character} audio playing via index.js approach`)
+      }
+
+      audio.onended = () => {
+        console.log(`${character} audio playback ended`)
+        setIsPlaying(false)
+        setCurrentSpeaker(null)
+
+        // If this was character 1, try to play character 2 next
+        if (character === character1 && currentAudioUrls.char2) {
+          const char2Text = debateMessages.find((msg) => msg.character === character2)?.content
+          if (char2Text) {
+            playAudioLikeIndex(char2Text, character2)
+          }
+        }
+      }
+
+      audio.onerror = (e) => {
+        const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
+        console.error(`${character} audio error:`, errorDetails)
+        setAudioError(`${character} audio error: ${errorDetails}`)
+        setIsLoadingAudio(false)
+        setIsPlaying(false)
+      }
+
+      // Play the audio
+      await audio.play()
+    } catch (err) {
+      console.error(`Error playing ${character} audio:`, err)
+      setAudioError(`Error playing ${character} audio: ${err.message}`)
+      setIsLoadingAudio(false)
+      setIsPlaying(false)
     }
   }
 
@@ -1533,7 +1547,8 @@ export function DebateInterface() {
 
       <style jsx global>{`
         @keyframes soundwave {
-          0%, 100% {
+          0%,
+          100% {
             height: 4px;
           }
           50% {
