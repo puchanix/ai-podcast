@@ -483,9 +483,14 @@ export function DebateInterface() {
     }
   }
 
+  // Update the continueDebate function to ensure it's not blocked by isProcessing
   const continueDebate = async () => {
-    if (!isDebating || isProcessing) return
+    if (!isDebating || isProcessing) {
+      console.log("Cannot continue debate: isDebating =", isDebating, "isProcessing =", isProcessing)
+      return
+    }
 
+    console.log("Starting next exchange...")
     setIsProcessing(true)
 
     try {
@@ -507,6 +512,7 @@ export function DebateInterface() {
       if (!response.ok) throw new Error("Failed to continue debate")
 
       const data = await response.json()
+      console.log("Received new debate responses:", data)
 
       // Add responses
       const newMessages = [
@@ -563,7 +569,7 @@ export function DebateInterface() {
     URL.revokeObjectURL(url)
   }
 
-  // Replace the existing playDebateAudio function with this updated version
+  // Function to play debate audio
   const playDebateAudio = async (message, allMessages, currentIndex) => {
     const { character, content } = message
     console.log(`Playing audio for ${character}...`)
@@ -639,6 +645,7 @@ export function DebateInterface() {
           // Check if we've completed an exchange (both characters have spoken)
           // An exchange is complete when we've heard from both characters
           if (currentIndex > 0 && currentIndex % 2 === 1) {
+            // Calculate exchange count - start at 1 instead of 0
             const newExchangeCount = Math.floor((currentIndex + 1) / 2)
             setExchangeCount(newExchangeCount)
             console.log(`Completed exchange ${newExchangeCount} of ${maxExchanges}`)
@@ -796,8 +803,6 @@ export function DebateInterface() {
         </div>
       </div>
 
-      {/* Remove the debate settings section by deleting this block of JSX: */}
-
       {/* Suggested Topics */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
         <h2 className="text-xl font-semibold mb-4 text-yellow-400">Suggested Debate Topics</h2>
@@ -889,11 +894,11 @@ export function DebateInterface() {
 
               {isDebating && (
                 <div className="mb-4 text-sm text-gray-400">
-                  Exchange {exchangeCount} of {maxExchanges}
+                  Exchange {exchangeCount || 1} of {maxExchanges}
                   <div className="w-full bg-gray-700 h-2 rounded-full mt-1">
                     <div
                       className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${(exchangeCount / maxExchanges) * 100}%` }}
+                      style={{ width: `${((exchangeCount || 1) / maxExchanges) * 100}%` }}
                     ></div>
                   </div>
                 </div>
