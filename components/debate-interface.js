@@ -1,9 +1,18 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { personas, loadVoiceIds, voiceIdsLoaded } from "../lib/personas"
+import {
+  initializeDebateState,
+  saveTopic,
+  saveMessages,
+  saveIsDebating,
+  saveCharacters,
+  saveExchangeCount,
+  clearDebateState,
+} from "../lib/debate-state"
 
-// Static debate topics to avoid API delay
+// Static debate topics
 const staticDebateTopics = [
   {
     id: "science-method",
@@ -44,14 +53,20 @@ const staticDebateTopics = [
 ]
 
 export function DebateInterface() {
-  const [character1, setCharacter1] = useState(Object.keys(personas)[0])
-  const [character2, setCharacter2] = useState(Object.keys(personas)[1])
-  const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
-  const [isDebating, setIsDebating] = useState(false)
-  const [debateMessages, setDebateMessages] = useState([])
-  const [suggestedTopics, setSuggestedTopics] = useState(staticDebateTopics) // Initialize with static topics
+  // Initialize state from localStorage or defaults
+  const initialState = initializeDebateState()
+
+  // Core debate state
+  const [character1, setCharacter1] = useState(initialState.character1 || Object.keys(personas)[0])
+  const [character2, setCharacter2] = useState(initialState.character2 || Object.keys(personas)[1])
+  const [isDebating, setIsDebating] = useState(initialState.isDebating)
+  const [debateMessages, setDebateMessages] = useState(initialState.messages)
+  const [currentTopic, setCurrentTopic] = useState(initialState.topic)
+  const [exchangeCount, setExchangeCount] = useState(initialState.exchangeCount)
+
+  // UI state
+  const [suggestedTopics] = useState(staticDebateTopics)
   const [customQuestion, setCustomQuestion] = useState("")
-  const [currentTopic, setCurrentTopic] = useState("")
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -64,31 +79,26 @@ export function DebateInterface() {
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
-  const [audioLoadTimeout, setAudioLoadTimeout] = useState(null)
   const [voiceIdsReady, setVoiceIdsReady] = useState(voiceIdsLoaded)
   const [retryCount, setRetryCount] = useState(0)
   const [lastError, setLastError] = useState(null)
   const [requestData, setRequestData] = useState(null)
-
-  // Audio preloading state
   const [nextAudioData, setNextAudioData] = useState(null)
   const [isPreloadingAudio, setIsPreloadingAudio] = useState(false)
-
-  // Add these new state variables after the existing ones
-  const [exchangeCount, setExchangeCount] = useState(0)
   const [maxExchanges, setMaxExchanges] = useState(5)
   const [isAutoplaying, setIsAutoplaying] = useState(true)
-  const [debugMode, setDebugMode] = useState(true) // Set to true to show debug panel by default
+  const [debugMode, setDebugMode] = useState(true)
 
-  // Store the topic in a ref to ensure it persists across renders
-  const topicRef = useRef("")
-
-  // Audio element refs
+  // Refs
   const audioRef = useRef(null)
   const silentAudioRef = useRef(null)
   const char1AudioRef = useRef(null)
   const char2AudioRef = useRef(null)
   const nextAudioRef = useRef(null)
+  const topicRef = useRef(currentTopic)
+  const isDebatingRef = useRef(isDebating)
+  const debateMessagesRef = useRef(debateMessages)
+  const exchangeCountRef = useRef(exchangeCount)
 
   // Store current audio URLs
   const [currentAudioUrls, setCurrentAudioUrls] = useState({
@@ -100,13 +110,35 @@ export function DebateInterface() {
   const char1 = personas[character1]
   const char2 = personas[character2]
 
-  // Update the ref whenever currentTopic changes
+  // Update refs when state changes
   useEffect(() => {
-    if (currentTopic) {
-      topicRef.current = currentTopic
-      console.log("Topic updated in ref:", topicRef.current)
-    }
+    topicRef.current = currentTopic
+    console.log("Topic updated in ref:", topicRef.current)
+    saveTopic(currentTopic)
   }, [currentTopic])
+
+  useEffect(() => {
+    isDebatingRef.current = isDebating
+    console.log("isDebating updated in ref:", isDebatingRef.current)
+    saveIsDebating(isDebating)
+  }, [isDebating])
+
+  useEffect(() => {
+    debateMessagesRef.current = debateMessages
+    console.log("debateMessages updated in ref, length:", debateMessagesRef.current.length)
+    saveMessages(debateMessages)
+  }, [debateMessages])
+
+  useEffect(() => {
+    exchangeCountRef.current = exchangeCount
+    console.log("exchangeCount updated in ref:", exchangeCountRef.current)
+    saveExchangeCount(exchangeCount)
+  }, [exchangeCount])
+
+  // Save characters when they change
+  useEffect(() => {
+    saveCharacters(character1, character2)
+  }, [character1, character2])
 
   // Load voice IDs when component mounts
   useEffect(() => {
@@ -136,8 +168,6 @@ export function DebateInterface() {
       // Set a default silent audio file to prevent "Empty src attribute" errors
       char1AudioRef.current.src = "/silent.mp3"
       char2AudioRef.current.src = "/silent.mp3"
-
-      // Don't actually load or play these, just set the src
 
       // Mark initialization as complete after a short delay
       const timer = setTimeout(() => {
@@ -208,7 +238,7 @@ export function DebateInterface() {
 
     // No need to generate topics - just use the static ones
     // This removes the delay in "generating topics"
-    setSuggestedTopics(staticDebateTopics)
+    //setSuggestedTopics(staticDebateTopics)
   }, [character1, character2])
 
   // Add a useEffect to monitor isDebating state changes
@@ -224,11 +254,10 @@ export function DebateInterface() {
   }, [debateMessages])
 
   // Reset all debate state
-  const resetDebateState = () => {
+  const resetDebateState = useCallback(() => {
     setIsDebating(false)
     setDebateMessages([])
     setCurrentTopic("")
-    topicRef.current = "" // Also reset the topic ref
     setCurrentSpeaker(null)
     setIsPlaying(false)
     setAudioError(null)
@@ -240,26 +269,29 @@ export function DebateInterface() {
     setLastError(null)
     setRequestData(null)
 
-    // Clear any existing timeout
-    if (audioLoadTimeout) {
-      clearTimeout(audioLoadTimeout)
-      setAudioLoadTimeout(null)
-    }
+    // Update refs
+    topicRef.current = ""
+    isDebatingRef.current = false
+    debateMessagesRef.current = []
+    exchangeCountRef.current = 0
+
+    // Clear localStorage
+    clearDebateState()
 
     // Stop any playing audio
     if (char1AudioRef.current) {
       char1AudioRef.current.pause()
-      char1AudioRef.current.src = "/silent.mp3" // Set to silent.mp3 instead of empty string
+      char1AudioRef.current.src = "/silent.mp3"
     }
 
     if (char2AudioRef.current) {
       char2AudioRef.current.pause()
-      char2AudioRef.current.src = "/silent.mp3" // Set to silent.mp3 instead of empty string
+      char2AudioRef.current.src = "/silent.mp3"
     }
-  }
+  }, [])
 
   // Get the appropriate voice for a character directly from personas.js
-  const getVoiceForCharacter = (characterId) => {
+  const getVoiceForCharacter = useCallback((characterId) => {
     // Check if the character exists in personas
     if (!personas[characterId]) {
       console.log(`Character ${characterId} not found in personas`)
@@ -284,88 +316,90 @@ export function DebateInterface() {
     // Fallback to default voices if no voice ID is found
     console.log(`No voice ID found for ${characterId}, using default based on gender`)
     return personas[characterId]?.gender === "female" ? "nova" : "echo"
-  }
+  }, [])
 
   // Start a debate on a specific topic
-  const startDebate = async (topic) => {
-    // Make sure voice IDs are loaded before starting
-    if (!voiceIdsLoaded) {
-      await loadVoiceIds()
-    }
-
-    // Make sure voice IDs are loaded before starting
-    if (!voiceIdsReady) {
-      const success = await loadVoiceIds()
-      setVoiceIdsReady(success)
-      if (!success) {
-        setAudioError("Failed to load voice IDs. Please try again.")
-        return
+  const startDebate = useCallback(
+    async (topic) => {
+      // Make sure voice IDs are loaded before starting
+      if (!voiceIdsLoaded) {
+        await loadVoiceIds()
       }
-    }
 
-    resetDebateState()
-    setCurrentTopic(topic)
-    topicRef.current = topic // Store in ref as well
-    setIsDebating(true)
-    setIsProcessing(true)
+      // Make sure voice IDs are loaded before starting
+      if (!voiceIdsReady) {
+        const success = await loadVoiceIds()
+        setVoiceIdsReady(success)
+        if (!success) {
+          setAudioError("Failed to load voice IDs. Please try again.")
+          return
+        }
+      }
 
-    // Set the current speaker to character1 immediately to show the correct image
-    setCurrentSpeaker(character1)
+      resetDebateState()
+      setCurrentTopic(topic)
+      setIsDebating(true)
+      setIsProcessing(true)
 
-    // Ensure audio is unlocked
-    await unlockAudio()
+      // Set the current speaker to character1 immediately to show the correct image
+      setCurrentSpeaker(character1)
 
-    try {
-      const response = await fetch("/api/start-debate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          character1,
-          character2,
-          topic,
-          format: debateFormat,
-          historicalContext,
-        }),
-      })
+      // Ensure audio is unlocked
+      await unlockAudio()
 
-      if (!response.ok) throw new Error("Failed to start debate")
+      try {
+        const response = await fetch("/api/start-debate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            character1,
+            character2,
+            topic,
+            format: debateFormat,
+            historicalContext,
+          }),
+        })
 
-      const data = await response.json()
-      console.log("Debate started with data:", data)
+        if (!response.ok) throw new Error("Failed to start debate")
 
-      // Store the debate messages
-      const messages = [
-        {
-          character: character1,
-          content: data.opening1,
-          timestamp: Date.now(),
-          audioUrl: data.audioUrl1,
-        },
-        {
-          character: character2,
-          content: data.opening2,
-          timestamp: Date.now() + 100,
-          audioUrl: data.audioUrl2,
-        },
-      ]
+        const data = await response.json()
+        console.log("Debate started with data:", data)
 
-      setDebateMessages(messages)
+        // Store the debate messages
+        const messages = [
+          {
+            character: character1,
+            content: data.opening1,
+            timestamp: Date.now(),
+            audioUrl: data.audioUrl1,
+          },
+          {
+            character: character2,
+            content: data.opening2,
+            timestamp: Date.now() + 100,
+            audioUrl: data.audioUrl2,
+          },
+        ]
 
-      // Play the first character's audio and preload the second character's audio
-      playDebateAudio(messages[0], messages, 0)
-    } catch (error) {
-      console.error("Error starting debate:", error)
-      setIsDebating(false)
-      setAudioError(`Failed to start debate: ${error.message}`)
-    } finally {
-      setIsProcessing(false)
-    }
-  }
+        setDebateMessages(messages)
+
+        // Play the first character's audio and preload the second character's audio
+        playDebateAudio(messages[0], messages, 0)
+      } catch (error) {
+        console.error("Error starting debate:", error)
+        setIsDebating(false)
+        setAudioError(`Failed to start debate: ${error.message}`)
+      } finally {
+        setIsProcessing(false)
+      }
+    },
+    [character1, character2, debateFormat, historicalContext, resetDebateState, voiceIdsReady],
+  )
 
   // Submit a custom question to the debate
-  const submitCustomQuestion = async () => {
+  const submitCustomQuestion = useCallback(async () => {
     if (!customQuestion.trim() || isProcessing) return
 
     const userQuestion = customQuestion.trim()
@@ -373,9 +407,8 @@ export function DebateInterface() {
     setIsProcessing(true)
 
     // If no debate is in progress, start one with the custom question as the topic
-    if (!isDebating || !currentTopic) {
+    if (!isDebatingRef.current || !topicRef.current) {
       setCurrentTopic(userQuestion)
-      topicRef.current = userQuestion // Store in ref as well
       setIsDebating(true)
 
       try {
@@ -431,7 +464,7 @@ export function DebateInterface() {
     // If a debate is already in progress, add the question to it
     // Add user question as a special message
     const updatedMessages = [
-      ...debateMessages,
+      ...debateMessagesRef.current,
       {
         character: "user",
         content: userQuestion,
@@ -451,7 +484,7 @@ export function DebateInterface() {
           character1,
           character2,
           userQuestion,
-          currentMessages: debateMessages,
+          currentMessages: debateMessagesRef.current,
           format: debateFormat,
           historicalContext,
         }),
@@ -488,12 +521,12 @@ export function DebateInterface() {
     } finally {
       setIsProcessing(false)
     }
-  }
+  }, [character1, character2, customQuestion, debateFormat, historicalContext, isProcessing])
 
   // Update the continueDebate function to ensure it's not blocked by isProcessing
-  const continueDebate = async () => {
+  const continueDebate = useCallback(async () => {
     // Check if isDebating is false and log it
-    if (!isDebating) {
+    if (!isDebatingRef.current) {
       console.log("isDebating is false, forcing it to true")
       setIsDebating(true)
       // Add a small delay to ensure state updates before proceeding
@@ -506,7 +539,7 @@ export function DebateInterface() {
     }
 
     // Use the topic from the ref to ensure it's always available
-    const topic = topicRef.current || currentTopic
+    const topic = topicRef.current
 
     // Validate that we have a topic
     if (!topic) {
@@ -515,14 +548,18 @@ export function DebateInterface() {
       return
     }
 
+    // Use the messages from the ref to ensure they're always available
+    const messages = debateMessagesRef.current
+
     // Validate that we have messages
-    if (!debateMessages || debateMessages.length === 0) {
+    if (!messages || messages.length === 0) {
       console.error("Cannot continue debate: No previous messages")
       setAudioError("Cannot continue debate: No previous messages. Please start a new debate.")
       return
     }
 
     console.log("Starting next exchange with topic:", topic)
+    console.log("Current messages length:", messages.length)
     setIsProcessing(true)
     setAudioError(null) // Clear any previous errors
 
@@ -531,8 +568,8 @@ export function DebateInterface() {
       const data = {
         character1,
         character2,
-        currentMessages: debateMessages,
-        topic: topic, // Use the topic from ref or state
+        currentMessages: messages,
+        topic: topic,
         format: debateFormat,
         historicalContext,
       }
@@ -576,12 +613,12 @@ export function DebateInterface() {
         },
       ]
 
-      const allMessages = [...debateMessages, ...newMessages]
+      const allMessages = [...messages, ...newMessages]
       setDebateMessages(allMessages)
       setRetryCount(0) // Reset retry count on success
 
       // Play the first character's response
-      playDebateAudio(newMessages[0], allMessages, debateMessages.length)
+      playDebateAudio(newMessages[0], allMessages, messages.length)
     } catch (error) {
       console.error("Error continuing debate:", error)
       setLastError(error.message)
@@ -596,7 +633,7 @@ export function DebateInterface() {
 
         // Retry after a delay
         setTimeout(() => {
-          if (isDebating) {
+          if (isDebatingRef.current) {
             console.log(`Retry attempt ${newRetryCount}/3...`)
             continueDebate()
           }
@@ -607,10 +644,10 @@ export function DebateInterface() {
     } finally {
       setIsProcessing(false)
     }
-  }
+  }, [character1, character2, debateFormat, historicalContext, isProcessing, retryCount])
 
   // Function to manually force continue the debate
-  const forceNextExchange = async () => {
+  const forceNextExchange = useCallback(async () => {
     // Reset retry count and clear errors
     setRetryCount(0)
     setAudioError(null)
@@ -624,15 +661,15 @@ export function DebateInterface() {
 
     // Try to continue the debate
     continueDebate()
-  }
+  }, [continueDebate])
 
   // Function to download the debate transcript
-  const downloadTranscript = () => {
-    if (debateMessages.length === 0) return
+  const downloadTranscript = useCallback(() => {
+    if (debateMessagesRef.current.length === 0) return
 
-    let transcript = `Debate on ${currentTopic || topicRef.current}\n\n`
+    let transcript = `Debate on ${topicRef.current}\n\n`
 
-    debateMessages.forEach((msg) => {
+    debateMessagesRef.current.forEach((msg) => {
       if (msg.character === "user") {
         transcript += `Question: ${msg.content}\n\n`
       } else {
@@ -645,197 +682,203 @@ export function DebateInterface() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `debate-${(currentTopic || topicRef.current).replace(/\s+/g, "-").toLowerCase()}.txt`
+    a.download = `debate-${topicRef.current.replace(/\s+/g, "-").toLowerCase()}.txt`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  }
+  }, [char1?.name, char2?.name, character1, character2])
+
+  // Preload the next speaker's audio
+  const preloadNextAudio = useCallback(
+    async (message, allMessages, nextIndex) => {
+      const { character, content } = message
+      console.log(`Preloading audio for next speaker ${character}...`)
+      setIsPreloadingAudio(true)
+
+      try {
+        // Get the voice for this character
+        const voice = getVoiceForCharacter(character)
+        console.log(`Using voice "${voice}" for preloading ${character}`)
+
+        // Generate audio for the next speaker
+        const response = await fetch("/api/speak", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: content,
+            voice,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Speak API returned ${response.status} for preloading`)
+        }
+
+        const data = await response.json()
+
+        // Store the preloaded audio URL
+        setNextAudioData({
+          character,
+          audioUrl: data.audioUrl,
+          index: nextIndex,
+        })
+
+        console.log(`Successfully preloaded audio for ${character}`)
+      } catch (err) {
+        console.error(`Error preloading audio for ${character}:`, err)
+      } finally {
+        setIsPreloadingAudio(false)
+      }
+    },
+    [getVoiceForCharacter],
+  )
 
   // Function to play debate audio
-  const playDebateAudio = async (message, allMessages, currentIndex) => {
-    // Ensure isDebating is true when playing audio
-    if (!isDebating) {
-      console.log("Setting isDebating to true in playDebateAudio")
-      setIsDebating(true)
-    }
-
-    const { character, content } = message
-    console.log(`Playing audio for ${character}...`)
-    setIsLoadingAudio(true)
-    setCurrentSpeaker(character)
-
-    try {
-      // Create a new audio element
-      const audio = new Audio()
-
-      // Get the voice for this character
-      const voice = getVoiceForCharacter(character)
-      console.log(`Using voice "${voice}" for ${character}`)
-
-      // Generate audio for the current speaker
-      const response = await fetch("/api/speak", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: content,
-          voice,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Speak API returned ${response.status}: ${response.statusText}`)
+  const playDebateAudio = useCallback(
+    async (message, allMessages, currentIndex) => {
+      // Ensure isDebating is true when playing audio
+      if (!isDebatingRef.current) {
+        console.log("Setting isDebating to true in playDebateAudio")
+        setIsDebating(true)
       }
 
-      const data = await response.json()
-      audio.src = data.audioUrl
-      audio.volume = volume
+      const { character, content } = message
+      console.log(`Playing audio for ${character}...`)
+      setIsLoadingAudio(true)
+      setCurrentSpeaker(character)
 
-      // Preload the next speaker's audio if available
-      const nextIndex = currentIndex + 1
-      if (nextIndex < allMessages.length && allMessages[nextIndex].character !== "user") {
-        preloadNextAudio(allMessages[nextIndex], allMessages, nextIndex)
-      }
+      try {
+        // Create a new audio element
+        const audio = new Audio()
 
-      // Set up event handlers
-      audio.oncanplaythrough = () => {
-        console.log(`${character} audio loaded successfully`)
-      }
+        // Get the voice for this character
+        const voice = getVoiceForCharacter(character)
+        console.log(`Using voice "${voice}" for ${character}`)
 
-      audio.onplay = () => {
-        console.log(`${character} audio playing`)
-        setIsPlaying(true)
-        setIsLoadingAudio(false)
-      }
+        // Generate audio for the current speaker
+        const response = await fetch("/api/speak", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: content,
+            voice,
+          }),
+        })
 
-      // Add this debug log right after the audio.onended function to track state changes
-      audio.onended = () => {
-        console.log(`${character} audio playback ended`)
-        setIsPlaying(false)
+        if (!response.ok) {
+          throw new Error(`Speak API returned ${response.status}: ${response.statusText}`)
+        }
 
-        // Add this debug log to track state
-        console.log(
-          `After audio ended - isDebating: ${isDebating}, isProcessing: ${isProcessing}, isAutoplaying: ${isAutoplaying}`,
-        )
+        const data = await response.json()
+        audio.src = data.audioUrl
+        audio.volume = volume
 
-        // Play the next message if it exists and is not a user message
+        // Preload the next speaker's audio if available
         const nextIndex = currentIndex + 1
-        if (nextIndex < allMessages.length) {
-          const nextMessage = allMessages[nextIndex]
-          if (nextMessage.character !== "user") {
-            // Small delay before playing next audio
-            setTimeout(() => {
-              if (isAutoplaying) {
-                playDebateAudio(nextMessage, allMessages, nextIndex)
-              } else {
-                setCurrentSpeaker(null)
-              }
-            }, 500)
-          }
-        } else {
-          setCurrentSpeaker(null)
+        if (nextIndex < allMessages.length && allMessages[nextIndex].character !== "user") {
+          preloadNextAudio(allMessages[nextIndex], allMessages, nextIndex)
+        }
 
-          // Check if we've completed an exchange (both characters have spoken)
-          // An exchange is complete when we've heard from both characters
-          if (currentIndex > 0 && currentIndex % 2 === 1) {
-            // Calculate exchange count - start at 1 instead of 0
-            const newExchangeCount = Math.floor((currentIndex + 1) / 2)
-            setExchangeCount(newExchangeCount)
-            console.log(`Completed exchange ${newExchangeCount} of ${maxExchanges}`)
+        // Set up event handlers
+        audio.oncanplaythrough = () => {
+          console.log(`${character} audio loaded successfully`)
+        }
 
-            // If we've reached the maximum exchanges, stop auto-playing
-            if (newExchangeCount >= maxExchanges) {
-              setIsAutoplaying(false)
-              console.log(`Reached ${maxExchanges} exchanges, stopping auto-play`)
-            } else if (isAutoplaying) {
-              // Otherwise, continue the debate automatically after a short delay
-              console.log(`Automatically continuing to next exchange...`)
+        audio.onplay = () => {
+          console.log(`${character} audio playing`)
+          setIsPlaying(true)
+          setIsLoadingAudio(false)
+        }
+
+        // Add this debug log right after the audio.onended function to track state changes
+        audio.onended = () => {
+          console.log(`${character} audio playback ended`)
+          setIsPlaying(false)
+
+          // Add this debug log to track state
+          console.log(
+            `After audio ended - isDebating: ${isDebatingRef.current}, isProcessing: ${isProcessing}, isAutoplaying: ${isAutoplaying}`,
+          )
+
+          // Play the next message if it exists and is not a user message
+          const nextIndex = currentIndex + 1
+          if (nextIndex < allMessages.length) {
+            const nextMessage = allMessages[nextIndex]
+            if (nextMessage.character !== "user") {
+              // Small delay before playing next audio
               setTimeout(() => {
-                // Add this debug log to check state right before continuing
-                console.log(
-                  `Before continuing - isDebating: ${isDebating}, isProcessing: ${isProcessing}, isAutoplaying: ${isAutoplaying}`,
-                )
-
-                if (isAutoplaying && !isProcessing) {
-                  console.log(`Triggering next exchange...`)
-                  continueDebate()
+                if (isAutoplaying) {
+                  playDebateAudio(nextMessage, allMessages, nextIndex)
+                } else {
+                  setCurrentSpeaker(null)
                 }
-              }, 2000)
+              }, 500)
+            }
+          } else {
+            setCurrentSpeaker(null)
+
+            // Check if we've completed an exchange (both characters have spoken)
+            // An exchange is complete when we've heard from both characters
+            if (currentIndex > 0 && currentIndex % 2 === 1) {
+              // Calculate exchange count - start at 1 instead of 0
+              const newExchangeCount = Math.floor((currentIndex + 1) / 2)
+              setExchangeCount(newExchangeCount)
+              console.log(`Completed exchange ${newExchangeCount} of ${maxExchanges}`)
+
+              // If we've reached the maximum exchanges, stop auto-playing
+              if (newExchangeCount >= maxExchanges) {
+                setIsAutoplaying(false)
+                console.log(`Reached ${maxExchanges} exchanges, stopping auto-play`)
+              } else if (isAutoplaying) {
+                // Otherwise, continue the debate automatically after a short delay
+                console.log(`Automatically continuing to next exchange...`)
+                setTimeout(() => {
+                  // Add this debug log to check state right before continuing
+                  console.log(
+                    `Before continuing - isDebating: ${isDebatingRef.current}, isProcessing: ${isProcessing}, isAutoplaying: ${isAutoplaying}`,
+                  )
+
+                  if (isAutoplaying && !isProcessing && isDebatingRef.current) {
+                    console.log(`Triggering next exchange...`)
+                    continueDebate()
+                  }
+                }, 2000)
+              }
             }
           }
         }
-      }
 
-      audio.onerror = (e) => {
-        const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
-        console.error(`${character} audio error:`, errorDetails)
-        setAudioError(`${character} audio error: ${errorDetails}`)
+        audio.onerror = (e) => {
+          const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
+          console.error(`${character} audio error:`, errorDetails)
+          setAudioError(`${character} audio error: ${errorDetails}`)
+          setIsLoadingAudio(false)
+          setIsPlaying(false)
+          setCurrentSpeaker(null)
+        }
+
+        // Play the audio
+        await audio.play()
+      } catch (err) {
+        console.error(`Error playing ${character} audio:`, err)
+        setAudioError(`Error playing ${character} audio: ${err.message}`)
         setIsLoadingAudio(false)
         setIsPlaying(false)
         setCurrentSpeaker(null)
       }
-
-      // Play the audio
-      await audio.play()
-    } catch (err) {
-      console.error(`Error playing ${character} audio:`, err)
-      setAudioError(`Error playing ${character} audio: ${err.message}`)
-      setIsLoadingAudio(false)
-      setIsPlaying(false)
-      setCurrentSpeaker(null)
-    }
-  }
-
-  // Preload the next speaker's audio
-  const preloadNextAudio = async (message, allMessages, nextIndex) => {
-    const { character, content } = message
-    console.log(`Preloading audio for next speaker ${character}...`)
-    setIsPreloadingAudio(true)
-
-    try {
-      // Get the voice for this character
-      const voice = getVoiceForCharacter(character)
-      console.log(`Using voice "${voice}" for preloading ${character}`)
-
-      // Generate audio for the next speaker
-      const response = await fetch("/api/speak", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: content,
-          voice,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Speak API returned ${response.status} for preloading`)
-      }
-
-      const data = await response.json()
-
-      // Store the preloaded audio URL
-      setNextAudioData({
-        character,
-        audioUrl: data.audioUrl,
-        index: nextIndex,
-      })
-
-      console.log(`Successfully preloaded audio for ${character}`)
-    } catch (err) {
-      console.error(`Error preloading audio for ${character}:`, err)
-    } finally {
-      setIsPreloadingAudio(false)
-    }
-  }
+    },
+    [getVoiceForCharacter, isAutoplaying, isProcessing, maxExchanges, preloadNextAudio, volume],
+  )
 
   // Add this function to toggle auto-play
-  const toggleAutoplay = () => {
+  const toggleAutoplay = useCallback(() => {
     setIsAutoplaying(!isAutoplaying)
-  }
+  }, [isAutoplaying])
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white min-h-screen">
@@ -947,7 +990,7 @@ export function DebateInterface() {
       {/* Current Debate Status */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
         <h2 className="text-xl font-semibold mb-4 text-yellow-400">
-          {currentTopic || topicRef.current ? `Debate: ${currentTopic || topicRef.current}` : "Select a topic to begin"}
+          {currentTopic ? `Debate: ${currentTopic}` : "Select a topic to begin"}
         </h2>
 
         {/* Voice-only interface */}
@@ -1206,7 +1249,10 @@ export function DebateInterface() {
             <p>Retry Count: {retryCount}/3</p>
             <p>Current Topic (state): "{currentTopic}"</p>
             <p>Current Topic (ref): "{topicRef.current}"</p>
-            <p>Debate Messages Count: {debateMessages.length}</p>
+            <p>Is Debating (state): {isDebating ? "Yes" : "No"}</p>
+            <p>Is Debating (ref): {isDebatingRef.current ? "Yes" : "No"}</p>
+            <p>Debate Messages Count (state): {debateMessages.length}</p>
+            <p>Debate Messages Count (ref): {debateMessagesRef.current.length}</p>
             {lastError && <p>Last Error: {lastError}</p>}
           </div>
 
@@ -1235,6 +1281,19 @@ export function DebateInterface() {
             <pre className="text-xs bg-gray-900 p-2 rounded overflow-auto max-h-40">
               {JSON.stringify(debateMessages, null, 2)}
             </pre>
+          </div>
+
+          <div className="mb-4">
+            <button
+              onClick={() => {
+                console.log("Clearing localStorage and resetting state")
+                clearDebateState()
+                resetDebateState()
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+            >
+              Clear Storage & Reset
+            </button>
           </div>
         </div>
       )}
