@@ -27,33 +27,23 @@ export function DebateInterface() {
   const [isInitializing, setIsInitializing] = useState(true)
   const [audioLoadTimeout, setAudioLoadTimeout] = useState(null)
   const [voiceIdsReady, setVoiceIdsReady] = useState(voiceIdsLoaded)
-  // Add these new state variables near the top of the component with the other state variables
-  const [nextSpeakerAudio, setNextSpeakerAudio] = useState(null)
+
+  // Audio preloading state
+  const [nextAudioData, setNextAudioData] = useState(null)
   const [isPreloadingAudio, setIsPreloadingAudio] = useState(false)
+
+  // Audio element refs
+  const audioRef = useRef(null)
+  const silentAudioRef = useRef(null)
+  const char1AudioRef = useRef(null)
+  const char2AudioRef = useRef(null)
   const nextAudioRef = useRef(null)
-
-  // Load voice IDs when component mounts
-  useEffect(() => {
-    async function initVoiceIds() {
-      if (!voiceIdsLoaded) {
-        const success = await loadVoiceIds()
-        console.log("Voice IDs loaded:", success)
-      }
-    }
-
-    initVoiceIds()
-  }, [])
 
   // Store current audio URLs
   const [currentAudioUrls, setCurrentAudioUrls] = useState({
     char1: "",
     char2: "",
   })
-
-  const audioRef = useRef(null)
-  const silentAudioRef = useRef(null)
-  const char1AudioRef = useRef(null)
-  const char2AudioRef = useRef(null)
 
   // Get character objects
   const char1 = personas[character1]
@@ -65,6 +55,7 @@ export function DebateInterface() {
       if (!voiceIdsLoaded) {
         const success = await loadVoiceIds()
         setVoiceIdsReady(success)
+        console.log("Voice IDs loaded:", success)
       }
     }
 
@@ -167,6 +158,7 @@ export function DebateInterface() {
     setIsPlaying(false)
     setAudioError(null)
     setCurrentAudioUrls({ char1: "", char2: "" })
+    setNextAudioData(null)
 
     // Clear any existing timeout
     if (audioLoadTimeout) {
@@ -348,9 +340,8 @@ export function DebateInterface() {
 
       setDebateMessages(messages)
 
-      // Use the index.js approach to play audio for the first character
-      // The second character will play automatically when the first one finishes
-      playAudioLikeIndex(data.opening1, character1, messages)
+      // Play the first character's audio and preload the second character's audio
+      playDebateAudio(messages[0], messages, 0)
     } catch (error) {
       console.error("Error starting debate:", error)
       setIsDebating(false)
@@ -420,7 +411,7 @@ export function DebateInterface() {
       setDebateMessages(allMessages)
 
       // Play the first character's response
-      playAudioLikeIndex(data.response1, character1, allMessages)
+      playDebateAudio(newMessages[0], allMessages, updatedMessages.length)
     } catch (error) {
       console.error("Error continuing debate:", error)
       setAudioError(`Failed to continue debate: ${error.message}`)
@@ -474,7 +465,7 @@ export function DebateInterface() {
       setDebateMessages(allMessages)
 
       // Play the first character's response
-      playAudioLikeIndex(data.response1, character1, allMessages)
+      playDebateAudio(newMessages[0], allMessages, debateMessages.length)
     } catch (error) {
       console.error("Error continuing debate:", error)
       setAudioError(`Failed to continue debate: ${error.message}`)
@@ -509,28 +500,30 @@ export function DebateInterface() {
     URL.revokeObjectURL(url)
   }
 
-  // Add this function to the DebateInterface component
-  const playAudioLikeIndex = async (text, character, allMessages) => {
+  // Simplified audio playback function with preloading
+  const playDebateAudio = async (message, allMessages, currentIndex) => {
+    const { character, content } = message
     console.log(`Playing audio for ${character}...`)
     setIsLoadingAudio(true)
+    setCurrentSpeaker(character)
 
     try {
-      // Create a new audio element each time (like in index.js)
+      // Create a new audio element
       const audio = new Audio()
 
-      // Get the appropriate voice for this character
+      // Get the voice for this character
       const voice = getVoiceForCharacter(character)
       console.log(`Using voice "${voice}" for ${character}`)
 
-      // Use the speak endpoint that works in index.js
+      // Generate audio for the current speaker
       const response = await fetch("/api/speak", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          text,
-          voice, // Pass the voice parameter
+          text: content,
+          voice,
         }),
       })
 
@@ -539,92 +532,42 @@ export function DebateInterface() {
       }
 
       const data = await response.json()
-
-      // The speak API returns a data URL
       audio.src = data.audioUrl
       audio.volume = volume
 
+      // Preload the next speaker's audio if available
+      const nextIndex = currentIndex + 1
+      if (nextIndex < allMessages.length && allMessages[nextIndex].character !== "user") {
+        preloadNextAudio(allMessages[nextIndex], allMessages, nextIndex)
+      }
+
       // Set up event handlers
       audio.oncanplaythrough = () => {
-        console.log(`${character} audio loaded successfully via index.js approach`)
+        console.log(`${character} audio loaded successfully`)
       }
 
       audio.onplay = () => {
-        console.log(`${character} audio playing via index.js approach`)
+        console.log(`${character} audio playing`)
         setIsPlaying(true)
         setIsLoadingAudio(false)
-        setCurrentSpeaker(character)
-
-        // Find the current message index
-        const currentMsgIndex = allMessages.findIndex((msg) => msg.character === character && msg.content === text)
-
-        // If we found the current message and there's a next message, preload it
-        if (currentMsgIndex !== -1 && currentMsgIndex + 1 < allMessages.length) {
-          const nextMsg = allMessages[currentMsgIndex + 1]
-
-          // Skip user messages for audio preloading
-          if (nextMsg.character === "user" && currentMsgIndex + 2 < allMessages.length) {
-            const msgAfterUser = allMessages[currentMsgIndex + 2]
-            if (msgAfterUser.character !== "user") {
-              preloadNextSpeakerAudio(msgAfterUser.content, msgAfterUser.character, allMessages)
-            }
-          }
-          // Preload the next character's audio if it's not a user message
-          else if (nextMsg.character !== "user") {
-            preloadNextSpeakerAudio(nextMsg.content, nextMsg.character, allMessages)
-          }
-        }
       }
 
       audio.onended = () => {
         console.log(`${character} audio playback ended`)
         setIsPlaying(false)
-        setCurrentSpeaker(null)
 
-        // If we have preloaded audio for the next speaker, play it immediately
-        if (nextSpeakerAudio) {
-          const { audio: nextAudio, character: nextCharacter, text: nextText } = nextSpeakerAudio
-
-          // Reset the next speaker audio state
-          setNextSpeakerAudio(null)
-
-          // Play the next audio immediately
-          console.log(`Playing preloaded audio for ${nextCharacter}...`)
-          setIsPlaying(true)
-          setCurrentSpeaker(nextCharacter)
-
-          nextAudio.onended = () => {
-            console.log(`${nextCharacter} audio playback ended`)
-            setIsPlaying(false)
-            setCurrentSpeaker(null)
-
-            // Find the next message after this one
-            const nextMsgIndex = allMessages.findIndex(
-              (msg) => msg.character === nextCharacter && msg.content === nextText,
-            )
-
-            if (nextMsgIndex !== -1 && nextMsgIndex + 1 < allMessages.length) {
-              const msgAfterNext = allMessages[nextMsgIndex + 1]
-
-              // Skip user messages for audio playback
-              if (msgAfterNext.character === "user" && nextMsgIndex + 2 < allMessages.length) {
-                const msgAfterUser = allMessages[nextMsgIndex + 2]
-                if (msgAfterUser.character !== "user") {
-                  playAudioLikeIndex(msgAfterUser.content, msgAfterUser.character, allMessages)
-                }
-              }
-              // Play the next message if it's not a user message
-              else if (msgAfterNext.character !== "user") {
-                playAudioLikeIndex(msgAfterNext.content, msgAfterNext.character, allMessages)
-              }
-            }
+        // Play the next message if it exists and is not a user message
+        const nextIndex = currentIndex + 1
+        if (nextIndex < allMessages.length) {
+          const nextMessage = allMessages[nextIndex]
+          if (nextMessage.character !== "user") {
+            // Small delay before playing next audio
+            setTimeout(() => {
+              playDebateAudio(nextMessage, allMessages, nextIndex)
+            }, 500)
           }
-
-          nextAudio.play().catch((err) => {
-            console.error(`Error playing preloaded audio for ${nextCharacter}:`, err)
-            setIsPlaying(false)
-            setCurrentSpeaker(null)
-          })
+        } else {
+          setCurrentSpeaker(null)
         }
       }
 
@@ -634,6 +577,7 @@ export function DebateInterface() {
         setAudioError(`${character} audio error: ${errorDetails}`)
         setIsLoadingAudio(false)
         setIsPlaying(false)
+        setCurrentSpeaker(null)
       }
 
       // Play the audio
@@ -643,30 +587,29 @@ export function DebateInterface() {
       setAudioError(`Error playing ${character} audio: ${err.message}`)
       setIsLoadingAudio(false)
       setIsPlaying(false)
+      setCurrentSpeaker(null)
     }
   }
 
-  // Add this new function to preload the next speaker's audio
-  const preloadNextSpeakerAudio = async (text, character, allMessages) => {
+  // Preload the next speaker's audio
+  const preloadNextAudio = async (message, allMessages, nextIndex) => {
+    const { character, content } = message
     console.log(`Preloading audio for next speaker ${character}...`)
     setIsPreloadingAudio(true)
 
     try {
-      // Create a new audio element for the next speaker
-      const audio = new Audio()
-
-      // Get the appropriate voice for this character
+      // Get the voice for this character
       const voice = getVoiceForCharacter(character)
       console.log(`Using voice "${voice}" for preloading ${character}`)
 
-      // Use the speak endpoint to get the audio
+      // Generate audio for the next speaker
       const response = await fetch("/api/speak", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          text,
+          text: content,
           voice,
         }),
       })
@@ -677,18 +620,11 @@ export function DebateInterface() {
 
       const data = await response.json()
 
-      // Set the audio source
-      audio.src = data.audioUrl
-      audio.volume = volume
-
-      // Preload the audio
-      audio.load()
-
-      // Store the preloaded audio
-      setNextSpeakerAudio({
-        audio,
+      // Store the preloaded audio URL
+      setNextAudioData({
         character,
-        text,
+        audioUrl: data.audioUrl,
+        index: nextIndex,
       })
 
       console.log(`Successfully preloaded audio for ${character}`)
@@ -1095,10 +1031,8 @@ export function DebateInterface() {
             <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
             <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
             <p>Is Preloading Next Speaker: {isPreloadingAudio ? "Yes" : "No"}</p>
-            <p>Next Speaker Audio Ready: {nextSpeakerAudio ? "Yes" : "No"}</p>
-            {nextSpeakerAudio && (
-              <p>Next Speaker: {nextSpeakerAudio.character === character1 ? char1.name : char2.name}</p>
-            )}
+            <p>Next Speaker Audio Ready: {nextAudioData ? "Yes" : "No"}</p>
+            {nextAudioData && <p>Next Speaker: {nextAudioData.character === character1 ? char1.name : char2.name}</p>}
           </div>
         </div>
       )}
