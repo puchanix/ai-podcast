@@ -360,12 +360,68 @@ export function DebateInterface() {
 
   // Submit a custom question to the debate
   const submitCustomQuestion = async () => {
-    if (!customQuestion.trim() || !isDebating || isProcessing) return
+    if (!customQuestion.trim() || isProcessing) return
 
     const userQuestion = customQuestion.trim()
     setCustomQuestion("")
     setIsProcessing(true)
 
+    // If no debate is in progress, start one with the custom question as the topic
+    if (!isDebating) {
+      setCurrentTopic(userQuestion)
+      setIsDebating(true)
+
+      try {
+        const response = await fetch("/api/start-debate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            character1,
+            character2,
+            topic: userQuestion,
+            format: debateFormat,
+            historicalContext,
+          }),
+        })
+
+        if (!response.ok) throw new Error("Failed to start debate")
+
+        const data = await response.json()
+        console.log("Debate started with data:", data)
+
+        // Store the debate messages
+        const messages = [
+          {
+            character: character1,
+            content: data.opening1,
+            timestamp: Date.now(),
+            audioUrl: data.audioUrl1,
+          },
+          {
+            character: character2,
+            content: data.opening2,
+            timestamp: Date.now() + 100,
+            audioUrl: data.audioUrl2,
+          },
+        ]
+
+        setDebateMessages(messages)
+
+        // Play the first character's audio and preload the second character's audio
+        playDebateAudio(messages[0], messages, 0)
+      } catch (error) {
+        console.error("Error starting debate:", error)
+        setIsDebating(false)
+        setAudioError(`Failed to start debate: ${error.message}`)
+      } finally {
+        setIsProcessing(false)
+      }
+      return
+    }
+
+    // If a debate is already in progress, add the question to it
     // Add user question as a special message
     const updatedMessages = [
       ...debateMessages,
@@ -585,6 +641,7 @@ export function DebateInterface() {
           if (currentIndex > 0 && currentIndex % 2 === 1) {
             const newExchangeCount = Math.floor((currentIndex + 1) / 2)
             setExchangeCount(newExchangeCount)
+            console.log(`Completed exchange ${newExchangeCount} of ${maxExchanges}`)
 
             // If we've reached the maximum exchanges, stop auto-playing
             if (newExchangeCount >= maxExchanges) {
@@ -592,8 +649,10 @@ export function DebateInterface() {
               console.log(`Reached ${maxExchanges} exchanges, stopping auto-play`)
             } else if (isAutoplaying) {
               // Otherwise, continue the debate automatically after a short delay
+              console.log(`Automatically continuing to next exchange...`)
               setTimeout(() => {
-                if (isAutoplaying) {
+                if (isAutoplaying && !isProcessing) {
+                  console.log(`Triggering next exchange...`)
                   continueDebate()
                 }
               }, 2000)
@@ -828,6 +887,18 @@ export function DebateInterface() {
                 </div>
               )}
 
+              {isDebating && (
+                <div className="mb-4 text-sm text-gray-400">
+                  Exchange {exchangeCount} of {maxExchanges}
+                  <div className="w-full bg-gray-700 h-2 rounded-full mt-1">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${(exchangeCount / maxExchanges) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+
               <div className="text-center mb-4">
                 {isLoadingAudio ? (
                   <div>
@@ -865,7 +936,14 @@ export function DebateInterface() {
                   </div>
                 ) : (
                   <div>
-                    <h3 className="text-xl font-bold text-gray-400">Waiting for next speaker...</h3>
+                    <h3 className="text-xl font-bold text-gray-400">
+                      {isDebating ? "Preparing next response..." : "Select a topic to begin"}
+                    </h3>
+                    {isDebating && !isPlaying && !isLoadingAudio && (
+                      <div className="mt-2 text-gray-500">
+                        <p className="animate-pulse">The debaters are formulating their thoughts...</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
