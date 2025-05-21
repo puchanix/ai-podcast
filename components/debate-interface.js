@@ -816,21 +816,25 @@ export function DebateInterface() {
     URL.revokeObjectURL(url)
   }
 
-  // Test audio playback
-  const testAudio = async () => {
-    // Unlock audio first
-    await unlockAudio()
-
-    setAudioError("Testing audio playback...")
+  // Test direct audio using Web Audio API
+  const testDirectAudio = async () => {
+    setAudioError("Testing direct audio playback...")
 
     try {
-      // Use the API endpoint that serves a static audio file
-      const testAudioUrl = "/api/test-audio"
-      const audio = new Audio(testAudioUrl)
+      // Use our new test audio GET endpoint
+      const audio = new Audio("/api/test-audio-get")
       audio.volume = volume
 
       audio.oncanplaythrough = () => {
         setAudioError("Test audio loaded successfully")
+      }
+
+      audio.onplay = () => {
+        setAudioError("Test audio playing successfully")
+      }
+
+      audio.onended = () => {
+        setAudioError("Test audio playback completed")
       }
 
       audio.onerror = (e) => {
@@ -840,10 +844,9 @@ export function DebateInterface() {
       }
 
       await audio.play()
-      setAudioError("Test audio playing successfully")
     } catch (err) {
-      console.error("Test audio playback failed:", err)
-      setAudioError(`Test audio failed: ${err.message}`)
+      console.error("Direct audio test failed:", err)
+      setAudioError(`Direct audio test failed: ${err.message}`)
     }
   }
 
@@ -913,38 +916,38 @@ export function DebateInterface() {
   }
 
   // Test direct audio using Web Audio API
-  const testDirectAudio = async () => {
-    setAudioError("Testing direct audio playback...")
+  // const testDirectAudio = async () => {
+  //   setAudioError("Testing direct audio playback...")
 
-    try {
-      // Use our simple test audio endpoint instead of Web Audio API
-      const audio = new Audio("/api/simple-test-audio")
-      audio.volume = volume
+  //   try {
+  //     // Use our simple test audio endpoint instead of Web Audio API
+  //     const audio = new Audio("/api/simple-test-audio")
+  //     audio.volume = volume
 
-      audio.oncanplaythrough = () => {
-        setAudioError("Test audio loaded successfully")
-      }
+  //     audio.oncanplaythrough = () => {
+  //       setAudioError("Test audio loaded successfully")
+  //     }
 
-      audio.onplay = () => {
-        setAudioError("Test audio playing successfully")
-      }
+  //     audio.onplay = () => {
+  //       setAudioError("Test audio playing successfully")
+  //     }
 
-      audio.onended = () => {
-        setAudioError("Test audio playback completed")
-      }
+  //     audio.onended = () => {
+  //       setAudioError("Test audio playback completed")
+  //     }
 
-      audio.onerror = (e) => {
-        const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
-        console.error("Test audio error:", errorDetails)
-        setAudioError(`Test audio failed: ${errorDetails}`)
-      }
+  //     audio.onerror = (e) => {
+  //       const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
+  //       console.error("Test audio error:", errorDetails)
+  //       setAudioError(`Test audio failed: ${errorDetails}`)
+  //     }
 
-      await audio.play()
-    } catch (err) {
-      console.error("Direct audio test failed:", err)
-      setAudioError(`Direct audio test failed: ${err.message}`)
-    }
-  }
+  //     await audio.play()
+  //   } catch (err) {
+  //     console.error("Direct audio test failed:", err)
+  //     setAudioError(`Direct audio test failed: ${err.message}`)
+  //   }
+  // }
 
   // Function to manually play character audio
   const playCharacterAudio = (charNum) => {
@@ -994,6 +997,37 @@ export function DebateInterface() {
       } else {
         setAudioError("Character 2 audio not available")
       }
+    }
+  }
+
+  const testAudio = async () => {
+    try {
+      // Use our new test audio GET endpoint
+      const audio = new Audio("/api/test-audio-get")
+      audio.volume = volume
+
+      audio.oncanplaythrough = () => {
+        setAudioError("Test audio loaded successfully")
+      }
+
+      audio.onplay = () => {
+        setAudioError("Test audio playing successfully")
+      }
+
+      audio.onended = () => {
+        setAudioError("Test audio playback completed")
+      }
+
+      audio.onerror = (e) => {
+        const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
+        console.error("Test audio error:", errorDetails)
+        setAudioError(`Test audio failed: ${errorDetails}`)
+      }
+
+      await audio.play()
+    } catch (err) {
+      console.error("Direct audio test failed:", err)
+      setAudioError(`Direct audio test failed: ${err.message}`)
     }
   }
 
