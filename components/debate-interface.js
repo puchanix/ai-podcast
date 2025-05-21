@@ -20,7 +20,7 @@ export function DebateInterface() {
   const [volume, setVolume] = useState(1.0)
   const [showTranscript, setShowTranscript] = useState(false)
   const [audioError, setAudioError] = useState(null)
-  const [debugMode, setDebugMode] = useState(false) // Set to false by default
+  const [debugMode, setDebugMode] = useState(true) // Set to true for debugging
   const [isLoadingAudio, setIsLoadingAudio] = useState(false)
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
@@ -41,6 +41,13 @@ export function DebateInterface() {
   // Get character objects
   const char1 = personas[character1]
   const char2 = personas[character2]
+
+  // Log the entire personas object for debugging
+  useEffect(() => {
+    console.log("PERSONAS OBJECT:", personas)
+    console.log("Character 1:", character1, personas[character1])
+    console.log("Character 2:", character2, personas[character2])
+  }, [character1, character2])
 
   // Initialize audio elements with silent.mp3
   useEffect(() => {
@@ -216,17 +223,37 @@ export function DebateInterface() {
     }
   }
 
-  // Get the appropriate voice for a character
+  // Get the appropriate voice for a character directly from personas.js
   const getVoiceForCharacter = (characterId) => {
-    // In pages/index.js, voices are accessed through the voice property, not voiceId
-    if (personas[characterId] && personas[characterId].voice) {
-      console.log(`Using voice "${personas[characterId].voice}" for ${characterId}`)
-      return personas[characterId].voice
+    // Check if the character exists in personas
+    if (!personas[characterId]) {
+      console.log(`Character ${characterId} not found in personas`)
+      return "alloy" // Default OpenAI voice as fallback
     }
 
-    // Fallback to default voices if no voice is found
-    console.log(`No voice found for ${characterId}, using default`)
-    return personas[characterId]?.gender === "female" ? "en-US-Neural2-F" : "en-US-Neural2-D"
+    // Log the character object for debugging
+    console.log(`Character object for ${characterId}:`, personas[characterId])
+
+    // Get the elevenlabs voice ID directly from the personas object
+    if (personas[characterId].elevenlabs_voice_id) {
+      console.log(`Found elevenlabs_voice_id "${personas[characterId].elevenlabs_voice_id}" for ${characterId}`)
+      return personas[characterId].elevenlabs_voice_id
+    }
+
+    // Try alternative property names
+    if (personas[characterId].voice_id) {
+      console.log(`Found voice_id "${personas[characterId].voice_id}" for ${characterId}`)
+      return personas[characterId].voice_id
+    }
+
+    if (personas[characterId].voiceId) {
+      console.log(`Found voiceId "${personas[characterId].voiceId}" for ${characterId}`)
+      return personas[characterId].voiceId
+    }
+
+    // Fallback to gender-based default OpenAI voices
+    console.log(`No voice ID found for ${characterId}, using default based on gender`)
+    return personas[characterId]?.gender === "female" ? "nova" : "echo"
   }
 
   // Start a debate on a specific topic
@@ -279,9 +306,6 @@ export function DebateInterface() {
       ]
 
       setDebateMessages(messages)
-
-      // Set the current speaker to character1 immediately to show the correct image
-      //setCurrentSpeaker(character1)
 
       // Use the index.js approach to play audio for the first character
       // The second character will play automatically when the first one finishes
