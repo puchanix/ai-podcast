@@ -220,27 +220,40 @@ export function DebateInterface() {
   const getVoiceForCharacter = (characterId) => {
     // Map characters to specific voices
     const voiceMap = {
-      // Male voices
-      aristotle: "onyx",
-      daVinci: "echo",
-      einstein: "echo",
-      tesla: "onyx",
-      darwin: "echo",
-      newton: "onyx",
-      galileo: "echo",
-      socrates: "onyx",
-      plato: "echo",
+      // Male voices with distinct personalities
+      aristotle: "onyx", // Deep, authoritative
+      daVinci: "echo", // Balanced, thoughtful
+      einstein: "echo", // Balanced, thoughtful
+      tesla: "onyx", // Deep, authoritative
+      darwin: "echo", // Balanced, thoughtful
+      newton: "onyx", // Deep, authoritative
+      galileo: "echo", // Balanced, thoughtful
+      socrates: "onyx", // Deep, authoritative
+      plato: "echo", // Balanced, thoughtful
+      shakespeare: "onyx", // Deep, authoritative for Shakespeare
+      mozart: "echo", // Balanced, thoughtful for Mozart
+      beethoven: "onyx", // Deep, authoritative
+      freud: "echo", // Balanced, thoughtful
+      jung: "onyx", // Deep, authoritative
+      nietzsche: "echo", // Balanced, thoughtful
+      kant: "onyx", // Deep, authoritative
 
       // Female voices
-      curie: "nova",
-      lovelace: "alloy",
-      nightingale: "nova",
-      franklin: "alloy",
+      curie: "nova", // Clear, professional
+      lovelace: "alloy", // Neutral, balanced
+      nightingale: "nova", // Clear, professional
+      franklin: "alloy", // Neutral, balanced
+      austen: "nova", // Clear, professional
+      woolf: "alloy", // Neutral, balanced
 
       // Default fallbacks
       default_male: "echo",
       default_female: "nova",
     }
+
+    console.log(
+      `Getting voice for character: ${characterId}, mapped to: ${voiceMap[characterId] || "not found in map"}`,
+    )
 
     // Return the mapped voice or a default based on gender
     return voiceMap[characterId] || (personas[characterId]?.gender === "female" ? "nova" : "echo")

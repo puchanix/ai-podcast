@@ -18,7 +18,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Text is required" })
     }
 
-    console.log(`Generating audio with voice: ${voice} for text: ${text.substring(0, 50)}...`)
+    console.log(`Generating audio with voice: "${voice}" for character text: ${text.substring(0, 50)}...`)
 
     // Use OpenAI's TTS API
     const mp3 = await openai.audio.speech.create({
