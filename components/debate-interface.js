@@ -258,12 +258,19 @@ export function DebateInterface() {
       return "alloy" // Default OpenAI voice as fallback
     }
 
-    // Get the voice ID directly from the persona object using the getter
-    const voiceId = personas[characterId].voiceId
+    // Use the getVoiceId method if available, otherwise fall back to the voiceId property
+    if (typeof personas[characterId].getVoiceId === "function") {
+      const voiceId = personas[characterId].getVoiceId()
+      if (voiceId) {
+        console.log(`Found voice ID "${voiceId}" for ${characterId} using getVoiceId()`)
+        return voiceId
+      }
+    }
 
-    if (voiceId) {
-      console.log(`Found voice ID "${voiceId}" for ${characterId}`)
-      return voiceId
+    // Try the direct voiceId property as fallback
+    if (personas[characterId].voiceId) {
+      console.log(`Found voice ID "${personas[characterId].voiceId}" for ${characterId} using voiceId property`)
+      return personas[characterId].voiceId
     }
 
     // Fallback to default voices if no voice ID is found
@@ -799,7 +806,7 @@ export function DebateInterface() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                       >
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
                       </svg>
                     </div>
                   </div>
