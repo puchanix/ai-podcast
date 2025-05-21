@@ -20,7 +20,6 @@ export function DebateInterface() {
   const [volume, setVolume] = useState(1.0)
   const [showTranscript, setShowTranscript] = useState(false)
   const [audioError, setAudioError] = useState(null)
-  const [debugMode, setDebugMode] = useState(true) // Set to true for debugging
   const [isLoadingAudio, setIsLoadingAudio] = useState(false)
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
@@ -31,6 +30,12 @@ export function DebateInterface() {
   // Audio preloading state
   const [nextAudioData, setNextAudioData] = useState(null)
   const [isPreloadingAudio, setIsPreloadingAudio] = useState(false)
+
+  // Add these new state variables after the existing ones
+  const [exchangeCount, setExchangeCount] = useState(0)
+  const [maxExchanges, setMaxExchanges] = useState(5)
+  const [isAutoplaying, setIsAutoplaying] = useState(true)
+  const [debugMode, setDebugMode] = useState(false) // Change to false to hide debug panel by default
 
   // Audio element refs
   const audioRef = useRef(null)
@@ -159,6 +164,8 @@ export function DebateInterface() {
     setAudioError(null)
     setCurrentAudioUrls({ char1: "", char2: "" })
     setNextAudioData(null)
+    setExchangeCount(0)
+    setIsAutoplaying(true)
 
     // Clear any existing timeout
     if (audioLoadTimeout) {
@@ -500,7 +507,7 @@ export function DebateInterface() {
     URL.revokeObjectURL(url)
   }
 
-  // Simplified audio playback function with preloading
+  // Replace the existing playDebateAudio function with this updated version
   const playDebateAudio = async (message, allMessages, currentIndex) => {
     const { character, content } = message
     console.log(`Playing audio for ${character}...`)
@@ -563,11 +570,35 @@ export function DebateInterface() {
           if (nextMessage.character !== "user") {
             // Small delay before playing next audio
             setTimeout(() => {
-              playDebateAudio(nextMessage, allMessages, nextIndex)
+              if (isAutoplaying) {
+                playDebateAudio(nextMessage, allMessages, nextIndex)
+              } else {
+                setCurrentSpeaker(null)
+              }
             }, 500)
           }
         } else {
           setCurrentSpeaker(null)
+
+          // Check if we've completed an exchange (both characters have spoken)
+          // An exchange is complete when we've heard from both characters
+          if (currentIndex > 0 && currentIndex % 2 === 1) {
+            const newExchangeCount = Math.floor((currentIndex + 1) / 2)
+            setExchangeCount(newExchangeCount)
+
+            // If we've reached the maximum exchanges, stop auto-playing
+            if (newExchangeCount >= maxExchanges) {
+              setIsAutoplaying(false)
+              console.log(`Reached ${maxExchanges} exchanges, stopping auto-play`)
+            } else if (isAutoplaying) {
+              // Otherwise, continue the debate automatically after a short delay
+              setTimeout(() => {
+                if (isAutoplaying) {
+                  continueDebate()
+                }
+              }, 2000)
+            }
+          }
         }
       }
 
@@ -633,6 +664,11 @@ export function DebateInterface() {
     } finally {
       setIsPreloadingAudio(false)
     }
+  }
+
+  // Add this function to toggle auto-play
+  const toggleAutoplay = () => {
+    setIsAutoplaying(!isAutoplaying)
   }
 
   return (
@@ -701,67 +737,7 @@ export function DebateInterface() {
         </div>
       </div>
 
-      {/* Debate Format Options */}
-      <div className="mb-8 bg-gray-800 p-4 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4 text-yellow-400">Debate Settings</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <h3 className="text-sm font-medium mb-2 text-gray-300">Format</h3>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                onClick={() => setDebateFormat("pointCounterpoint")}
-                className={`p-2 rounded ${
-                  debateFormat === "pointCounterpoint"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                }`}
-              >
-                Point/Counterpoint
-              </button>
-              <button
-                onClick={() => setDebateFormat("moderated")}
-                className={`p-2 rounded ${
-                  debateFormat === "moderated"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                }`}
-              >
-                Moderated
-              </button>
-              <button
-                onClick={() => setDebateFormat("freeform")}
-                className={`p-2 rounded ${
-                  debateFormat === "freeform" ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                }`}
-              >
-                Free Discussion
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-sm font-medium mb-2 text-gray-300">Historical Context</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setHistoricalContext(true)}
-                className={`p-2 rounded ${
-                  historicalContext ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                }`}
-              >
-                Historical Knowledge Only
-              </button>
-              <button
-                onClick={() => setHistoricalContext(false)}
-                className={`p-2 rounded ${
-                  !historicalContext ? "bg-blue-600 text-white" : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                }`}
-              >
-                Include Modern Knowledge
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Remove the debate settings section by deleting this block of JSX: */}
 
       {/* Suggested Topics */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
@@ -906,12 +882,12 @@ export function DebateInterface() {
             value={customQuestion}
             onChange={(e) => setCustomQuestion(e.target.value)}
             placeholder="Enter a debate question or topic..."
-            disabled={!isDebating || isProcessing}
+            disabled={isProcessing}
             className="flex-1 p-2 rounded border bg-gray-700 text-white border-gray-600 placeholder-gray-400"
           />
           <button
             onClick={submitCustomQuestion}
-            disabled={!isDebating || isProcessing || !customQuestion.trim()}
+            disabled={isProcessing || !customQuestion.trim()}
             className="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-gray-600 disabled:text-gray-400"
           >
             {isProcessing ? "Processing..." : "Submit"}
@@ -919,35 +895,53 @@ export function DebateInterface() {
         </div>
       </div>
 
-      {/* Continue Debate Button */}
+      {/* Replace the Continue Debate button with Pause/Continue button */}
       {isDebating && (
         <div className="flex justify-center mb-8">
-          <button
-            onClick={continueDebate}
-            disabled={isProcessing}
-            className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-full disabled:bg-gray-600 disabled:text-gray-400 font-bold"
-          >
-            {isProcessing ? (
-              <span className="flex items-center">
-                <svg
-                  className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                Processing...
-              </span>
-            ) : (
-              "Continue Debate"
-            )}
-          </button>
+          {isPlaying ? (
+            <button
+              onClick={toggleAutoplay}
+              className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-full font-bold"
+            >
+              {isAutoplaying ? "⏸️ Pause Debate" : "▶️ Resume Debate"}
+            </button>
+          ) : (
+            <button
+              onClick={exchangeCount >= maxExchanges ? continueDebate : toggleAutoplay}
+              disabled={isProcessing}
+              className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-full disabled:bg-gray-600 disabled:text-gray-400 font-bold"
+            >
+              {isProcessing ? (
+                <span className="flex items-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Processing...
+                </span>
+              ) : exchangeCount >= maxExchanges ? (
+                "Continue Debate"
+              ) : (
+                "Resume Debate"
+              )}
+            </button>
+          )}
         </div>
       )}
 
@@ -1001,6 +995,9 @@ export function DebateInterface() {
             <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
             <p>Is Unlocking Audio: {isUnlockingAudio ? "Yes" : "No"}</p>
             <p>Is Initializing: {isInitializing ? "Yes" : "No"}</p>
+            <p>Exchange Count: {exchangeCount}</p>
+            <p>Max Exchanges: {maxExchanges}</p>
+            <p>Is Autoplaying: {isAutoplaying ? "Yes" : "No"}</p>
           </div>
 
           <div className="mb-4">
