@@ -52,6 +52,9 @@ export function TopicSelector({ isOpen, onClose, onSelectTopic, character1, char
   useEffect(() => {
     if (!isOpen) return
 
+    const isBrowser = typeof window !== "undefined"
+    if (!isBrowser) return
+
     // Check if we already have topics for this character pair in localStorage
     const topicKey = `${character1}_${character2}_topics`
     const storedTopics = localStorage.getItem(topicKey)
