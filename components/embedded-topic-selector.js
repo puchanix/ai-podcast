@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { personas } from "./personas" // Import the personas variable
 
 // Static debate topics as fallback
 const staticDebateTopics = [
@@ -45,6 +46,8 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
     const isBrowser = typeof window !== "undefined"
     if (!isBrowser) return
 
+    setIsLoading(true)
+
     // Check if we already have topics for this character pair in localStorage
     const topicKey = `${character1}_${character2}_topics`
     const storedTopics = localStorage.getItem(topicKey)
@@ -78,7 +81,6 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
 
     // If no stored topics, try to fetch from API
     async function fetchTopics() {
-      setIsLoading(true)
       setError(null)
 
       try {
@@ -106,14 +108,22 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
           // Store in localStorage for future use
           localStorage.setItem(topicKey, JSON.stringify(limitedTopics))
         } else {
-          // If no topics returned, use static topics
-          setTopics(staticDebateTopics)
+          // If no topics returned, generate character-specific fallback topics
+          const fallbackTopics = generateFallbackTopics(character1, character2)
+          setTopics(fallbackTopics)
+          localStorage.setItem(topicKey, JSON.stringify(fallbackTopics))
         }
       } catch (error) {
         console.error("Error fetching topics:", error)
         setError("Failed to load custom topics. Using default topics instead.")
-        // Fall back to static topics
-        setTopics(staticDebateTopics)
+        // Generate character-specific fallback topics
+        const fallbackTopics = generateFallbackTopics(character1, character2)
+        setTopics(fallbackTopics)
+        try {
+          localStorage.setItem(topicKey, JSON.stringify(fallbackTopics))
+        } catch (e) {
+          console.error("Error storing topics in localStorage:", e)
+        }
       } finally {
         setIsLoading(false)
       }
@@ -121,6 +131,29 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
 
     fetchTopics()
   }, [character1, character2])
+
+  // Add this function to generate fallback topics based on character pair
+  function generateFallbackTopics(char1, char2) {
+    const persona1 = personas[char1]
+    const persona2 = personas[char2]
+
+    if (!persona1 || !persona2) return staticDebateTopics
+
+    return [
+      {
+        id: `${char1}-${char2}-expertise`,
+        title: `${persona1.name.split(" ")[0]}'s vs ${persona2.name.split(" ")[0]}'s Expertise`,
+        description: `Comparing the approaches and philosophies of these historical figures`,
+        category: "philosophy",
+      },
+      {
+        id: `${char1}-${char2}-legacy`,
+        title: "Historical Impact and Legacy",
+        description: `How ${persona1.name} and ${persona2.name} changed their respective fields`,
+        category: "history",
+      },
+    ]
+  }
 
   // Helper function to get category color
   function getCategoryColor(category) {

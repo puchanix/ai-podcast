@@ -138,14 +138,18 @@ export function DebateInterface() {
           setVoiceIds(data)
           console.log("Voice IDs loaded:", data)
 
-          // Update personas with voice IDs
-          Object.keys(personas).forEach((key) => {
-            const lowerKey = key.toLowerCase()
-            if (data[lowerKey]) {
-              personas[key].voiceId = data[lowerKey]
-              console.log(`Updated voice ID for ${key}: ${data[lowerKey]}`)
-            }
-          })
+          // Update voiceIdMap in the personas module
+          if (typeof window !== "undefined") {
+            // This is the key fix - update the voiceIdMap in the personas module
+            Object.keys(data).forEach((key) => {
+              if (data[key]) {
+                // Update the global voiceIdMap
+                if (window.voiceIdMap) {
+                  window.voiceIdMap[key] = data[key]
+                }
+              }
+            })
+          }
         } else {
           console.error("Failed to load voice IDs")
         }
@@ -420,27 +424,21 @@ export function DebateInterface() {
   // Get the appropriate voice for a character
   const getVoiceForCharacter = useCallback(
     (characterId) => {
-      // Check if the character exists in personas
-      if (!personas[characterId]) {
-        console.log(`Character ${characterId} not found in personas`)
-        return "echo" // Default OpenAI voice as fallback
+      // Use the getVoiceId method if available (this is the key fix)
+      if (personas[characterId] && typeof personas[characterId].getVoiceId === "function") {
+        const voiceId = personas[characterId].getVoiceId()
+        console.log(`Using getVoiceId() method for ${characterId}: ${voiceId}`)
+        return voiceId
       }
 
-      // Get the voice ID directly from the personas object
-      if (personas[characterId].voiceId) {
-        console.log(`Found voice ID "${personas[characterId].voiceId}" for ${characterId}`)
+      // Fallback to direct voiceId property
+      if (personas[characterId] && personas[characterId].voiceId) {
+        console.log(`Using direct voiceId property for ${characterId}: ${personas[characterId].voiceId}`)
         return personas[characterId].voiceId
       }
 
-      // Check if we have a voice ID in the voiceIds state
-      const lowerCaseId = characterId.toLowerCase()
-      if (voiceIds[lowerCaseId]) {
-        console.log(`Found voice ID "${voiceIds[lowerCaseId]}" for ${characterId} in voiceIds state`)
-        return voiceIds[lowerCaseId]
-      }
-
-      // Fallback to default voices if no voice ID is found
-      console.log(`No voice ID found for ${characterId}, using default based on gender`)
+      // Final fallback
+      console.log(`No voice ID found for ${characterId}, using default`)
       return personas[characterId]?.gender === "female" ? "nova" : "echo"
     },
     [voiceIds],
@@ -1148,7 +1146,8 @@ export function DebateInterface() {
       if (nextIndex < allMessages.length && allMessages[nextIndex].character !== "user") {
         setNextSpeaker(allMessages[nextIndex].character)
       } else {
-        setNextSpeaker(null)
+        // If there's no next message, set the next speaker to the opposite character
+        setNextSpeaker(character === character1 ? character2 : character1)
       }
 
       try {
@@ -1418,22 +1417,31 @@ export function DebateInterface() {
         <div className="flex flex-col items-center justify-center p-8 bg-gray-900 rounded-lg">
           {isIntroPlaying ? (
             <div className="flex flex-col items-center">
-              <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-yellow-500 p-2 flex items-center justify-center bg-gray-800 mb-6">
-                <div className="h-16 w-16 text-yellow-400 animate-pulse">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="animate-spin"
-                  >
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <path d="M12 6v6l4 2"></path>
-                  </svg>
+              <div className="w-48 h-48 relative mb-6">
+                {/* Left half circle (Character 1) */}
+                <div className="absolute top-0 left-0 w-24 h-48 overflow-hidden border-4 border-yellow-500 rounded-l-full">
+                  <div className="w-48 h-48 absolute top-0 left-0">
+                    <img
+                      src={char1?.image || "/placeholder.png"}
+                      alt={char1?.name || "Character 1"}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                 </div>
+
+                {/* Right half circle (Character 2) */}
+                <div className="absolute top-0 right-0 w-24 h-48 overflow-hidden border-4 border-yellow-500 rounded-r-full">
+                  <div className="w-48 h-48 absolute top-0 right-0">
+                    <img
+                      src={char2?.image || "/placeholder.png"}
+                      alt={char2?.name || "Character 2"}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+
+                {/* Overlay with pulsing effect */}
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/30 to-red-500/30 rounded-full animate-pulse"></div>
               </div>
               <h3 className="text-xl font-bold text-yellow-400 mb-2">Setting the stage...</h3>
               <p className="text-gray-300">
@@ -1463,55 +1471,51 @@ export function DebateInterface() {
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse rounded-full"></div>
                   </div>
                 </div>
+              ) : isLoadingAudio || isPreparing ? (
+                <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2">
+                  <img
+                    src={
+                      (nextSpeaker === character1 ? char1 : nextSpeaker === character2 ? char2 : null)?.image ||
+                      "/placeholder.png"
+                    }
+                    alt={
+                      (nextSpeaker === character1 ? char1 : nextSpeaker === character2 ? char2 : "Moderator")?.name ||
+                      "Thinking"
+                    }
+                    className="w-full h-full object-cover rounded-full"
+                  />
+                  <div className="absolute inset-0 bg-gray-800 opacity-50 flex items-center justify-center">
+                    <div className="h-16 w-16 text-yellow-400 animate-spin">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M12 6v6l4 2"></path>
+                      </svg>
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <div className="flex items-center justify-center mb-6">
-                  {isLoadingAudio && nextSpeaker ? (
-                    <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2">
-                      <img
-                        src={
-                          (nextSpeaker === character1 ? char1 : nextSpeaker === character2 ? char2 : null)?.image ||
-                          "/placeholder.png"
-                        }
-                        alt={
-                          (nextSpeaker === character1 ? char1 : nextSpeaker === character2 ? char2 : "Moderator")
-                            ?.name || "Thinking"
-                        }
-                        className="w-full h-full object-cover rounded-full opacity-80"
-                      />
-                      <div className="absolute inset-0 bg-gray-800 opacity-50 flex items-center justify-center">
-                        <div className="h-16 w-16 text-gray-400 animate-spin">
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <path d="M12 6v6l4 2"></path>
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2 flex items-center justify-center bg-gray-800">
-                      <div className="h-16 w-16 text-gray-400">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-                        </svg>
-                      </div>
-                    </div>
-                  )}
+                <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2 flex items-center justify-center bg-gray-800">
+                  <div className="h-16 w-16 text-gray-400">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                    </svg>
+                  </div>
                 </div>
               )}
 
