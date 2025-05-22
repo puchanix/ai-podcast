@@ -1411,8 +1411,9 @@ export function DebateInterface() {
         character2={character2}
         currentSpeaker={currentSpeaker}
         isPlaying={isPlaying}
-        exchangeCount={exchangeCount}
-        maxExchanges={maxExchanges}
+        isLoadingAudio={isLoadingAudio}
+        isPreparing={isPreparing}
+        debateMessages={debateMessages}
         onCharacter1Change={handleCharacter1Change}
         onCharacter2Change={handleCharacter2Change}
       />
@@ -1488,71 +1489,6 @@ export function DebateInterface() {
             </div>
           ) : (
             <div className="flex flex-col items-center">
-              {isPlaying && isAudioLoaded ? (
-                <div className="flex items-center justify-center mb-6">
-                  <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-yellow-500 p-2">
-                    <img
-                      src={
-                        (currentSpeaker === character1 ? char1 : currentSpeaker === character2 ? char2 : null)?.image ||
-                        "/placeholder.png"
-                      }
-                      alt={
-                        (currentSpeaker === character1 ? char1 : currentSpeaker === character2 ? char2 : "Moderator")
-                          ?.name || "Speaking"
-                      }
-                      className="w-full h-full object-cover rounded-full"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse rounded-full"></div>
-                  </div>
-                </div>
-              ) : isLoadingAudio || isPreparing ? (
-                <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2">
-                  <img
-                    src={
-                      (currentSpeaker === character1 ? char1 : currentSpeaker === character2 ? char2 : null)?.image ||
-                      "/placeholder.png"
-                    }
-                    alt={
-                      (currentSpeaker === character1 ? char1 : currentSpeaker === character2 ? char2 : "Moderator")
-                        ?.name || "Thinking"
-                    }
-                    className="w-full h-full object-cover rounded-full"
-                  />
-                  <div className="absolute inset-0 bg-gray-800 opacity-50 flex items-center justify-center">
-                    <div className="h-16 w-16 text-yellow-400 animate-spin">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <path d="M12 6v6l4 2"></path>
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2 flex items-center justify-center bg-gray-800">
-                  <div className="h-16 w-16 text-gray-400">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-                    </svg>
-                  </div>
-                </div>
-              )}
-
               <div className="text-center mb-4">
                 {isLoadingAudio ? (
                   <div>
