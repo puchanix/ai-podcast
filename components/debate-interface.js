@@ -14,6 +14,9 @@ import {
 import { DebateHeader } from "./debate-header"
 import { TopicSelector } from "./topic-selector"
 
+// Check if we're running in the browser
+const isBrowser = typeof window !== "undefined"
+
 // Static debate topics
 const staticDebateTopics = [
   {
@@ -55,16 +58,38 @@ const staticDebateTopics = [
 ]
 
 export function DebateInterface() {
-  // Initialize state from localStorage or defaults
-  const initialState = initializeDebateState()
+  // Initialize state with default values first
+  const defaultState = {
+    character1: Object.keys(personas)[0],
+    character2: Object.keys(personas)[1],
+    isDebating: false,
+    messages: [],
+    topic: "",
+    exchangeCount: 0,
+  }
 
-  // Core debate state
-  const [character1, setCharacter1] = useState(initialState.character1 || Object.keys(personas)[0])
-  const [character2, setCharacter2] = useState(initialState.character2 || Object.keys(personas)[1])
-  const [isDebating, setIsDebating] = useState(initialState.isDebating)
-  const [debateMessages, setDebateMessages] = useState(initialState.messages)
-  const [currentTopic, setCurrentTopic] = useState(initialState.topic)
-  const [exchangeCount, setExchangeCount] = useState(initialState.exchangeCount)
+  // Initialize state from localStorage or defaults
+  const [initialStateLoaded, setInitialStateLoaded] = useState(false)
+  const [character1, setCharacter1] = useState(defaultState.character1)
+  const [character2, setCharacter2] = useState(defaultState.character2)
+  const [isDebating, setIsDebating] = useState(defaultState.isDebating)
+  const [debateMessages, setDebateMessages] = useState(defaultState.messages)
+  const [currentTopic, setCurrentTopic] = useState(defaultState.topic)
+  const [exchangeCount, setExchangeCount] = useState(defaultState.exchangeCount)
+
+  // Load initial state from localStorage on client-side only
+  useEffect(() => {
+    if (isBrowser && !initialStateLoaded) {
+      const savedState = initializeDebateState()
+      if (savedState.character1) setCharacter1(savedState.character1)
+      if (savedState.character2) setCharacter2(savedState.character2)
+      setIsDebating(savedState.isDebating)
+      setDebateMessages(savedState.messages)
+      setCurrentTopic(savedState.topic)
+      setExchangeCount(savedState.exchangeCount)
+      setInitialStateLoaded(true)
+    }
+  }, [initialStateLoaded])
 
   // UI state
   const [customQuestion, setCustomQuestion] = useState("")
@@ -246,75 +271,6 @@ export function DebateInterface() {
     }
   }, [audioInitialized, isUnlockingAudio, unlockAudio])
 
-  // Generate character-specific debate topics
-  const generateCharacterSpecificTopics = useCallback(async () => {
-    if (isGeneratingTopics) return
-
-    // Check if we already have topics for this character pair
-    const topicKey = `${character1}_${character2}_topics`
-    const storedTopics = localStorage.getItem(topicKey)
-
-    if (storedTopics) {
-      try {
-        const parsedTopics = JSON.parse(storedTopics)
-        setCharacterSpecificTopics(parsedTopics)
-        return
-      } catch (e) {
-        console.error("Error parsing stored topics:", e)
-      }
-    }
-
-    setIsGeneratingTopics(true)
-
-    try {
-      const response = await fetch("/api/generate-character-topics", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          character1,
-          character2,
-        }),
-      })
-
-      if (!response.ok) throw new Error("Failed to generate topics")
-
-      const data = await response.json()
-      setCharacterSpecificTopics(data.topics)
-
-      // Store in localStorage for future use
-      localStorage.setItem(topicKey, JSON.stringify(data.topics))
-    } catch (error) {
-      console.error("Error generating character-specific topics:", error)
-      // Fall back to static topics
-      setCharacterSpecificTopics(staticDebateTopics)
-    } finally {
-      setIsGeneratingTopics(false)
-    }
-  }, [character1, character2, isGeneratingTopics])
-
-  // Generate debate topics when characters change
-  useEffect(() => {
-    // Reset debate state when characters change
-    resetDebateState()
-
-    // Generate character-specific topics
-    generateCharacterSpecificTopics()
-  }, [character1, character2, generateCharacterSpecificTopics, resetDebateState])
-
-  // Add a useEffect to monitor isDebating state changes
-  useEffect(() => {
-    console.log("isDebating state changed to:", isDebating)
-  }, [isDebating])
-
-  // Add a useEffect to monitor debateMessages changes
-  useEffect(() => {
-    if (debateMessages.length > 0) {
-      console.log("debateMessages updated, length:", debateMessages.length)
-    }
-  }, [debateMessages])
-
   // Reset all debate state
   const resetDebateState = useCallback(() => {
     setIsDebating(false)
@@ -370,6 +326,87 @@ export function DebateInterface() {
       prepareTimeoutRef.current = null
     }
   }, [])
+
+  // Generate character-specific debate topics
+  const generateCharacterSpecificTopics = useCallback(async () => {
+    if (isGeneratingTopics || !isBrowser) return
+
+    // Check if we already have topics for this character pair
+    const topicKey = `${character1}_${character2}_topics`
+    let storedTopics
+
+    try {
+      storedTopics = localStorage.getItem(topicKey)
+    } catch (e) {
+      console.error("Error accessing localStorage:", e)
+    }
+
+    if (storedTopics) {
+      try {
+        const parsedTopics = JSON.parse(storedTopics)
+        setCharacterSpecificTopics(parsedTopics)
+        return
+      } catch (e) {
+        console.error("Error parsing stored topics:", e)
+      }
+    }
+
+    setIsGeneratingTopics(true)
+
+    try {
+      const response = await fetch("/api/generate-character-topics", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          character1,
+          character2,
+        }),
+      })
+
+      if (!response.ok) throw new Error("Failed to generate topics")
+
+      const data = await response.json()
+      setCharacterSpecificTopics(data.topics)
+
+      // Store in localStorage for future use
+      try {
+        localStorage.setItem(topicKey, JSON.stringify(data.topics))
+      } catch (e) {
+        console.error("Error storing topics in localStorage:", e)
+      }
+    } catch (error) {
+      console.error("Error generating character-specific topics:", error)
+      // Fall back to static topics
+      setCharacterSpecificTopics(staticDebateTopics)
+    } finally {
+      setIsGeneratingTopics(false)
+    }
+  }, [character1, character2, isGeneratingTopics])
+
+  // Generate debate topics when characters change
+  useEffect(() => {
+    if (isBrowser && initialStateLoaded) {
+      // Reset debate state when characters change
+      resetDebateState()
+
+      // Generate character-specific topics
+      generateCharacterSpecificTopics()
+    }
+  }, [character1, character2, generateCharacterSpecificTopics, resetDebateState, initialStateLoaded])
+
+  // Add a useEffect to monitor isDebating state changes
+  useEffect(() => {
+    console.log("isDebating state changed to:", isDebating)
+  }, [isDebating])
+
+  // Add a useEffect to monitor debateMessages changes
+  useEffect(() => {
+    if (debateMessages.length > 0) {
+      console.log("debateMessages updated, length:", debateMessages.length)
+    }
+  }, [debateMessages])
 
   // Get the appropriate voice for a character directly from personas.js
   const getVoiceForCharacter = useCallback((characterId) => {
@@ -700,7 +737,7 @@ export function DebateInterface() {
   // Function to prepare next exchange during playback
   const prepareNextExchange = useCallback(() => {
     // Only prepare if we're debating and not already processing
-    if (!isDebatingRef.current || isProcessing || isPreparing) return
+    if (!isDebatingRef.current || isProcessing || isPreparing || !isBrowser) return
 
     console.log("Preparing next exchange...")
     setIsPreparing(true)
@@ -759,7 +796,11 @@ export function DebateInterface() {
           audioUrl2: responseData.audioUrl2,
           timestamp: Date.now(),
         }
-        localStorage.setItem("preparedExchange", JSON.stringify(preparedData))
+        try {
+          localStorage.setItem("preparedExchange", JSON.stringify(preparedData))
+        } catch (e) {
+          console.error("Error storing prepared exchange:", e)
+        }
       })
       .catch((error) => {
         console.error("Error preparing next exchange:", error)
@@ -810,16 +851,18 @@ export function DebateInterface() {
     setAudioError(null) // Clear any previous errors
 
     // Check if we have a prepared exchange
-    const preparedExchangeJson = localStorage.getItem("preparedExchange")
     let usePreparedExchange = false
     let preparedExchange = null
 
-    if (preparedExchangeJson) {
+    if (isBrowser) {
       try {
-        preparedExchange = JSON.parse(preparedExchangeJson)
-        // Check if the prepared exchange is still valid (less than 5 minutes old)
-        if (preparedExchange && Date.now() - preparedExchange.timestamp < 5 * 60 * 1000) {
-          usePreparedExchange = true
+        const preparedExchangeJson = localStorage.getItem("preparedExchange")
+        if (preparedExchangeJson) {
+          preparedExchange = JSON.parse(preparedExchangeJson)
+          // Check if the prepared exchange is still valid (less than 5 minutes old)
+          if (preparedExchange && Date.now() - preparedExchange.timestamp < 5 * 60 * 1000) {
+            usePreparedExchange = true
+          }
         }
       } catch (e) {
         console.error("Error parsing prepared exchange:", e)
@@ -833,7 +876,11 @@ export function DebateInterface() {
         console.log("Using prepared exchange")
         responseData = preparedExchange
         // Clear the prepared exchange
-        localStorage.removeItem("preparedExchange")
+        try {
+          localStorage.removeItem("preparedExchange")
+        } catch (e) {
+          console.error("Error removing prepared exchange:", e)
+        }
       } else {
         // Prepare the request data
         const data = {
@@ -943,7 +990,7 @@ export function DebateInterface() {
 
   // Function to download the debate transcript
   const downloadTranscript = useCallback(() => {
-    if (debateMessagesRef.current.length === 0) return
+    if (!isBrowser || debateMessagesRef.current.length === 0) return
 
     let transcript = `Debate on ${topicRef.current}\n\n`
 
