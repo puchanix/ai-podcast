@@ -83,11 +83,11 @@ export function DebateHeader({
           <div className="text-center">
             <h2 className="text-lg font-semibold text-yellow-400 mb-2">Debate Progress</h2>
             <div className="mt-2 text-sm text-gray-400">
-              Exchange {exchangeCount || 0} of {maxExchanges}
+              Exchange {Math.max(1, exchangeCount || 1)} of {maxExchanges}
               <div className="w-full bg-gray-700 h-2 rounded-full mt-1">
                 <div
                   className="bg-blue-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${((exchangeCount || 0) / maxExchanges) * 100}%` }}
+                  style={{ width: `${(Math.max(1, exchangeCount || 1) / maxExchanges) * 100}%` }}
                 ></div>
               </div>
             </div>

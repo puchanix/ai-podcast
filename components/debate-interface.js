@@ -848,6 +848,11 @@ export function DebateInterface() {
       return
     }
 
+    // Get the correct voices for both characters
+    const voice1 = getVoiceForCharacter(character1)
+    const voice2 = getVoiceForCharacter(character2)
+    console.log(`Preparing with voices: ${character1}=${voice1}, ${character2}=${voice2}`)
+
     // Prepare the request data
     const data = {
       character1,
@@ -857,6 +862,8 @@ export function DebateInterface() {
       format: debateFormat,
       historicalContext,
       isPreparing: true,
+      voice1,
+      voice2,
     }
 
     fetch("/api/auto-continue", {
@@ -894,7 +901,7 @@ export function DebateInterface() {
       .finally(() => {
         setIsPreparing(false)
       })
-  }, [character1, character2, debateFormat, historicalContext, isProcessing, isPreparing])
+  }, [character1, character2, debateFormat, historicalContext, isProcessing, isPreparing, getVoiceForCharacter])
 
   // Update the continueDebate function to use prepared exchange if available
   const continueDebate = useCallback(async () => {
@@ -1003,7 +1010,7 @@ export function DebateInterface() {
 
       console.log("Received new debate responses:", responseData)
 
-      // Calculate the current response number
+      // Calculate the current response number based on total exchanges
       const currentExchangeCount = Math.floor(messages.length / 2) + 1
 
       // Add responses
@@ -1013,14 +1020,14 @@ export function DebateInterface() {
           content: responseData.response1,
           timestamp: Date.now() + 100,
           audioUrl: responseData.audioUrl1,
-          responseType: `Response ${currentExchangeCount}`, // Changed from "Answer" to "Response"
+          responseType: `Response ${currentExchangeCount}`,
         },
         {
           character: character2,
           content: responseData.response2,
           timestamp: Date.now() + 200,
           audioUrl: responseData.audioUrl2,
-          responseType: `Response ${currentExchangeCount}`, // Changed from "Answer" to "Response"
+          responseType: `Response ${currentExchangeCount}`,
         },
       ]
 
@@ -1278,11 +1285,13 @@ export function DebateInterface() {
             if (currentIndex > 0 && currentIndex % 2 === 1) {
               // Calculate exchange count - start at 1 instead of 0
               const newExchangeCount = Math.floor((currentIndex + 1) / 2)
-              setExchangeCount(newExchangeCount)
-              console.log(`Completed exchange ${newExchangeCount} of ${maxExchanges}`)
+              // Ensure we start counting from 1
+              const displayExchangeCount = Math.max(1, newExchangeCount)
+              setExchangeCount(displayExchangeCount)
+              console.log(`Completed exchange ${displayExchangeCount} of ${maxExchanges}`)
 
               // If we've reached the maximum exchanges, stop auto-playing
-              if (newExchangeCount >= maxExchanges) {
+              if (displayExchangeCount >= maxExchanges) {
                 setIsAutoplaying(false)
                 console.log(`Reached ${maxExchanges} exchanges, stopping auto-play`)
               } else if (isAutoplaying) {
@@ -1581,12 +1590,16 @@ export function DebateInterface() {
                           : `${char2.name}`}{" "}
                       is speaking...
                     </h3>
-                    {/* Add response type label */}
-                    {debateMessages.find((m) => m.character === currentSpeaker)?.responseType && (
-                      <p className="text-sm text-gray-400 mb-2">
-                        {debateMessages.find((m) => m.character === currentSpeaker)?.responseType}
-                      </p>
-                    )}
+                    {(() => {
+                      // Find the most recent message for the current speaker
+                      const speakerMessages = debateMessages.filter((m) => m.character === currentSpeaker)
+                      const latestMessage = speakerMessages[speakerMessages.length - 1]
+                      return (
+                        latestMessage?.responseType && (
+                          <p className="text-sm text-gray-400 mb-2">{latestMessage.responseType}</p>
+                        )
+                      )
+                    })()}
                     <div className="flex justify-center mt-2">
                       <div className="flex space-x-1">
                         <div className="w-2 h-8 bg-blue-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
