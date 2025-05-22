@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { personas } from "./personas" // Import the personas variable
+import { personas } from "../lib/personas" // Fix the import path to point to the correct location
 
 // Static debate topics as fallback
 const staticDebateTopics = [
