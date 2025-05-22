@@ -15,6 +15,11 @@ export default async function handler(req, res) {
   try {
     const { character1, character2, topic, format, historicalContext } = req.body
 
+    // Validate required fields
+    if (!character1 || !character2 || !topic) {
+      return res.status(400).json({ error: "Missing required fields" })
+    }
+
     // Get the personas for each character
     const persona1 = personas[character1]
     const persona2 = personas[character2]
@@ -23,56 +28,29 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid character selection" })
     }
 
-    // Use the character-specific system prompts from the personas object
-    const systemPrompt1 = persona1.systemPrompt || `You are ${persona1.name}, responding to questions.`
-    const systemPrompt2 = persona2.systemPrompt || `You are ${persona2.name}, responding to questions.`
+    console.log(`Using system prompt for ${persona1.name}: ${persona1.systemPrompt}`)
 
-    console.log(`Using system prompt for ${persona1.name}:`, systemPrompt1)
-    console.log(`Using system prompt for ${persona2.name}:`, systemPrompt2)
+    // Generate opening statements for both characters
+    const [opening1Promise, opening2Promise] = await Promise.all([
+      generateOpening(persona1, persona2, topic, format, historicalContext),
+      generateOpening(persona2, persona1, topic, format, historicalContext),
+    ])
 
-    // Generate opening statement for character 1
-    const opening1Completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: `${systemPrompt1} You are participating in a debate on "${topic}". 
-                    Give a thoughtful opening statement from your perspective. 
-                    Keep your response concise (2-3 sentences).
-                    ${historicalContext ? "Only use knowledge available during your lifetime." : ""}`,
-        },
-        {
-          role: "user",
-          content: `Give your opening statement on the topic of "${topic}".`,
-        },
-      ],
-    })
+    const opening1 = await opening1Promise
+    const opening2 = await opening2Promise
 
-    const opening1 = opening1Completion.choices[0].message.content.trim()
+    // Get voice IDs for both characters
+    const voice1 = persona1.getVoiceId ? persona1.getVoiceId() : persona1.voiceId || "echo"
+    const voice2 = persona2.getVoiceId ? persona2.getVoiceId() : persona2.voiceId || "echo"
 
-    // Generate opening statement for character 2
-    const opening2Completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: `${systemPrompt2} You are participating in a debate on "${topic}". 
-                    Give a thoughtful opening statement from your perspective.
-                    Keep your response concise (2-3 sentences).
-                    ${historicalContext ? "Only use knowledge available during your lifetime." : ""}`,
-        },
-        {
-          role: "user",
-          content: `Give your opening statement on the topic of "${topic}".`,
-        },
-      ],
-    })
+    // Generate audio for both openings in parallel
+    const [audioUrl1Promise, audioUrl2Promise] = await Promise.all([
+      generateAudio(opening1, voice1),
+      generateAudio(opening2, voice2),
+    ])
 
-    const opening2 = opening2Completion.choices[0].message.content.trim()
-
-    // Generate audio for opening statements
-    const audioUrl1 = `/api/stream-audio?id=debate_${character1}_${Date.now()}&text=${encodeURIComponent(opening1)}&voice=${encodeURIComponent(getVoiceForCharacter(character1))}`
-    const audioUrl2 = `/api/stream-audio?id=debate_${character2}_${Date.now() + 1}&text=${encodeURIComponent(opening2)}&voice=${encodeURIComponent(getVoiceForCharacter(character2))}`
+    const audioUrl1 = await audioUrl1Promise
+    const audioUrl2 = await audioUrl2Promise
 
     res.status(200).json({
       opening1,
@@ -86,23 +64,52 @@ export default async function handler(req, res) {
   }
 }
 
-// Helper function to get the appropriate voice for a character
-function getVoiceForCharacter(characterId) {
-  // Default voice mapping
-  const voiceMap = {
-    daVinci: "en-US-Neural2-D",
-    socrates: "en-US-Neural2-D",
-    frida: "en-US-Neural2-F",
-    shakespeare: "en-US-Neural2-D",
-    mozart: "en-US-Neural2-D",
-  }
+// Function to generate an opening statement for a character
+async function generateOpening(persona, otherPersona, topic, format, historicalContext) {
+  // Create a system prompt that includes the character's persona and debate context
+  const systemPrompt = `${persona.systemPrompt}
+You are participating in a debate with ${otherPersona.name} on the topic of "${topic}".
+Keep your opening statement concise (100-150 words) but insightful.
+${historicalContext ? `Speak from your historical perspective and knowledge.` : ""}
+${
+  format === "pointCounterpoint"
+    ? "This debate will follow a point-counterpoint format. Present your initial position clearly."
+    : format === "socratic"
+      ? "This debate will follow a Socratic dialogue format. Ask thoughtful questions and present your views."
+      : "Present your opening statement on this topic."
+}`
 
-  // Check if there's an environment variable for this character
-  const envVoiceId = process.env[`${characterId.toUpperCase()}_VOICE_ID`]
-  if (envVoiceId) {
-    return envVoiceId
-  }
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: `You are ${persona.name}. Give your opening statement on the topic: "${topic}". Keep it concise but insightful.`,
+        },
+      ],
+      temperature: 0.7,
+      max_tokens: 250,
+    })
 
-  // Fall back to the default voice mapping
-  return voiceMap[characterId] || "en-US-Neural2-D"
+    return completion.choices[0].message.content.trim()
+  } catch (error) {
+    console.error("Error generating opening statement:", error)
+    throw error
+  }
+}
+
+// Function to generate audio for a statement
+async function generateAudio(text, voiceId) {
+  try {
+    // Generate a unique ID for this audio file
+    const audioId = `debate_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+
+    // Return the streaming URL
+    return `/api/stream-audio?id=${audioId}&text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId)}`
+  } catch (error) {
+    console.error("Error generating audio:", error)
+    throw error
+  }
 }

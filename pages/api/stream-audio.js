@@ -7,6 +7,9 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
+// Valid OpenAI voices
+const VALID_OPENAI_VOICES = ["nova", "shimmer", "echo", "onyx", "fable", "alloy", "ash", "sage", "coral"]
+
 export default async function handler(req, res) {
   // Set appropriate headers for streaming audio
   res.setHeader("Content-Type", "audio/mpeg")
@@ -21,11 +24,18 @@ export default async function handler(req, res) {
     }
 
     console.log(`Streaming audio for: ${text.substring(0, 50)}...`)
+    console.log(`Requested voice: ${voice}`)
 
     // Check if the voice is an ElevenLabs voice ID (UUID format or 21-character alphanumeric)
     const isElevenLabsVoice =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(voice) ||
       /^[a-zA-Z0-9]{20,25}$/i.test(voice)
+
+    // Check if the voice is a valid OpenAI voice
+    const isValidOpenAIVoice = VALID_OPENAI_VOICES.includes(voice)
+
+    // Determine which voice to use
+    let finalVoice = "alloy" // Default fallback
 
     if (isElevenLabsVoice) {
       // Use ElevenLabs for voice generation
@@ -59,35 +69,30 @@ export default async function handler(req, res) {
         // Write the buffer to the response
         res.write(Buffer.from(audioBuffer))
         res.end()
+        return
       } catch (error) {
         console.error("ElevenLabs streaming error:", error)
-
-        // Fall back to OpenAI if ElevenLabs fails
-        console.log("Falling back to OpenAI TTS")
-        const mp3 = await openai.audio.speech.create({
-          model: "tts-1",
-          voice: "alloy",
-          input: text,
-        })
-
-        const buffer = await mp3.arrayBuffer()
-        res.write(Buffer.from(buffer))
-        res.end()
+        // Fall through to OpenAI fallback
       }
-    } else {
-      // Use OpenAI TTS
-      console.log(`Streaming with OpenAI voice: ${voice || "alloy"}`)
-
-      const mp3 = await openai.audio.speech.create({
-        model: "tts-1",
-        voice: voice || "alloy",
-        input: text,
-      })
-
-      const buffer = await mp3.arrayBuffer()
-      res.write(Buffer.from(buffer))
-      res.end()
     }
+
+    // If we get here, either it's not an ElevenLabs voice or ElevenLabs failed
+    // Use a valid OpenAI voice
+    if (isValidOpenAIVoice) {
+      finalVoice = voice
+    }
+
+    console.log(`Streaming with OpenAI voice: ${finalVoice}`)
+
+    const mp3 = await openai.audio.speech.create({
+      model: "tts-1",
+      voice: finalVoice,
+      input: text,
+    })
+
+    const buffer = await mp3.arrayBuffer()
+    res.write(Buffer.from(buffer))
+    res.end()
   } catch (error) {
     console.error("Error streaming audio:", error)
     res.status(500).end("Error streaming audio")

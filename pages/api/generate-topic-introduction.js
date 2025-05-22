@@ -45,8 +45,8 @@ export default async function handler(req, res) {
 
     const introduction = completion.choices[0].message.content.trim()
 
-    // Generate audio for the introduction
-    const audioUrl = `/api/stream-audio?id=intro_${Date.now()}&text=${encodeURIComponent(introduction)}&voice=${encodeURIComponent(process.env.ELEVENLABS_VOICE_ID || "en-US-Neural2-D")}`
+    // Generate audio for the introduction - use a valid OpenAI voice
+    const audioUrl = `/api/stream-audio?id=intro_${Date.now()}&text=${encodeURIComponent(introduction)}&voice=${encodeURIComponent("alloy")}`
 
     res.status(200).json({
       introduction,
