@@ -12,7 +12,7 @@ import {
   clearDebateState,
 } from "../lib/debate-state"
 import { DebateHeader } from "./debate-header"
-import { TopicSelector } from "./topic-selector"
+import { EmbeddedTopicSelector } from "./embedded-topic-selector"
 
 // Check if we're running in the browser
 const isBrowser = typeof window !== "undefined"
@@ -114,7 +114,6 @@ export function DebateInterface() {
   const [maxExchanges, setMaxExchanges] = useState(5)
   const [isAutoplaying, setIsAutoplaying] = useState(true)
   const [debugMode, setDebugMode] = useState(false)
-  const [showTopicSelector, setShowTopicSelector] = useState(false)
   // New state for topic introduction
   const [hasIntroduction, setHasIntroduction] = useState(false)
   const [isIntroPlaying, setIsIntroPlaying] = useState(false)
@@ -1277,11 +1276,6 @@ export function DebateInterface() {
     [character2, isDebating, resetDebateState],
   )
 
-  // Open topic selector
-  const openTopicSelector = useCallback(() => {
-    setShowTopicSelector(true)
-  }, [])
-
   return (
     <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white min-h-screen">
       <DebateHeader
@@ -1351,27 +1345,8 @@ export function DebateInterface() {
               </p>
             </div>
           ) : !isDebating ? (
-            <div className="flex flex-col items-center justify-center text-gray-400">
-              <div className="h-12 w-12 mb-4">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-              </div>
-              <p>Select a topic below to start the debate</p>
-              <button
-                onClick={openTopicSelector}
-                className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full"
-              >
-                Choose a Topic
-              </button>
+            <div className="w-full">
+              <EmbeddedTopicSelector onSelectTopic={startDebate} character1={character1} character2={character2} />
             </div>
           ) : (
             <div className="flex flex-col items-center">
@@ -1661,15 +1636,6 @@ export function DebateInterface() {
       {/* Audio elements - hidden by default, visible in debug mode */}
       <audio ref={silentAudioRef} preload="auto" className="hidden" />
       <audio ref={introAudioRef} preload="auto" className="hidden" />
-
-      {/* Topic Selector Modal */}
-      <TopicSelector
-        isOpen={showTopicSelector}
-        onClose={() => setShowTopicSelector(false)}
-        onSelectTopic={startDebate}
-        character1={character1}
-        character2={character2}
-      />
 
       <style jsx global>{`
         @keyframes soundwave {
