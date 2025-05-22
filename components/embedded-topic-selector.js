@@ -16,30 +16,6 @@ const staticDebateTopics = [
     description: "The fundamental characteristics of humanity",
     category: "philosophy",
   },
-  {
-    id: "technology-progress",
-    title: "Technological Progress",
-    description: "The benefits and risks of advancing technology",
-    category: "technology",
-  },
-  {
-    id: "art-purpose",
-    title: "Purpose of Art",
-    description: "The role of artistic expression in society",
-    category: "arts",
-  },
-  {
-    id: "education-methods",
-    title: "Education Methods",
-    description: "How to best educate future generations",
-    category: "education",
-  },
-  {
-    id: "historical-legacy",
-    title: "Historical Legacy",
-    description: "How history shapes our present and future",
-    category: "history",
-  },
 ]
 
 // Character-specific topics for da Vinci and Socrates
@@ -76,7 +52,8 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
     if (storedTopics) {
       try {
         const parsedTopics = JSON.parse(storedTopics)
-        setTopics(parsedTopics)
+        // Limit to 2 topics
+        setTopics(parsedTopics.slice(0, 2))
         setIsLoading(false)
         return
       } catch (e) {

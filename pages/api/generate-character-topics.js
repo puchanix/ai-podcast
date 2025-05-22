@@ -75,30 +75,6 @@ export default async function handler(req, res) {
           description: "The relationship between artistic expression and scientific inquiry",
           category: "arts",
         },
-        {
-          id: "human-potential",
-          title: "Human Potential",
-          description: "The limits and possibilities of human achievement and understanding",
-          category: "philosophy",
-        },
-        {
-          id: "ideal-society",
-          title: "Ideal Society",
-          description: "What constitutes the perfect social and political structure?",
-          category: "politics",
-        },
-        {
-          id: "beauty-truth",
-          title: "Beauty and Truth",
-          description: "Is beauty objective or subjective, and how does it relate to truth?",
-          category: "arts",
-        },
-        {
-          id: "innovation-tradition",
-          title: "Innovation vs. Tradition",
-          description: "The value of new ideas versus established wisdom",
-          category: "philosophy",
-        },
       ]
 
       // Cache the topics if Redis is available
@@ -113,73 +89,19 @@ export default async function handler(req, res) {
       return res.status(200).json({ topics: daVinciSocratesTopics })
     }
 
-    try {
-      // Generate topics using OpenAI
-      const completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo", // Use a faster model
-        messages: [
-          {
-            role: "system",
-            content: `Generate 2 debate topics that would be interesting for ${persona1.name} and ${persona2.name} to debate based on their historical backgrounds, expertise, and potential areas of disagreement or shared interest.`,
-          },
-          {
-            role: "user",
-            content: `Create 2 debate topics for ${persona1.name} and ${persona2.name}. For each topic, provide:
-            1. A unique ID (lowercase with hyphens)
-            2. A short title (3-5 words)
-            3. A brief description (10-15 words)
-            4. A category (science, philosophy, arts, technology, history, education, politics)
-            
-            Format the response as a JSON array of objects with the properties: id, title, description, and category.`,
-          },
-        ],
-        response_format: { type: "json_object" },
-      })
+    // Special case for other character pairs - use predefined topics
+    const defaultTopics = getDefaultTopics(character1, character2)
 
-      // Parse the response
-      const responseText = completion.choices[0].message.content
-      let topics = []
-
+    // Cache the topics if Redis is available
+    if (redis) {
       try {
-        const responseData = JSON.parse(responseText)
-        topics = responseData.topics || []
+        await redis.set(cacheKey, JSON.stringify(defaultTopics), "EX", 86400)
       } catch (error) {
-        console.error("Error parsing OpenAI response:", error)
-        // Return default topics if parsing fails
-        return res.status(200).json({
-          topics: getDefaultTopics(character1, character2),
-        })
+        console.error("Redis caching error:", error)
       }
-
-      // If we got no topics or an empty array, use default topics
-      if (!topics || topics.length === 0) {
-        return res.status(200).json({
-          topics: getDefaultTopics(character1, character2),
-        })
-      }
-
-      // Limit to 2 topics
-      topics = topics.slice(0, 2)
-
-      // Cache the topics for 24 hours if Redis is available
-      if (redis) {
-        try {
-          await redis.set(cacheKey, JSON.stringify(topics), "EX", 86400)
-        } catch (error) {
-          console.error("Redis caching error:", error)
-          // Continue even if caching fails
-        }
-      }
-
-      res.status(200).json({ topics })
-    } catch (error) {
-      console.error("Error generating topics:", error)
-      // Return default topics instead of an error
-      res.status(200).json({
-        topics: getDefaultTopics(character1, character2),
-        error: error.message,
-      })
     }
+
+    return res.status(200).json({ topics: defaultTopics })
   } catch (error) {
     console.error("Error generating topics:", error)
     res.status(500).json({ error: "Failed to generate topics", details: error.message })
@@ -188,18 +110,23 @@ export default async function handler(req, res) {
 
 // Add a helper function to get default topics
 function getDefaultTopics(character1, character2) {
+  // Get the personas for each character
+  const persona1 = personas[character1]
+  const persona2 = personas[character2]
+
+  // Create default topics based on character names
   return [
     {
-      id: "human-nature",
-      title: "Human Nature",
-      description: "The fundamental characteristics of humanity",
+      id: `${character1}-${character2}-philosophy`,
+      title: "Philosophy and Knowledge",
+      description: `How ${persona1.name} and ${persona2.name} view the pursuit of wisdom`,
       category: "philosophy",
     },
     {
-      id: "art-purpose",
-      title: "Purpose of Art",
-      description: "The role of artistic expression in society",
-      category: "arts",
+      id: `${character1}-${character2}-legacy`,
+      title: "Historical Legacy",
+      description: `The lasting impact of ${persona1.name} and ${persona2.name} on humanity`,
+      category: "history",
     },
   ]
 }

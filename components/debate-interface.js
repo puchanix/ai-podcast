@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { personas, loadVoiceIds, voiceIdsLoaded } from "../lib/personas"
+import { personas } from "../lib/personas"
 import {
   initializeDebateState,
   saveTopic,
@@ -31,30 +31,6 @@ const staticDebateTopics = [
     description: "The fundamental characteristics of humanity",
     category: "philosophy",
   },
-  {
-    id: "technology-progress",
-    title: "Technological Progress",
-    description: "The benefits and risks of advancing technology",
-    category: "technology",
-  },
-  {
-    id: "art-purpose",
-    title: "Purpose of Art",
-    description: "The role of artistic expression in society",
-    category: "arts",
-  },
-  {
-    id: "education-methods",
-    title: "Education Methods",
-    description: "How to best educate future generations",
-    category: "education",
-  },
-  {
-    id: "historical-legacy",
-    title: "Historical Legacy",
-    description: "How history shapes our present and future",
-    category: "history",
-  },
 ]
 
 export function DebateInterface() {
@@ -77,6 +53,10 @@ export function DebateInterface() {
   const [currentTopic, setCurrentTopic] = useState(defaultState.topic)
   const [exchangeCount, setExchangeCount] = useState(defaultState.exchangeCount)
 
+  // Voice state
+  const [isLoadingVoices, setIsLoadingVoices] = useState(true)
+  const [voiceIds, setVoiceIds] = useState({})
+
   // Load initial state from localStorage on client-side only
   useEffect(() => {
     if (isBrowser && !initialStateLoaded) {
@@ -91,6 +71,35 @@ export function DebateInterface() {
     }
   }, [initialStateLoaded])
 
+  // Load voice IDs when component mounts
+  useEffect(() => {
+    async function loadVoiceIds() {
+      try {
+        const response = await fetch("/api/get-voice-ids")
+        if (response.ok) {
+          const data = await response.json()
+          setVoiceIds(data)
+          console.log("Voice IDs loaded:", data)
+
+          // Update personas with voice IDs
+          Object.keys(personas).forEach((key) => {
+            if (data[key.toLowerCase()]) {
+              personas[key].voiceId = data[key.toLowerCase()]
+            }
+          })
+        } else {
+          console.error("Failed to load voice IDs")
+        }
+      } catch (error) {
+        console.error("Error loading voice IDs:", error)
+      } finally {
+        setIsLoadingVoices(false)
+      }
+    }
+
+    loadVoiceIds()
+  }, [])
+
   // UI state
   const [customQuestion, setCustomQuestion] = useState("")
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
@@ -98,6 +107,7 @@ export function DebateInterface() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [isAudioLoaded, setIsAudioLoaded] = useState(false)
   const [volume, setVolume] = useState(1.0)
   const [showTranscript, setShowTranscript] = useState(false)
   const [audioError, setAudioError] = useState(null)
@@ -105,7 +115,6 @@ export function DebateInterface() {
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
-  const [voiceIdsReady, setVoiceIdsReady] = useState(voiceIdsLoaded)
   const [retryCount, setRetryCount] = useState(0)
   const [lastError, setLastError] = useState(null)
   const [requestData, setRequestData] = useState(null)
@@ -135,6 +144,7 @@ export function DebateInterface() {
   const exchangeCountRef = useRef(exchangeCount)
   const prepareNextTimeoutRef = useRef(null)
   const prepareTimeoutRef = useRef(null)
+  const currentAudioRef = useRef(null)
 
   // Store current audio URLs
   const [currentAudioUrls, setCurrentAudioUrls] = useState({
@@ -176,19 +186,6 @@ export function DebateInterface() {
     saveCharacters(character1, character2)
   }, [character1, character2])
 
-  // Load voice IDs when component mounts
-  useEffect(() => {
-    async function initVoiceIds() {
-      if (!voiceIdsLoaded) {
-        const success = await loadVoiceIds()
-        setVoiceIdsReady(success)
-        console.log("Voice IDs loaded:", success)
-      }
-    }
-
-    initVoiceIds()
-  }, [])
-
   // Log the personas object and voice IDs for debugging
   useEffect(() => {
     console.log("PERSONAS OBJECT:", personas)
@@ -196,7 +193,7 @@ export function DebateInterface() {
     console.log("Character 1 Voice ID:", personas[character1]?.voiceId)
     console.log("Character 2:", character2, personas[character2])
     console.log("Character 2 Voice ID:", personas[character2]?.voiceId)
-  }, [character1, character2, voiceIdsReady])
+  }, [character1, character2, voiceIds])
 
   // Initialize audio elements with silent.mp3
   useEffect(() => {
@@ -277,6 +274,7 @@ export function DebateInterface() {
     setCurrentTopic("")
     setCurrentSpeaker(null)
     setIsPlaying(false)
+    setIsAudioLoaded(false)
     setAudioError(null)
     setCurrentAudioUrls({ char1: "", char2: "" })
     setNextAudioData(null)
@@ -319,6 +317,11 @@ export function DebateInterface() {
       introAudioRef.current.src = "/silent.mp3"
     }
 
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current = null
+    }
+
     // Clear any prepare timeout
     if (prepareTimeoutRef.current) {
       clearTimeout(prepareTimeoutRef.current)
@@ -343,7 +346,8 @@ export function DebateInterface() {
     if (storedTopics) {
       try {
         const parsedTopics = JSON.parse(storedTopics)
-        setCharacterSpecificTopics(parsedTopics)
+        // Limit to 2 topics
+        setCharacterSpecificTopics(parsedTopics.slice(0, 2))
         return
       } catch (e) {
         console.error("Error parsing stored topics:", e)
@@ -367,11 +371,13 @@ export function DebateInterface() {
       if (!response.ok) throw new Error("Failed to generate topics")
 
       const data = await response.json()
-      setCharacterSpecificTopics(data.topics)
+      // Limit to 2 topics
+      const limitedTopics = data.topics.slice(0, 2)
+      setCharacterSpecificTopics(limitedTopics)
 
       // Store in localStorage for future use
       try {
-        localStorage.setItem(topicKey, JSON.stringify(data.topics))
+        localStorage.setItem(topicKey, JSON.stringify(limitedTopics))
       } catch (e) {
         console.error("Error storing topics in localStorage:", e)
       }
@@ -407,33 +413,34 @@ export function DebateInterface() {
     }
   }, [debateMessages])
 
-  // Get the appropriate voice for a character directly from personas.js
-  const getVoiceForCharacter = useCallback((characterId) => {
-    // Check if the character exists in personas
-    if (!personas[characterId]) {
-      console.log(`Character ${characterId} not found in personas`)
-      return "echo" // Default OpenAI voice as fallback
-    }
-
-    // Use the getVoiceId method if available
-    if (typeof personas[characterId].getVoiceId === "function") {
-      const voiceId = personas[characterId].getVoiceId()
-      if (voiceId) {
-        console.log(`Found voice ID "${voiceId}" for ${characterId} using getVoiceId()`)
-        return voiceId
+  // Get the appropriate voice for a character
+  const getVoiceForCharacter = useCallback(
+    (characterId) => {
+      // Check if the character exists in personas
+      if (!personas[characterId]) {
+        console.log(`Character ${characterId} not found in personas`)
+        return "echo" // Default OpenAI voice as fallback
       }
-    }
 
-    // Try the direct voiceId property as fallback
-    if (personas[characterId].voiceId) {
-      console.log(`Found voice ID "${personas[characterId].voiceId}" for ${characterId} using voiceId property`)
-      return personas[characterId].voiceId
-    }
+      // Get the voice ID directly from the personas object
+      if (personas[characterId].voiceId) {
+        console.log(`Found voice ID "${personas[characterId].voiceId}" for ${characterId}`)
+        return personas[characterId].voiceId
+      }
 
-    // Fallback to default voices if no voice ID is found
-    console.log(`No voice ID found for ${characterId}, using default based on gender`)
-    return personas[characterId]?.gender === "female" ? "nova" : "echo"
-  }, [])
+      // Check if we have a voice ID in the voiceIds state
+      const lowerCaseId = characterId.toLowerCase()
+      if (voiceIds[lowerCaseId]) {
+        console.log(`Found voice ID "${voiceIds[lowerCaseId]}" for ${characterId} in voiceIds state`)
+        return voiceIds[lowerCaseId]
+      }
+
+      // Fallback to default voices if no voice ID is found
+      console.log(`No voice ID found for ${characterId}, using default based on gender`)
+      return personas[characterId]?.gender === "female" ? "nova" : "echo"
+    },
+    [voiceIds],
+  )
 
   // Function to play topic introduction
   const playTopicIntroduction = useCallback(
@@ -542,14 +549,14 @@ export function DebateInterface() {
           content: data.opening1,
           timestamp: Date.now(),
           audioUrl: data.audioUrl1,
-          responseNumber: 1,
+          responseType: "Opening Remarks",
         },
         {
           character: character2,
           content: data.opening2,
           timestamp: Date.now() + 100,
           audioUrl: data.audioUrl2,
-          responseNumber: 1,
+          responseType: "Opening Remarks",
         },
       ]
 
@@ -562,29 +569,9 @@ export function DebateInterface() {
   )
 
   // Start debate after introduction
-  const startDebateAfterIntro = useCallback(
-    (topic) => {
-      // Make sure voice IDs are loaded before starting
-      if (!voiceIdsLoaded) {
-        loadVoiceIds()
-      }
-
-      // Make sure voice IDs are loaded before starting
-      if (!voiceIdsReady) {
-        loadVoiceIds().then((success) => {
-          setVoiceIdsReady(success)
-          if (!success) {
-            setAudioError("Failed to load voice IDs. Please try again.")
-            return
-          }
-          startDebateMain(topic)
-        })
-      } else {
-        startDebateMain(topic)
-      }
-    },
-    [voiceIdsReady],
-  )
+  const startDebateAfterIntro = useCallback((topic) => {
+    startDebateMain(topic)
+  }, [])
 
   // Main debate starting function (without introduction)
   const startDebateMain = useCallback(
@@ -627,14 +614,14 @@ export function DebateInterface() {
             content: data.opening1,
             timestamp: Date.now(),
             audioUrl: data.audioUrl1,
-            responseNumber: 1,
+            responseType: "Opening Remarks",
           },
           {
             character: character2,
             content: data.opening2,
             timestamp: Date.now() + 100,
             audioUrl: data.audioUrl2,
-            responseNumber: 1,
+            responseType: "Opening Remarks",
           },
         ]
 
@@ -702,14 +689,14 @@ export function DebateInterface() {
             content: data.opening1,
             timestamp: Date.now(),
             audioUrl: data.audioUrl1,
-            responseNumber: 1,
+            responseType: "Opening Remarks",
           },
           {
             character: character2,
             content: data.opening2,
             timestamp: Date.now() + 100,
             audioUrl: data.audioUrl2,
-            responseNumber: 1,
+            responseType: "Opening Remarks",
           },
         ]
 
@@ -770,14 +757,14 @@ export function DebateInterface() {
           content: data.response1,
           timestamp: Date.now() + 100,
           audioUrl: data.audioUrl1,
-          responseNumber: currentExchangeCount,
+          responseType: `Answer ${currentExchangeCount}`,
         },
         {
           character: character2,
           content: data.response2,
           timestamp: Date.now() + 200,
           audioUrl: data.audioUrl2,
-          responseNumber: currentExchangeCount,
+          responseType: `Answer ${currentExchangeCount}`,
         },
       ]
 
@@ -987,14 +974,14 @@ export function DebateInterface() {
           content: responseData.response1,
           timestamp: Date.now() + 100,
           audioUrl: responseData.audioUrl1,
-          responseNumber: currentExchangeCount,
+          responseType: `Answer ${currentExchangeCount}`,
         },
         {
           character: character2,
           content: responseData.response2,
           timestamp: Date.now() + 200,
           audioUrl: responseData.audioUrl2,
-          responseNumber: currentExchangeCount,
+          responseType: `Answer ${currentExchangeCount}`,
         },
       ]
 
@@ -1059,7 +1046,7 @@ export function DebateInterface() {
         transcript += `Question: ${msg.content}\n\n`
       } else {
         const speaker = msg.character === character1 ? char1.name : char2.name
-        const responseLabel = msg.responseNumber ? `Response #${msg.responseNumber}` : ""
+        const responseLabel = msg.responseType || ""
         transcript += `${speaker} ${responseLabel}: ${msg.content}\n\n`
       }
     })
@@ -1135,10 +1122,12 @@ export function DebateInterface() {
       console.log(`Playing audio for ${character}...`)
       setIsLoadingAudio(true)
       setCurrentSpeaker(character)
+      setIsAudioLoaded(false)
 
       try {
         // Create a new audio element
         const audio = new Audio()
+        currentAudioRef.current = audio
 
         // Get the voice for this character
         const voice = getVoiceForCharacter(character)
@@ -1179,6 +1168,7 @@ export function DebateInterface() {
         // Set up event handlers
         audio.oncanplaythrough = () => {
           console.log(`${character} audio loaded successfully`)
+          setIsAudioLoaded(true)
         }
 
         audio.onplay = () => {
@@ -1201,6 +1191,7 @@ export function DebateInterface() {
         audio.onended = () => {
           console.log(`${character} audio playback ended`)
           setIsPlaying(false)
+          setIsAudioLoaded(false)
 
           // Clear any prepare timeout
           if (prepareNextTimeoutRef.current) {
@@ -1267,6 +1258,7 @@ export function DebateInterface() {
           setAudioError(`${character} audio error: ${errorDetails}`)
           setIsLoadingAudio(false)
           setIsPlaying(false)
+          setIsAudioLoaded(false)
           setCurrentSpeaker(null)
 
           // Clear any prepare timeout
@@ -1276,6 +1268,9 @@ export function DebateInterface() {
           }
         }
 
+        // Load the audio
+        audio.load()
+
         // Play the audio
         await audio.play()
       } catch (err) {
@@ -1283,6 +1278,7 @@ export function DebateInterface() {
         setAudioError(`Error playing ${character} audio: ${err.message}`)
         setIsLoadingAudio(false)
         setIsPlaying(false)
+        setIsAudioLoaded(false)
         setCurrentSpeaker(null)
 
         // Clear any prepare timeout
@@ -1308,6 +1304,16 @@ export function DebateInterface() {
   // Add this function to toggle auto-play
   const toggleAutoplay = useCallback(() => {
     setIsAutoplaying(!isAutoplaying)
+
+    // If we're pausing, pause the current audio
+    if (isAutoplaying && currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      setIsPlaying(false)
+    } else if (!isAutoplaying && currentAudioRef.current) {
+      // If we're resuming, play the current audio
+      currentAudioRef.current.play()
+      setIsPlaying(true)
+    }
   }, [isAutoplaying])
 
   // Handle character changes
@@ -1350,8 +1356,9 @@ export function DebateInterface() {
         onCharacter2Change={handleCharacter2Change}
       />
 
-      {!voiceIdsReady && (
+      {isLoadingVoices && (
         <div className="mb-4 p-4 bg-yellow-800 text-yellow-100 rounded-lg text-center">
+          <div className="inline-block animate-spin h-5 w-5 border-2 border-yellow-500 border-t-transparent rounded-full mr-2"></div>
           Loading voice data... Please wait.
         </div>
       )}
@@ -1393,10 +1400,10 @@ export function DebateInterface() {
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    className="animate-spin"
                   >
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 6v6l4 2"></path>
                   </svg>
                 </div>
               </div>
@@ -1411,7 +1418,7 @@ export function DebateInterface() {
             </div>
           ) : (
             <div className="flex flex-col items-center">
-              {isPlaying || isLoadingAudio ? (
+              {isPlaying && isAudioLoaded ? (
                 <div className="flex items-center justify-center mb-6">
                   <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-yellow-500 p-2">
                     <img
@@ -1431,19 +1438,36 @@ export function DebateInterface() {
               ) : (
                 <div className="flex items-center justify-center mb-6">
                   <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2 flex items-center justify-center bg-gray-800">
-                    <div className="h-16 w-16 text-gray-400">
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-                      </svg>
-                    </div>
+                    {isLoadingAudio ? (
+                      <div className="h-16 w-16 text-gray-400 animate-spin">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <path d="M12 6v6l4 2"></path>
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="h-16 w-16 text-gray-400">
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                        </svg>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1451,7 +1475,14 @@ export function DebateInterface() {
               <div className="text-center mb-4">
                 {isLoadingAudio ? (
                   <div>
-                    <h3 className="text-xl font-bold text-yellow-400">Loading audio...</h3>
+                    <h3 className="text-xl font-bold text-yellow-400">
+                      {currentSpeaker === "moderator"
+                        ? "Moderator"
+                        : currentSpeaker === character1
+                          ? `${char1.name}`
+                          : `${char2.name}`}{" "}
+                      is thinking...
+                    </h3>
                     <div className="mt-2">
                       <div className="h-8 w-8 animate-spin mx-auto text-yellow-400">
                         <svg
@@ -1468,7 +1499,7 @@ export function DebateInterface() {
                       </div>
                     </div>
                   </div>
-                ) : isPlaying ? (
+                ) : isPlaying && isAudioLoaded ? (
                   <div>
                     <h3 className="text-xl font-bold text-yellow-400">
                       {currentSpeaker === "moderator"
@@ -1478,10 +1509,10 @@ export function DebateInterface() {
                           : `${char2.name}`}{" "}
                       is speaking...
                     </h3>
-                    {/* Add response number label */}
-                    {debateMessages.find((m) => m.character === currentSpeaker)?.responseNumber && (
+                    {/* Add response type label */}
+                    {debateMessages.find((m) => m.character === currentSpeaker)?.responseType && (
                       <p className="text-sm text-gray-400 mb-2">
-                        Response #{debateMessages.find((m) => m.character === currentSpeaker)?.responseNumber}
+                        {debateMessages.find((m) => m.character === currentSpeaker)?.responseType}
                       </p>
                     )}
                     <div className="flex justify-center mt-2">
@@ -1609,10 +1640,10 @@ export function DebateInterface() {
               speaker = "Moderator"
               speakerClass = "text-yellow-400"
             } else if (msg.character === character1) {
-              speaker = `${char1.name}${msg.responseNumber ? ` (Response ${msg.responseNumber})` : ""}`
+              speaker = `${char1.name}${msg.responseType ? ` (${msg.responseType})` : ""}`
               speakerClass = "text-blue-400"
             } else if (msg.character === character2) {
-              speaker = `${char2.name}${msg.responseNumber ? ` (Response ${msg.responseNumber})` : ""}`
+              speaker = `${char2.name}${msg.responseType ? ` (${msg.responseType})` : ""}`
               speakerClass = "text-red-400"
             }
 
@@ -1650,10 +1681,11 @@ export function DebateInterface() {
           <h3 className="text-lg font-bold mb-2">Debug Panel</h3>
 
           <div className="mb-4">
-            <p>Voice IDs Ready: {voiceIdsReady ? "Yes" : "No"}</p>
+            <p>Voice IDs Ready: {!isLoadingVoices ? "Yes" : "No"}</p>
             <p>Current Speaker: {currentSpeaker || "None"}</p>
             <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
             <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
+            <p>Audio Loaded: {isAudioLoaded ? "Yes" : "No"}</p>
             <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
             <p>Is Unlocking Audio: {isUnlockingAudio ? "Yes" : "No"}</p>
             <p>Is Initializing: {isInitializing ? "Yes" : "No"}</p>
