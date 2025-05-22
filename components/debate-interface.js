@@ -412,10 +412,10 @@ export function DebateInterface() {
     // Check if the character exists in personas
     if (!personas[characterId]) {
       console.log(`Character ${characterId} not found in personas`)
-      return "alloy" // Default OpenAI voice as fallback
+      return "echo" // Default OpenAI voice as fallback
     }
 
-    // Use the getVoiceId method if available, otherwise fall back to the voiceId property
+    // Use the getVoiceId method if available
     if (typeof personas[characterId].getVoiceId === "function") {
       const voiceId = personas[characterId].getVoiceId()
       if (voiceId) {
@@ -442,6 +442,21 @@ export function DebateInterface() {
 
       setIsIntroPlaying(true)
       setStatusMessage("Preparing introduction...")
+
+      // Start preparing the debate in parallel
+      const debatePromise = fetch("/api/start-debate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          character1,
+          character2,
+          topic,
+          format: debateFormat,
+          historicalContext,
+        }),
+      })
 
       try {
         const response = await fetch("/api/generate-topic-introduction", {
@@ -473,13 +488,26 @@ export function DebateInterface() {
           setStatusMessage("Playing introduction...")
         }
 
-        introAudioRef.current.onended = () => {
+        introAudioRef.current.onended = async () => {
           console.log("Introduction audio ended")
           setIsIntroPlaying(false)
           setHasIntroduction(true)
 
-          // Start the actual debate after introduction
-          startDebateAfterIntro(topic)
+          // Get the debate data that was being prepared in parallel
+          try {
+            const debateResponse = await debatePromise
+            if (!debateResponse.ok) throw new Error("Failed to start debate")
+
+            const debateData = await debateResponse.json()
+            console.log("Debate prepared during intro:", debateData)
+
+            // Continue with the debate using the prepared data
+            continueWithPreparedDebate(topic, debateData)
+          } catch (error) {
+            console.error("Error preparing debate during intro:", error)
+            // Fall back to regular debate start
+            startDebateAfterIntro(topic)
+          }
         }
 
         introAudioRef.current.onerror = (e) => {
@@ -497,7 +525,40 @@ export function DebateInterface() {
         startDebateAfterIntro(topic)
       }
     },
-    [character1, character2, setStatusMessage],
+    [character1, character2, debateFormat, historicalContext],
+  )
+
+  // Add a new function to continue with prepared debate data
+  const continueWithPreparedDebate = useCallback(
+    (topic, data) => {
+      resetDebateState()
+      setCurrentTopic(topic)
+      setIsDebating(true)
+
+      // Store the debate messages
+      const messages = [
+        {
+          character: character1,
+          content: data.opening1,
+          timestamp: Date.now(),
+          audioUrl: data.audioUrl1,
+          responseNumber: 1,
+        },
+        {
+          character: character2,
+          content: data.opening2,
+          timestamp: Date.now() + 100,
+          audioUrl: data.audioUrl2,
+          responseNumber: 1,
+        },
+      ]
+
+      setDebateMessages(messages)
+
+      // Play the first character's audio and preload the second character's audio
+      playDebateAudio(messages[0], messages, 0)
+    },
+    [character1, character2, resetDebateState],
   )
 
   // Start debate after introduction
@@ -1636,6 +1697,11 @@ export function DebateInterface() {
       {/* Audio elements - hidden by default, visible in debug mode */}
       <audio ref={silentAudioRef} preload="auto" className="hidden" />
       <audio ref={introAudioRef} preload="auto" className="hidden" />
+      <audio ref={char1AudioRef} preload="auto" className="hidden" />
+      <audio ref={char2AudioRef} preload="auto" className="hidden" />
+
+      <style jsx />
+      <audio ref={char2AudioRef} preload="auto" className="hidden" />
 
       <style jsx global>{`
         @keyframes soundwave {
@@ -1650,87 +1716,4 @@ export function DebateInterface() {
       `}</style>
     </div>
   )
-}
-
-// Helper function to get category color
-function getCategoryColor(category) {
-  switch (category) {
-    case "science":
-      return "bg-blue-900 text-blue-300"
-    case "philosophy":
-      return "bg-purple-900 text-purple-300"
-    case "politics":
-      return "bg-red-900 text-red-300"
-    case "arts":
-      return "bg-yellow-900 text-yellow-300"
-    case "technology":
-      return "bg-green-900 text-green-300"
-    case "history":
-      return "bg-orange-900 text-orange-300"
-    case "education":
-      return "bg-teal-900 text-teal-300"
-    default:
-      return "bg-gray-700 text-gray-300"
-  }
-}
-
-// Helper function to get category icon
-function getCategoryIcon(category) {
-  // Simple SVG icons
-  switch (category) {
-    case "science":
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M10 2v8L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45L14 10V2"></path>
-          <path d="M8.5 2h7"></path>
-          <path d="M7 16h10"></path>
-        </svg>
-      )
-    case "philosophy":
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10"></circle>
-          <path d="M12 16v-4"></path>
-          <path d="M12 8h.01"></path>
-        </svg>
-      )
-    default:
-      return (
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="16" x2="12" y2="12"></line>
-          <line x1="12" y1="8" x2="12.01" y2="8"></line>
-        </svg>
-      )
-  }
 }
