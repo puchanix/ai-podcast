@@ -1,9 +1,15 @@
 // pages/api/speak.js
 import OpenAI from "openai"
+import { ElevenLabs } from "elevenlabs"
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+})
+
+// Initialize ElevenLabs client
+const elevenlabs = new ElevenLabs({
+  apiKey: process.env.ELEVENLABS_API_KEY,
 })
 
 export default async function handler(req, res) {
@@ -12,82 +18,53 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { text, voice = "alloy" } = req.body
+    const { text, voice } = req.body
 
     if (!text) {
       return res.status(400).json({ error: "Text is required" })
     }
 
-    console.log(`Generating audio with voice ID: "${voice}" for text: ${text.substring(0, 50)}...`)
+    console.log(`Generating audio for text: ${text.substring(0, 50)}...`)
 
-    // Check if this is an ElevenLabs voice ID (they typically start with numbers or have a specific format)
-    const isElevenLabsVoice = voice && voice.length > 10 && /^[a-zA-Z0-9]+$/.test(voice)
+    // Check if the voice is an ElevenLabs voice ID (UUID format)
+    // This regex checks for a UUID format which ElevenLabs uses
+    const isElevenLabsVoice =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(voice) ||
+      /^[a-zA-Z0-9]{20,25}$/i.test(voice) // Also check for ElevenLabs' 21-character IDs
 
     let audioUrl
 
     if (isElevenLabsVoice) {
-      // Use ElevenLabs API
-      const ELEVEN_LABS_API_KEY = process.env.ELEVENLABS_API_KEY || process.env.ELEVEN_LABS_API_KEY
+      // Use ElevenLabs for voice generation
+      console.log(`Using ElevenLabs voice: ${voice}`)
 
-      if (!ELEVEN_LABS_API_KEY) {
-        console.warn("ELEVEN_LABS_API_KEY not found, falling back to OpenAI TTS")
-        // Fall back to OpenAI if no ElevenLabs API key
-        const mp3 = await openai.audio.speech.create({
-          model: "tts-1",
-          voice: "alloy", // Default fallback
-          input: text,
-        })
+      // Generate a unique ID for this audio file
+      const audioId = `elevenlabs_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
 
-        const buffer = Buffer.from(await mp3.arrayBuffer())
-        const base64Audio = buffer.toString("base64")
-        audioUrl = `data:audio/mp3;base64,${base64Audio}`
-      } else {
-        // Use ElevenLabs
-        const options = {
-          method: "POST",
-          headers: {
-            "xi-api-key": ELEVEN_LABS_API_KEY,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            text,
-            model_id: "eleven_monolingual_v1",
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.75,
-            },
-          }),
-        }
-
-        const elevenLabsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}`, options)
-
-        if (!elevenLabsResponse.ok) {
-          throw new Error(`ElevenLabs API returned ${elevenLabsResponse.status}`)
-        }
-
-        const arrayBuffer = await elevenLabsResponse.arrayBuffer()
-        const buffer = Buffer.from(arrayBuffer)
-        const base64Audio = buffer.toString("base64")
-        audioUrl = `data:audio/mp3;base64,${base64Audio}`
-      }
+      // Return the streaming URL
+      audioUrl = `/api/stream-audio?id=${audioId}&text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`
     } else {
-      // Use OpenAI's TTS API
+      // Use OpenAI TTS as fallback
+      console.log(`Using OpenAI voice: ${voice || "alloy"}`)
+
       const mp3 = await openai.audio.speech.create({
         model: "tts-1",
-        voice: voice, // Use the provided voice or default to "alloy"
+        voice: voice || "alloy",
         input: text,
       })
 
-      // Get the audio data as an ArrayBuffer
       const buffer = Buffer.from(await mp3.arrayBuffer())
+
+      // Convert buffer to base64
       const base64Audio = buffer.toString("base64")
-      audioUrl = `data:audio/mp3;base64,${base64Audio}`
+
+      // Create a data URL
+      audioUrl = `data:audio/mpeg;base64,${base64Audio}`
     }
 
-    // Return the data URL
     res.status(200).json({ audioUrl })
   } catch (error) {
-    console.error("Error generating audio:", error)
-    res.status(500).json({ error: "Failed to generate audio", details: error.message })
+    console.error("Error generating speech:", error)
+    res.status(500).json({ error: "Failed to generate speech" })
   }
 }
