@@ -13,6 +13,15 @@ export default async function handler(req, res) {
       // Log the voice IDs for debugging
       console.log("API returning voice IDs:", voiceIds)
   
+      // Check if any voice IDs are missing
+      const missingVoices = Object.entries(voiceIds)
+        .filter(([key, value]) => !value)
+        .map(([key]) => key)
+  
+      if (missingVoices.length > 0) {
+        console.warn(`Warning: Missing voice IDs for: ${missingVoices.join(", ")}`)
+      }
+  
       res.status(200).json(voiceIds)
     } catch (error) {
       console.error("Error getting voice IDs:", error)
