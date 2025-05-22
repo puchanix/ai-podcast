@@ -1007,7 +1007,7 @@ export function DebateInterface() {
 
         console.log(`Successfully preloaded audio for ${character}`)
       } catch (err) {
-        console.error(`Error preloading audio for ${character}`)
+        console.error(`Error preloading audio for ${character}`, err)
       } finally {
         setIsPreloadingAudio(false)
       }
@@ -1613,6 +1613,7 @@ export function DebateInterface() {
 
       {/* Audio elements - hidden by default, visible in debug mode */}
       <audio ref={silentAudioRef} preload="auto" className="hidden" />
+      <audio ref={introAudioRef} preload="auto" className="hidden" />
 
       {/* Topic Selector Modal */}
       <TopicSelector
