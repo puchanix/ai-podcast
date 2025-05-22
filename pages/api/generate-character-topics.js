@@ -113,93 +113,93 @@ export default async function handler(req, res) {
       return res.status(200).json({ topics: daVinciSocratesTopics })
     }
 
-    // Generate topics using OpenAI
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: `Generate 6 debate topics that would be interesting for ${persona1.name} and ${persona2.name} to debate based on their historical backgrounds, expertise, and potential areas of disagreement or shared interest.`,
-        },
-        {
-          role: "user",
-          content: `Create 6 debate topics for ${persona1.name} and ${persona2.name}. For each topic, provide:
-          1. A unique ID (lowercase with hyphens)
-          2. A short title (3-5 words)
-          3. A brief description (10-15 words)
-          4. A category (science, philosophy, arts, technology, history, education, politics)
-          
-          Format the response as a JSON array of objects with the properties: id, title, description, and category.`,
-        },
-      ],
-      response_format: { type: "json_object" },
-    })
-
-    // Parse the response
-    const responseText = completion.choices[0].message.content
-    let topics = []
-
     try {
-      const responseData = JSON.parse(responseText)
-      topics = responseData.topics || []
-    } catch (error) {
-      console.error("Error parsing OpenAI response:", error)
-      // Return default topics if parsing fails
-      return res.status(200).json({
-        topics: [
+      // Generate topics using OpenAI
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo", // Use a faster model
+        messages: [
           {
-            id: "science-method",
-            title: "Scientific Method",
-            description: "Approaches to scientific discovery and experimentation",
-            category: "science",
+            role: "system",
+            content: `Generate 2 debate topics that would be interesting for ${persona1.name} and ${persona2.name} to debate based on their historical backgrounds, expertise, and potential areas of disagreement or shared interest.`,
           },
           {
-            id: "human-nature",
-            title: "Human Nature",
-            description: "The fundamental characteristics of humanity",
-            category: "philosophy",
-          },
-          {
-            id: "technology-progress",
-            title: "Technological Progress",
-            description: "The benefits and risks of advancing technology",
-            category: "technology",
-          },
-          {
-            id: "art-purpose",
-            title: "Purpose of Art",
-            description: "The role of artistic expression in society",
-            category: "arts",
-          },
-          {
-            id: "education-methods",
-            title: "Education Methods",
-            description: "How to best educate future generations",
-            category: "education",
-          },
-          {
-            id: "historical-legacy",
-            title: "Historical Legacy",
-            description: "How history shapes our present and future",
-            category: "history",
+            role: "user",
+            content: `Create 2 debate topics for ${persona1.name} and ${persona2.name}. For each topic, provide:
+            1. A unique ID (lowercase with hyphens)
+            2. A short title (3-5 words)
+            3. A brief description (10-15 words)
+            4. A category (science, philosophy, arts, technology, history, education, politics)
+            
+            Format the response as a JSON array of objects with the properties: id, title, description, and category.`,
           },
         ],
+        response_format: { type: "json_object" },
+      })
+
+      // Parse the response
+      const responseText = completion.choices[0].message.content
+      let topics = []
+
+      try {
+        const responseData = JSON.parse(responseText)
+        topics = responseData.topics || []
+      } catch (error) {
+        console.error("Error parsing OpenAI response:", error)
+        // Return default topics if parsing fails
+        return res.status(200).json({
+          topics: getDefaultTopics(character1, character2),
+        })
+      }
+
+      // If we got no topics or an empty array, use default topics
+      if (!topics || topics.length === 0) {
+        return res.status(200).json({
+          topics: getDefaultTopics(character1, character2),
+        })
+      }
+
+      // Limit to 2 topics
+      topics = topics.slice(0, 2)
+
+      // Cache the topics for 24 hours if Redis is available
+      if (redis) {
+        try {
+          await redis.set(cacheKey, JSON.stringify(topics), "EX", 86400)
+        } catch (error) {
+          console.error("Redis caching error:", error)
+          // Continue even if caching fails
+        }
+      }
+
+      res.status(200).json({ topics })
+    } catch (error) {
+      console.error("Error generating topics:", error)
+      // Return default topics instead of an error
+      res.status(200).json({
+        topics: getDefaultTopics(character1, character2),
+        error: error.message,
       })
     }
-
-    // Cache the topics for 24 hours if Redis is available
-    if (redis) {
-      try {
-        await redis.set(cacheKey, JSON.stringify(topics), "EX", 86400)
-      } catch (error) {
-        console.error("Redis caching error:", error)
-        // Continue even if caching fails
-      }
-    }
-
-    res.status(200).json({ topics })
   } catch (error) {
     console.error("Error generating topics:", error)
     res.status(500).json({ error: "Failed to generate topics", details: error.message })
   }
+}
+
+// Add a helper function to get default topics
+function getDefaultTopics(character1, character2) {
+  return [
+    {
+      id: "human-nature",
+      title: "Human Nature",
+      description: "The fundamental characteristics of humanity",
+      category: "philosophy",
+    },
+    {
+      id: "art-purpose",
+      title: "Purpose of Art",
+      description: "The role of artistic expression in society",
+      category: "arts",
+    },
+  ]
 }

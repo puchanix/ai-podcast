@@ -56,30 +56,6 @@ const daVinciSocratesTopics = [
     description: "The relationship between artistic expression and scientific inquiry",
     category: "arts",
   },
-  {
-    id: "human-potential",
-    title: "Human Potential",
-    description: "The limits and possibilities of human achievement and understanding",
-    category: "philosophy",
-  },
-  {
-    id: "ideal-society",
-    title: "Ideal Society",
-    description: "What constitutes the perfect social and political structure?",
-    category: "politics",
-  },
-  {
-    id: "beauty-truth",
-    title: "Beauty and Truth",
-    description: "Is beauty objective or subjective, and how does it relate to truth?",
-    category: "arts",
-  },
-  {
-    id: "innovation-tradition",
-    title: "Innovation vs. Tradition",
-    description: "The value of new ideas versus established wisdom",
-    category: "philosophy",
-  },
 ]
 
 export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 }) {
@@ -147,9 +123,11 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
         const data = await response.json()
 
         if (data.topics && Array.isArray(data.topics) && data.topics.length > 0) {
-          setTopics(data.topics)
+          // Limit to only 2 topics
+          const limitedTopics = data.topics.slice(0, 2)
+          setTopics(limitedTopics)
           // Store in localStorage for future use
-          localStorage.setItem(topicKey, JSON.stringify(data.topics))
+          localStorage.setItem(topicKey, JSON.stringify(limitedTopics))
         } else {
           // If no topics returned, use static topics
           setTopics(staticDebateTopics)

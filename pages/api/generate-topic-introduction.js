@@ -30,15 +30,15 @@ export default async function handler(req, res) {
 
     // Generate a neutral introduction for the topic
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
-          content: `You are a knowledgeable debate moderator introducing a debate between ${persona1.name} and ${persona2.name} on the topic of "${topic}". Create a brief, engaging introduction that sets the stage for their debate.`,
+          content: `You are a concise debate moderator introducing a debate between ${persona1.name} and ${persona2.name}. Create a very brief introduction (1 sentence).`,
         },
         {
           role: "user",
-          content: `Write a brief introduction (2-3 sentences) for a debate between ${persona1.name} and ${persona2.name} on the topic of "${topic}". The introduction should be neutral, informative, and set the context for why this topic is interesting for these two historical figures to debate.`,
+          content: `Write a single sentence introduction for a debate between ${persona1.name} and ${persona2.name} on the topic of "${topic}". Just introduce the debaters and the topic, nothing more.`,
         },
       ],
     })
