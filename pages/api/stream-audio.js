@@ -1,96 +1,87 @@
 // pages/api/stream-audio.js
+import { ElevenLabs } from "elevenlabs"
 import OpenAI from "openai"
+
+// Initialize ElevenLabs client
+const elevenlabs = new ElevenLabs({
+  apiKey: process.env.ELEVENLABS_API_KEY,
+})
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-// Map Google TTS voices to OpenAI voices
-function mapVoice(googleVoice) {
-  // Default to 'alloy' if no mapping exists
-  const voiceMap = {
-    "en-US-Neural2-D": "alloy", // Male voice
-    "en-US-Neural2-F": "nova", // Female voice
-    "en-US-Neural2-C": "echo", // Neutral voice
-    "en-US-Neural2-A": "shimmer", // Female voice
-    "en-US-Neural2-B": "fable", // Male voice
-    "en-US-Neural2-E": "onyx", // Male voice
-  }
-
-  return voiceMap[googleVoice] || "alloy"
-}
-
 export default async function handler(req, res) {
-  // Accept GET requests instead of just POST
-  if (req.method !== "GET" && req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" })
-  }
-
-  // Add CORS headers
-  res.setHeader("Access-Control-Allow-Origin", "*")
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type")
-
-  // Handle preflight requests
-  if (req.method === "OPTIONS") {
-    return res.status(200).end()
-  }
+  // Set appropriate headers for streaming audio
+  res.setHeader("Content-Type", "audio/mpeg")
+  res.setHeader("Transfer-Encoding", "chunked")
 
   try {
-    // Use query parameters for GET requests
-    const text = req.method === "GET" ? req.query.text : req.body.text
-    const googleVoice =
-      req.method === "GET" ? req.query.voice || "en-US-Neural2-D" : req.body.voice || "en-US-Neural2-D"
-
-    // Map Google voice to OpenAI voice
-    const openaiVoice = mapVoice(googleVoice)
+    const { id, text, voice } = req.query
 
     if (!text) {
-      console.error("Text parameter is missing")
-      return res.status(400).json({ error: "Text is required" })
+      res.status(400).end("Text is required")
+      return
     }
 
-    console.log(`Generating audio for text: ${text.substring(0, 50)}...`)
-    console.log(`Using OpenAI voice: ${openaiVoice} (mapped from ${googleVoice})`)
+    console.log(`Streaming audio for: ${text.substring(0, 50)}...`)
 
-    // Check if OpenAI API key is set
-    if (!process.env.OPENAI_API_KEY) {
-      console.error("OPENAI_API_KEY is not set")
-      return res.status(500).json({ error: "OpenAI API key is not configured" })
-    }
+    // Check if the voice is an ElevenLabs voice ID (UUID format)
+    // This regex checks for a UUID format which ElevenLabs uses
+    const isElevenLabsVoice =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(voice) ||
+      /^[a-zA-Z0-9]{20,25}$/i.test(voice) // Also check for ElevenLabs' 21-character IDs
 
-    try {
-      // Use OpenAI's TTS API
+    if (isElevenLabsVoice) {
+      // Use ElevenLabs for voice generation
+      console.log(`Streaming with ElevenLabs voice: ${voice}`)
+
+      try {
+        // Stream the audio from ElevenLabs
+        const stream = await elevenlabs.generate({
+          voice: voice,
+          text: text,
+          stream: true,
+        })
+
+        // Pipe the stream to the response
+        for await (const chunk of stream) {
+          res.write(chunk)
+        }
+
+        res.end()
+      } catch (error) {
+        console.error("ElevenLabs streaming error:", error)
+
+        // Fall back to OpenAI if ElevenLabs fails
+        console.log("Falling back to OpenAI TTS")
+        const mp3 = await openai.audio.speech.create({
+          model: "tts-1",
+          voice: "alloy",
+          input: text,
+        })
+
+        const buffer = await mp3.arrayBuffer()
+        res.write(Buffer.from(buffer))
+        res.end()
+      }
+    } else {
+      // Use OpenAI TTS
+      console.log(`Streaming with OpenAI voice: ${voice || "alloy"}`)
+
       const mp3 = await openai.audio.speech.create({
         model: "tts-1",
-        voice: openaiVoice,
+        voice: voice || "alloy",
         input: text,
       })
 
-      // Get the audio data as an ArrayBuffer
-      const buffer = Buffer.from(await mp3.arrayBuffer())
-
-      // Set appropriate headers
-      res.setHeader("Content-Type", "audio/mpeg")
-      res.setHeader("Content-Length", buffer.length)
-
-      // Send the audio data
-      res.status(200).send(buffer)
-    } catch (openaiError) {
-      console.error("OpenAI API error:", openaiError)
-      return res.status(500).json({
-        error: "OpenAI API error",
-        message: openaiError.message,
-        details: openaiError.toString(),
-      })
+      const buffer = await mp3.arrayBuffer()
+      res.write(Buffer.from(buffer))
+      res.end()
     }
   } catch (error) {
-    console.error("Error generating audio:", error)
-    res.status(500).json({
-      error: "Failed to generate audio",
-      message: error.message,
-      stack: error.stack,
-    })
+    console.error("Error streaming audio:", error)
+    res.status(500).end("Error streaming audio")
   }
 }
