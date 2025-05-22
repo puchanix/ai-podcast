@@ -1,11 +1,6 @@
 // pages/api/stream-audio.js
-import { ElevenLabs } from "elevenlabs"
 import OpenAI from "openai"
-
-// Initialize ElevenLabs client
-const elevenlabs = new ElevenLabs({
-  apiKey: process.env.ELEVENLABS_API_KEY,
-})
+import fetch from "node-fetch"
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -27,29 +22,42 @@ export default async function handler(req, res) {
 
     console.log(`Streaming audio for: ${text.substring(0, 50)}...`)
 
-    // Check if the voice is an ElevenLabs voice ID (UUID format)
-    // This regex checks for a UUID format which ElevenLabs uses
+    // Check if the voice is an ElevenLabs voice ID (UUID format or 21-character alphanumeric)
     const isElevenLabsVoice =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(voice) ||
-      /^[a-zA-Z0-9]{20,25}$/i.test(voice) // Also check for ElevenLabs' 21-character IDs
+      /^[a-zA-Z0-9]{20,25}$/i.test(voice)
 
     if (isElevenLabsVoice) {
       // Use ElevenLabs for voice generation
       console.log(`Streaming with ElevenLabs voice: ${voice}`)
 
       try {
-        // Stream the audio from ElevenLabs
-        const stream = await elevenlabs.generate({
-          voice: voice,
-          text: text,
-          stream: true,
+        // Use the ElevenLabs API directly
+        const elevenLabsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}/stream`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          },
+          body: JSON.stringify({
+            text: text,
+            model_id: "eleven_monolingual_v1",
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.75,
+            },
+          }),
         })
 
-        // Pipe the stream to the response
-        for await (const chunk of stream) {
-          res.write(chunk)
+        if (!elevenLabsResponse.ok) {
+          throw new Error(`ElevenLabs API error: ${elevenLabsResponse.statusText}`)
         }
 
+        // Get the response as an array buffer
+        const audioBuffer = await elevenLabsResponse.arrayBuffer()
+
+        // Write the buffer to the response
+        res.write(Buffer.from(audioBuffer))
         res.end()
       } catch (error) {
         console.error("ElevenLabs streaming error:", error)
