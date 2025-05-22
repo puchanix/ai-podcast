@@ -71,41 +71,13 @@ export function DebateInterface() {
     }
   }, [initialStateLoaded])
 
-  // Load voice IDs when component mounts
-  useEffect(() => {
-    async function loadVoiceIds() {
-      try {
-        const response = await fetch("/api/get-voice-ids")
-        if (response.ok) {
-          const data = await response.json()
-          setVoiceIds(data)
-          console.log("Voice IDs loaded:", data)
-
-          // Update personas with voice IDs
-          Object.keys(personas).forEach((key) => {
-            if (data[key.toLowerCase()]) {
-              personas[key].voiceId = data[key.toLowerCase()]
-            }
-          })
-        } else {
-          console.error("Failed to load voice IDs")
-        }
-      } catch (error) {
-        console.error("Error loading voice IDs:", error)
-      } finally {
-        setIsLoadingVoices(false)
-      }
-    }
-
-    loadVoiceIds()
-  }, [])
-
   // UI state
   const [customQuestion, setCustomQuestion] = useState("")
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
+  const [nextSpeaker, setNextSpeaker] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isAudioLoaded, setIsAudioLoaded] = useState(false)
   const [volume, setVolume] = useState(1.0)
@@ -155,6 +127,37 @@ export function DebateInterface() {
   // Get character objects
   const char1 = personas[character1]
   const char2 = personas[character2]
+
+  // Load voice IDs when component mounts
+  useEffect(() => {
+    async function loadVoiceIds() {
+      try {
+        const response = await fetch("/api/get-voice-ids")
+        if (response.ok) {
+          const data = await response.json()
+          setVoiceIds(data)
+          console.log("Voice IDs loaded:", data)
+
+          // Update personas with voice IDs
+          Object.keys(personas).forEach((key) => {
+            const lowerKey = key.toLowerCase()
+            if (data[lowerKey]) {
+              personas[key].voiceId = data[lowerKey]
+              console.log(`Updated voice ID for ${key}: ${data[lowerKey]}`)
+            }
+          })
+        } else {
+          console.error("Failed to load voice IDs")
+        }
+      } catch (error) {
+        console.error("Error loading voice IDs:", error)
+      } finally {
+        setIsLoadingVoices(false)
+      }
+    }
+
+    loadVoiceIds()
+  }, [])
 
   // Update refs when state changes
   useEffect(() => {
@@ -273,6 +276,7 @@ export function DebateInterface() {
     setDebateMessages([])
     setCurrentTopic("")
     setCurrentSpeaker(null)
+    setNextSpeaker(null)
     setIsPlaying(false)
     setIsAudioLoaded(false)
     setAudioError(null)
@@ -562,6 +566,9 @@ export function DebateInterface() {
 
       setDebateMessages(messages)
 
+      // Set the next speaker to be character2 (for the thinking UI)
+      setNextSpeaker(character2)
+
       // Play the first character's audio and preload the second character's audio
       playDebateAudio(messages[0], messages, 0)
     },
@@ -626,6 +633,9 @@ export function DebateInterface() {
         ]
 
         setDebateMessages(messages)
+
+        // Set the next speaker to be character2 (for the thinking UI)
+        setNextSpeaker(character2)
 
         // Play the first character's audio and preload the second character's audio
         playDebateAudio(messages[0], messages, 0)
@@ -702,6 +712,9 @@ export function DebateInterface() {
 
         setDebateMessages(messages)
 
+        // Set the next speaker to be character2 (for the thinking UI)
+        setNextSpeaker(character2)
+
         // Play the first character's audio and preload the second character's audio
         playDebateAudio(messages[0], messages, 0)
       } catch (error) {
@@ -770,6 +783,9 @@ export function DebateInterface() {
 
       const allMessages = [...updatedMessages, ...newMessages]
       setDebateMessages(allMessages)
+
+      // Set the next speaker to be character2 (for the thinking UI)
+      setNextSpeaker(character2)
 
       // Play the first character's response
       playDebateAudio(newMessages[0], allMessages, updatedMessages.length)
@@ -989,6 +1005,9 @@ export function DebateInterface() {
       setDebateMessages(allMessages)
       setRetryCount(0) // Reset retry count on success
 
+      // Set the next speaker to be character2 (for the thinking UI)
+      setNextSpeaker(character2)
+
       // Play the first character's response
       playDebateAudio(newMessages[0], allMessages, messages.length)
     } catch (error) {
@@ -1124,6 +1143,14 @@ export function DebateInterface() {
       setCurrentSpeaker(character)
       setIsAudioLoaded(false)
 
+      // Set the next speaker for the thinking UI
+      const nextIndex = currentIndex + 1
+      if (nextIndex < allMessages.length && allMessages[nextIndex].character !== "user") {
+        setNextSpeaker(allMessages[nextIndex].character)
+      } else {
+        setNextSpeaker(null)
+      }
+
       try {
         // Create a new audio element
         const audio = new Audio()
@@ -1220,6 +1247,7 @@ export function DebateInterface() {
             }
           } else {
             setCurrentSpeaker(null)
+            setNextSpeaker(null)
 
             // Check if we've completed an exchange (both characters have spoken)
             // An exchange is complete when we've heard from both characters
@@ -1437,23 +1465,38 @@ export function DebateInterface() {
                 </div>
               ) : (
                 <div className="flex items-center justify-center mb-6">
-                  <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2 flex items-center justify-center bg-gray-800">
-                    {isLoadingAudio ? (
-                      <div className="h-16 w-16 text-gray-400 animate-spin">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <circle cx="12" cy="12" r="10"></circle>
-                          <path d="M12 6v6l4 2"></path>
-                        </svg>
+                  {isLoadingAudio && nextSpeaker ? (
+                    <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2">
+                      <img
+                        src={
+                          (nextSpeaker === character1 ? char1 : nextSpeaker === character2 ? char2 : null)?.image ||
+                          "/placeholder.png"
+                        }
+                        alt={
+                          (nextSpeaker === character1 ? char1 : nextSpeaker === character2 ? char2 : "Moderator")
+                            ?.name || "Thinking"
+                        }
+                        className="w-full h-full object-cover rounded-full opacity-80"
+                      />
+                      <div className="absolute inset-0 bg-gray-800 opacity-50 flex items-center justify-center">
+                        <div className="h-16 w-16 text-gray-400 animate-spin">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M12 6v6l4 2"></path>
+                          </svg>
+                        </div>
                       </div>
-                    ) : (
+                    </div>
+                  ) : (
+                    <div className="w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2 flex items-center justify-center bg-gray-800">
                       <div className="h-16 w-16 text-gray-400">
                         <svg
                           xmlns="http://www.w3.org/2000/svg"
@@ -1467,8 +1510,8 @@ export function DebateInterface() {
                           <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
                         </svg>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1476,9 +1519,9 @@ export function DebateInterface() {
                 {isLoadingAudio ? (
                   <div>
                     <h3 className="text-xl font-bold text-yellow-400">
-                      {currentSpeaker === "moderator"
+                      {nextSpeaker === "moderator"
                         ? "Moderator"
-                        : currentSpeaker === character1
+                        : nextSpeaker === character1
                           ? `${char1.name}`
                           : `${char2.name}`}{" "}
                       is thinking...
@@ -1683,6 +1726,7 @@ export function DebateInterface() {
           <div className="mb-4">
             <p>Voice IDs Ready: {!isLoadingVoices ? "Yes" : "No"}</p>
             <p>Current Speaker: {currentSpeaker || "None"}</p>
+            <p>Next Speaker: {nextSpeaker || "None"}</p>
             <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
             <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
             <p>Audio Loaded: {isAudioLoaded ? "Yes" : "No"}</p>
