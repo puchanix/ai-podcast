@@ -1,15 +1,9 @@
 // pages/api/speak.js
 import OpenAI from "openai"
-import { ElevenLabs } from "elevenlabs"
 
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-})
-
-// Initialize ElevenLabs client
-const elevenlabs = new ElevenLabs({
-  apiKey: process.env.ELEVENLABS_API_KEY,
 })
 
 export default async function handler(req, res) {
@@ -26,16 +20,15 @@ export default async function handler(req, res) {
 
     console.log(`Generating audio for text: ${text.substring(0, 50)}...`)
 
-    // Check if the voice is an ElevenLabs voice ID (UUID format)
-    // This regex checks for a UUID format which ElevenLabs uses
+    // Check if the voice is an ElevenLabs voice ID (UUID format or 21-character alphanumeric)
     const isElevenLabsVoice =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(voice) ||
-      /^[a-zA-Z0-9]{20,25}$/i.test(voice) // Also check for ElevenLabs' 21-character IDs
+      /^[a-zA-Z0-9]{20,25}$/i.test(voice)
 
     let audioUrl
 
     if (isElevenLabsVoice) {
-      // Use ElevenLabs for voice generation
+      // Use ElevenLabs for voice generation via our streaming endpoint
       console.log(`Using ElevenLabs voice: ${voice}`)
 
       // Generate a unique ID for this audio file
