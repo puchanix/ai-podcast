@@ -140,11 +140,13 @@ export function DebateInterface() {
 
           // This is the critical part - directly update the voiceId property in each persona
           Object.keys(personas).forEach((key) => {
-            const lowerKey = key.toLowerCase()
-            if (data[lowerKey]) {
+            // Map the character keys correctly
+            const voiceKey = key === "daVinci" ? "davinci" : key.toLowerCase()
+
+            if (data[voiceKey]) {
               // Directly set the voiceId property
-              personas[key].voiceId = data[lowerKey]
-              console.log(`Updated voice ID for ${key}: ${data[lowerKey]}`)
+              personas[key].voiceId = data[voiceKey]
+              console.log(`Updated voice ID for ${key}: ${data[voiceKey]}`)
             }
           })
 
@@ -454,15 +456,15 @@ export function DebateInterface() {
       }
 
       // Third priority: Check voiceIds state
-      const lowerCaseId = characterId.toLowerCase()
-      if (voiceIds[lowerCaseId]) {
-        console.log(`Using voiceIds state for ${characterId}: ${voiceIds[lowerCaseId]}`)
-        return voiceIds[lowerCaseId]
+      const voiceKey = characterId === "daVinci" ? "davinci" : characterId.toLowerCase()
+      if (voiceIds[voiceKey]) {
+        console.log(`Using voiceIds state for ${characterId}: ${voiceIds[voiceKey]}`)
+        return voiceIds[voiceKey]
       }
 
-      // Final fallback
+      // Final fallback - use valid OpenAI voices
       console.log(`No voice ID found for ${characterId}, using default`)
-      return personas[characterId]?.gender === "female" ? "nova" : "echo"
+      return characterId === "frida" ? "nova" : "echo"
     },
     [voiceIds],
   )
@@ -791,14 +793,14 @@ export function DebateInterface() {
           content: data.response1,
           timestamp: Date.now() + 100,
           audioUrl: data.audioUrl1,
-          responseType: `Answer ${currentExchangeCount}`,
+          responseType: `Response ${currentExchangeCount}`, // Changed from "Answer" to "Response"
         },
         {
           character: character2,
           content: data.response2,
           timestamp: Date.now() + 200,
           audioUrl: data.audioUrl2,
-          responseType: `Answer ${currentExchangeCount}`,
+          responseType: `Response ${currentExchangeCount}`, // Changed from "Answer" to "Response"
         },
       ]
 
@@ -1011,14 +1013,14 @@ export function DebateInterface() {
           content: responseData.response1,
           timestamp: Date.now() + 100,
           audioUrl: responseData.audioUrl1,
-          responseType: `Answer ${currentExchangeCount}`,
+          responseType: `Response ${currentExchangeCount}`, // Changed from "Answer" to "Response"
         },
         {
           character: character2,
           content: responseData.response2,
           timestamp: Date.now() + 200,
           audioUrl: responseData.audioUrl2,
-          responseType: `Answer ${currentExchangeCount}`,
+          responseType: `Response ${currentExchangeCount}`, // Changed from "Answer" to "Response"
         },
       ]
 
@@ -1498,12 +1500,12 @@ export function DebateInterface() {
                 <div className="relative w-48 h-48 rounded-full overflow-hidden border-4 border-gray-600 p-2">
                   <img
                     src={
-                      (nextSpeaker === character1 ? char1 : nextSpeaker === character2 ? char2 : null)?.image ||
+                      (currentSpeaker === character1 ? char1 : currentSpeaker === character2 ? char2 : null)?.image ||
                       "/placeholder.png"
                     }
                     alt={
-                      (nextSpeaker === character1 ? char1 : nextSpeaker === character2 ? char2 : "Moderator")?.name ||
-                      "Thinking"
+                      (currentSpeaker === character1 ? char1 : currentSpeaker === character2 ? char2 : "Moderator")
+                        ?.name || "Thinking"
                     }
                     className="w-full h-full object-cover rounded-full"
                   />
@@ -1546,9 +1548,9 @@ export function DebateInterface() {
                 {isLoadingAudio ? (
                   <div>
                     <h3 className="text-xl font-bold text-yellow-400">
-                      {nextSpeaker === "moderator"
+                      {currentSpeaker === "moderator"
                         ? "Moderator"
-                        : nextSpeaker === character1
+                        : currentSpeaker === character1
                           ? `${char1.name}`
                           : `${char2.name}`}{" "}
                       is thinking...
