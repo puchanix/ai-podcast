@@ -138,15 +138,22 @@ export function DebateInterface() {
           setVoiceIds(data)
           console.log("Voice IDs loaded:", data)
 
-          // Update voiceIdMap in the personas module
-          if (typeof window !== "undefined") {
-            // This is the key fix - update the voiceIdMap in the personas module
+          // This is the critical part - directly update the voiceId property in each persona
+          Object.keys(personas).forEach((key) => {
+            const lowerKey = key.toLowerCase()
+            if (data[lowerKey]) {
+              // Directly set the voiceId property
+              personas[key].voiceId = data[lowerKey]
+              console.log(`Updated voice ID for ${key}: ${data[lowerKey]}`)
+            }
+          })
+
+          // Also update the global voiceIdMap if it exists
+          if (typeof window !== "undefined" && window.voiceIdMap) {
             Object.keys(data).forEach((key) => {
               if (data[key]) {
-                // Update the global voiceIdMap
-                if (window.voiceIdMap) {
-                  window.voiceIdMap[key] = data[key]
-                }
+                window.voiceIdMap[key] = data[key]
+                console.log(`Updated global voiceIdMap for ${key}: ${data[key]}`)
               }
             })
           }
@@ -424,17 +431,33 @@ export function DebateInterface() {
   // Get the appropriate voice for a character
   const getVoiceForCharacter = useCallback(
     (characterId) => {
-      // Use the getVoiceId method if available (this is the key fix)
-      if (personas[characterId] && typeof personas[characterId].getVoiceId === "function") {
+      // First, check if the character exists
+      if (!personas[characterId]) {
+        console.log(`Character ${characterId} not found in personas`)
+        return "echo" // Default OpenAI voice as fallback
+      }
+
+      // Log the current state of the character's voice ID
+      console.log(`Character ${characterId} voiceId property:`, personas[characterId].voiceId)
+
+      // First priority: Use the direct voiceId property if available
+      if (personas[characterId].voiceId) {
+        console.log(`Using direct voiceId property for ${characterId}: ${personas[characterId].voiceId}`)
+        return personas[characterId].voiceId
+      }
+
+      // Second priority: Use the getVoiceId method if available
+      if (typeof personas[characterId].getVoiceId === "function") {
         const voiceId = personas[characterId].getVoiceId()
         console.log(`Using getVoiceId() method for ${characterId}: ${voiceId}`)
         return voiceId
       }
 
-      // Fallback to direct voiceId property
-      if (personas[characterId] && personas[characterId].voiceId) {
-        console.log(`Using direct voiceId property for ${characterId}: ${personas[characterId].voiceId}`)
-        return personas[characterId].voiceId
+      // Third priority: Check voiceIds state
+      const lowerCaseId = characterId.toLowerCase()
+      if (voiceIds[lowerCaseId]) {
+        console.log(`Using voiceIds state for ${characterId}: ${voiceIds[lowerCaseId]}`)
+        return voiceIds[lowerCaseId]
       }
 
       // Final fallback

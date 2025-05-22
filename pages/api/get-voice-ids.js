@@ -1,20 +1,22 @@
 // pages/api/get-voice-ids.js
-// This API route will provide the voice IDs to the client
-
-export default function handler(req, res) {
-    // Return all environment variables that end with _VOICE_ID
-    const voiceIds = {}
-  
-    // Get all environment variables
-    Object.keys(process.env).forEach((key) => {
-      // If the key ends with _VOICE_ID, add it to the response
-      if (key.endsWith("_VOICE_ID")) {
-        // Convert to the format expected by the client (remove _VOICE_ID suffix)
-        const characterKey = key.replace("_VOICE_ID", "").toLowerCase()
-        voiceIds[characterKey] = process.env[key]
+export default async function handler(req, res) {
+    try {
+      // Return the voice IDs from environment variables
+      const voiceIds = {
+        eleonardo: process.env.ELEONARDO_VOICE_ID,
+        socrates: process.env.SOCRATES_VOICE_ID,
+        frida: process.env.FRIDA_VOICE_ID,
+        shakespeare: process.env.SHAKESPEARE_VOICE_ID,
+        mozart: process.env.MOZART_VOICE_ID,
       }
-    })
   
-    res.status(200).json(voiceIds)
+      // Log the voice IDs for debugging
+      console.log("API returning voice IDs:", voiceIds)
+  
+      res.status(200).json(voiceIds)
+    } catch (error) {
+      console.error("Error getting voice IDs:", error)
+      res.status(500).json({ error: "Failed to get voice IDs" })
+    }
   }
   
