@@ -13,44 +13,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log("Auto-continue API called")
+    const { character1, character2, currentMessages, topic, format, historicalContext, isPreparing, voice1, voice2 } =
+      req.body
 
-    // Log the request body to help debug
-    console.log("Request body:", JSON.stringify(req.body, null, 2))
-
-    const { character1, character2, currentMessages, topic, format, historicalContext } = req.body
-
-    // Detailed validation of required fields
-    const missingFields = []
-    if (!character1) missingFields.push("character1")
-    if (!character2) missingFields.push("character2")
-    if (!currentMessages) missingFields.push("currentMessages")
-    if (!topic) missingFields.push("topic")
-
-    if (missingFields.length > 0) {
-      console.error(`Missing required fields: ${missingFields.join(", ")}`)
-      return res.status(400).json({
-        error: "Missing required fields",
-        details: `The following fields are required: ${missingFields.join(", ")}`,
-      })
-    }
-
-    // Validate currentMessages is an array
-    if (!Array.isArray(currentMessages)) {
-      console.error("currentMessages is not an array:", typeof currentMessages)
-      return res.status(400).json({
-        error: "Invalid format",
-        details: "currentMessages must be an array",
-      })
-    }
-
-    // Validate currentMessages has content
-    if (currentMessages.length === 0) {
-      console.error("currentMessages array is empty")
-      return res.status(400).json({
-        error: "Invalid content",
-        details: "currentMessages array cannot be empty",
-      })
+    // Validate required fields
+    if (!character1 || !character2 || !topic) {
+      return res.status(400).json({ error: "Missing required fields" })
     }
 
     // Get the personas for each character
@@ -58,176 +26,112 @@ export default async function handler(req, res) {
     const persona2 = personas[character2]
 
     if (!persona1 || !persona2) {
-      const missingPersonas = []
-      if (!persona1) missingPersonas.push(character1)
-      if (!persona2) missingPersonas.push(character2)
-
-      console.error(`Invalid character selection: ${missingPersonas.join(", ")} not found in personas`)
-      return res.status(400).json({
-        error: "Invalid character selection",
-        details: `The following characters were not found: ${missingPersonas.join(", ")}`,
-      })
+      return res.status(400).json({ error: "Invalid character selection" })
     }
 
-    // Use the character-specific system prompts from the personas object
-    const systemPrompt1 = persona1.systemPrompt || `You are ${persona1.name}, responding to questions.`
-    const systemPrompt2 = persona2.systemPrompt || `You are ${persona2.name}, responding to questions.`
+    // Determine which exchange this is
+    const exchangeCount = Math.floor(currentMessages.length / 2) + 1
 
-    console.log(`Using system prompt for ${persona1.name}:`, systemPrompt1)
-    console.log(`Using system prompt for ${persona2.name}:`, systemPrompt2)
+    // Generate both responses in parallel
+    const [response1Promise, response2Promise] = await Promise.all([
+      generateResponse(persona1, persona2, currentMessages, topic, format, historicalContext, exchangeCount),
+      generateResponse(persona2, persona1, currentMessages, topic, format, historicalContext, exchangeCount),
+    ])
 
-    // Format previous messages for context
-    let debateContext = `Topic: ${topic}\n\n`
+    const response1 = await response1Promise
+    const response2 = await response2Promise
 
-    currentMessages.forEach((msg) => {
-      if (msg.character === "user") {
-        debateContext += `Question: ${msg.content}\n\n`
-      } else if (msg.character === character1) {
-        debateContext += `${persona1.name}: ${msg.content}\n\n`
-      } else if (msg.character === character2) {
-        debateContext += `${persona2.name}: ${msg.content}\n\n`
-      }
-    })
+    // Use provided voices or fall back to persona voices
+    const finalVoice1 = voice1 || (persona1.getVoiceId ? persona1.getVoiceId() : persona1.voiceId || "echo")
+    const finalVoice2 = voice2 || (persona2.getVoiceId ? persona2.getVoiceId() : persona2.voiceId || "echo")
 
-    // Get the last speaker
-    const lastMessage = currentMessages[currentMessages.length - 1]
-    const lastSpeaker = lastMessage.character
+    console.log(`Using voices for auto-continue: ${character1}=${finalVoice1}, ${character2}=${finalVoice2}`)
 
-    // Determine who speaks first in this round
-    const firstSpeaker = lastSpeaker === character1 ? character2 : character1
-    const secondSpeaker = firstSpeaker === character1 ? character2 : character1
+    // Generate audio for both responses in parallel
+    const [audioUrl1Promise, audioUrl2Promise] = await Promise.all([
+      generateAudio(response1, finalVoice1),
+      generateAudio(response2, finalVoice2),
+    ])
 
-    // Get personas for first and second speakers
-    const firstPersona = firstSpeaker === character1 ? persona1 : persona2
-    const secondPersona = secondSpeaker === character1 ? persona1 : persona2
-
-    // Get system prompts for first and second speakers
-    const firstSystemPrompt = firstSpeaker === character1 ? systemPrompt1 : systemPrompt2
-    const secondSystemPrompt = secondSpeaker === character1 ? systemPrompt1 : systemPrompt2
-
-    console.log("Generating response for first speaker:", firstSpeaker)
-
-    // Check if OpenAI API key is set
-    if (!process.env.OPENAI_API_KEY) {
-      console.error("OPENAI_API_KEY is not set")
-      return res.status(500).json({ error: "OpenAI API key is not configured" })
-    }
-
-    // Generate response for first speaker
-    let response1
-    try {
-      const response1Completion = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `${firstSystemPrompt} You are participating in a debate on "${topic}".
-                      Here is the context of the debate so far:
-                      ${debateContext}
-                      
-                      Continue the debate by responding to the previous points.
-                      Keep your response concise (2-3 sentences).
-                      ${historicalContext ? "Only use knowledge available during your lifetime." : ""}`,
-          },
-          {
-            role: "user",
-            content: `As ${firstPersona.name}, continue the debate on "${topic}" by responding to the previous points.`,
-          },
-        ],
-      })
-
-      response1 = response1Completion.choices[0].message.content.trim()
-      console.log("First speaker response generated:", response1.substring(0, 50) + "...")
-    } catch (error) {
-      console.error("Error generating first speaker response:", error)
-      return res.status(500).json({
-        error: "Failed to generate first speaker response",
-        details: error.message,
-      })
-    }
-
-    console.log("Generating response for second speaker:", secondSpeaker)
-
-    // Generate response for second speaker
-    let response2
-    try {
-      const response2Completion = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: `${secondSystemPrompt} You are participating in a debate on "${topic}".
-                      Here is the context of the debate so far:
-                      ${debateContext}
-                      
-                      ${firstPersona.name} just said: "${response1}"
-                      
-                      Continue the debate by responding to ${firstPersona.name}'s points.
-                      Keep your response concise (2-3 sentences).
-                      ${historicalContext ? "Only use knowledge available during your lifetime." : ""}`,
-          },
-          {
-            role: "user",
-            content: `As ${secondPersona.name}, respond to ${firstPersona.name}'s statement: "${response1}"`,
-          },
-        ],
-      })
-
-      response2 = response2Completion.choices[0].message.content.trim()
-      console.log("Second speaker response generated:", response2.substring(0, 50) + "...")
-    } catch (error) {
-      console.error("Error generating second speaker response:", error)
-      return res.status(500).json({
-        error: "Failed to generate second speaker response",
-        details: error.message,
-      })
-    }
-
-    // Map responses back to character1 and character2 format
-    const responseMap = {
-      [firstSpeaker]: response1,
-      [secondSpeaker]: response2,
-    }
-
-    // Generate audio URLs
-    const audioUrl1 = `/api/stream-audio?id=debate_${character1}_${Date.now()}&text=${encodeURIComponent(responseMap[character1])}&voice=${encodeURIComponent(getVoiceForCharacter(character1))}`
-    const audioUrl2 = `/api/stream-audio?id=debate_${character2}_${Date.now() + 1}&text=${encodeURIComponent(responseMap[character2])}&voice=${encodeURIComponent(getVoiceForCharacter(character2))}`
-
-    console.log("Auto-continue API completed successfully")
+    const audioUrl1 = await audioUrl1Promise
+    const audioUrl2 = await audioUrl2Promise
 
     res.status(200).json({
-      response1: responseMap[character1],
-      response2: responseMap[character2],
+      response1,
+      response2,
       audioUrl1,
       audioUrl2,
     })
   } catch (error) {
-    console.error("Error in auto-continue API:", error)
-    res.status(500).json({
-      error: "Failed to continue debate",
-      details: error.message,
-      stack: error.stack,
-    })
+    console.error("Error continuing debate:", error)
+    res.status(500).json({ error: "Failed to continue debate" })
   }
 }
 
-// Helper function to get the appropriate voice for a character
-function getVoiceForCharacter(characterId) {
-  // Default voice mapping
-  const voiceMap = {
-    daVinci: "en-US-Neural2-D",
-    socrates: "en-US-Neural2-D",
-    frida: "en-US-Neural2-F",
-    shakespeare: "en-US-Neural2-D",
-    mozart: "en-US-Neural2-D",
+// Function to generate a response for a character
+async function generateResponse(
+  persona,
+  otherPersona,
+  currentMessages,
+  topic,
+  format,
+  historicalContext,
+  exchangeCount,
+) {
+  // Use a faster model for response generation
+  const model = "gpt-3.5-turbo"
+
+  // Create a system prompt that encourages concise responses
+  const systemPrompt = `${persona.systemPrompt}
+You are participating in a debate with ${otherPersona.name} on the topic of "${topic}".
+Keep your response concise (100-150 words) but insightful.
+This is exchange #${exchangeCount} in the debate.
+Respond directly to the points made by ${otherPersona.name} in their last statement.`
+
+  // Create a prompt from the current messages
+  let prompt = `The debate topic is: "${topic}"\n\n`
+
+  // Add the last few messages for context (to keep the prompt shorter)
+  const relevantMessages = currentMessages.slice(-4)
+  for (const msg of relevantMessages) {
+    if (msg.character === "user") {
+      prompt += `Question from audience: ${msg.content}\n\n`
+    } else {
+      const speakerName = msg.character === persona.id ? persona.name : otherPersona.name
+      prompt += `${speakerName}: ${msg.content}\n\n`
+    }
   }
 
-  // Check if there's an environment variable for this character
-  const envVoiceId = process.env[`${characterId.toUpperCase()}_VOICE_ID`]
-  if (envVoiceId) {
-    return envVoiceId
-  }
+  prompt += `Now, ${persona.name}, provide your response:`
 
-  // Fall back to the default voice mapping
-  return voiceMap[characterId] || "en-US-Neural2-D"
+  try {
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 250, // Limit token count for faster responses
+    })
+
+    return completion.choices[0].message.content.trim()
+  } catch (error) {
+    console.error("Error generating response:", error)
+    throw error
+  }
+}
+
+// Function to generate audio for a response
+async function generateAudio(text, voiceId) {
+  try {
+    // Generate a unique ID for this audio file
+    const audioId = `debate_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
+
+    // Return the streaming URL
+    return `/api/stream-audio?id=${audioId}&text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId)}`
+  } catch (error) {
+    console.error("Error generating audio:", error)
+    throw error
+  }
 }
