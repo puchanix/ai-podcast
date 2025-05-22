@@ -1700,9 +1700,6 @@ export function DebateInterface() {
       <audio ref={char1AudioRef} preload="auto" className="hidden" />
       <audio ref={char2AudioRef} preload="auto" className="hidden" />
 
-      <style jsx />
-      <audio ref={char2AudioRef} preload="auto" className="hidden" />
-
       <style jsx global>{`
         @keyframes soundwave {
           0%,
