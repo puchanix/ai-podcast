@@ -27,14 +27,15 @@ export default async function handler(req, res) {
       messages: [
         {
           role: "system",
-          content: selectedPersona.systemPrompt,
+          content:
+            selectedPersona.systemPrompt + " Keep your responses concise and engaging, around 60-80 words maximum.",
         },
         {
           role: "user",
           content: message,
         },
       ],
-      max_tokens: 500,
+      max_tokens: 100, // Reduced from 500 to 100
       temperature: 0.7,
     })
 

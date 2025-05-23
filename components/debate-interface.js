@@ -34,7 +34,7 @@ const staticDebateTopics = [
   },
 ]
 
-export function DebateInterface() {
+export default function DebateInterface() {
   // Initialize state with default values first
   const defaultState = {
     character1: Object.keys(personas)[0],
@@ -702,10 +702,10 @@ export function DebateInterface() {
   // Start a debate on a specific topic
   const startDebate = useCallback(
     async (topic) => {
-      // Play introduction first
-      playTopicIntroduction(topic)
+      // Skip introduction for faster start
+      startDebateMain(topic)
     },
-    [playTopicIntroduction],
+    [startDebateMain],
   )
 
   // Submit a custom question to the debate

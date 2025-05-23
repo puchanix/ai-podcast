@@ -7,18 +7,6 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-// Initialize Redis client if REDIS_URL is available
-let redis = null
-try {
-  if (process.env.REDIS_URL) {
-    // Dynamic import to avoid build errors if ioredis is not installed
-    const Redis = require("ioredis")
-    redis = new Redis(process.env.REDIS_URL)
-  }
-} catch (error) {
-  console.warn("Redis not available:", error.message)
-}
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" })
@@ -44,20 +32,7 @@ export default async function handler(req, res) {
     const sortedChars = [character1, character2].sort()
     const cacheKey = `debate_topics:${sortedChars[0]}:${sortedChars[1]}`
 
-    // Try to get topics from cache first if Redis is available
-    if (redis) {
-      try {
-        const cachedTopics = await redis.get(cacheKey)
-        if (cachedTopics) {
-          console.log("Using cached topics for", character1, "and", character2)
-          return res.status(200).json({ topics: JSON.parse(cachedTopics) })
-        }
-      } catch (error) {
-        console.error("Redis error:", error)
-        // Continue with OpenAI if Redis fails
-      }
-    }
-
+    // Try to get topics from localStorage cache first (client-side caching only)
     console.log(`Generating new topics for ${persona1.name} and ${persona2.name}`)
 
     // Use GPT-3.5-turbo for faster topic generation
@@ -110,34 +85,13 @@ Return only valid JSON.`,
       category: topic.category || "philosophy",
     }))
 
-    // Cache the topics if Redis is available (cache for 7 days)
-    if (redis) {
-      try {
-        await redis.set(cacheKey, JSON.stringify(validatedTopics), "EX", 604800)
-        console.log(`Cached topics for ${character1} and ${character2}`)
-      } catch (error) {
-        console.error("Redis caching error:", error)
-      }
-    }
-
     return res.status(200).json({ topics: validatedTopics })
   } catch (error) {
     console.error("Error generating topics:", error)
 
     // Fallback to default topics if GPT fails
-    const { character1, character2 } = req.body // Declare character1 and character2 here
+    const { character1, character2 } = req.body
     const fallbackTopics = getDefaultTopics(character1, character2)
-
-    // Still try to cache the fallback topics
-    if (redis) {
-      try {
-        const sortedChars = [character1, character2].sort()
-        const cacheKey = `debate_topics:${sortedChars[0]}:${sortedChars[1]}`
-        await redis.set(cacheKey, JSON.stringify(fallbackTopics), "EX", 604800)
-      } catch (cacheError) {
-        console.error("Redis caching error for fallback:", cacheError)
-      }
-    }
 
     res.status(200).json({ topics: fallbackTopics })
   }

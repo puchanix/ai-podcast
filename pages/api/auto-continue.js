@@ -13,11 +13,10 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { character1, character2, currentMessages, topic, format, historicalContext, isPreparing, voice1, voice2 } =
-      req.body
+    const { character1, character2, currentMessages, topic, format, historicalContext } = req.body
 
     // Validate required fields
-    if (!character1 || !character2 || !topic) {
+    if (!character1 || !character2 || !currentMessages || !topic) {
       return res.status(400).json({ error: "Missing required fields" })
     }
 
@@ -29,28 +28,23 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid character selection" })
     }
 
-    // Determine which exchange this is
-    const exchangeCount = Math.floor(currentMessages.length / 2) + 1
-
-    // Generate both responses in parallel
+    // Generate responses for both characters
     const [response1Promise, response2Promise] = await Promise.all([
-      generateResponse(persona1, persona2, currentMessages, topic, format, historicalContext, exchangeCount),
-      generateResponse(persona2, persona1, currentMessages, topic, format, historicalContext, exchangeCount),
+      generateResponse(persona1, persona2, currentMessages, topic, format, historicalContext),
+      generateResponse(persona2, persona1, currentMessages, topic, format, historicalContext),
     ])
 
     const response1 = await response1Promise
     const response2 = await response2Promise
 
-    // Use provided voices or fall back to persona voices
-    const finalVoice1 = voice1 || (persona1.getVoiceId ? persona1.getVoiceId() : persona1.voiceId || "echo")
-    const finalVoice2 = voice2 || (persona2.getVoiceId ? persona2.getVoiceId() : persona2.voiceId || "echo")
-
-    console.log(`Using voices for auto-continue: ${character1}=${finalVoice1}, ${character2}=${finalVoice2}`)
+    // Get voice IDs for both characters
+    const voice1 = persona1.getVoiceId ? persona1.getVoiceId() : persona1.voiceId || "echo"
+    const voice2 = persona2.getVoiceId ? persona2.getVoiceId() : persona2.voiceId || "echo"
 
     // Generate audio for both responses in parallel
     const [audioUrl1Promise, audioUrl2Promise] = await Promise.all([
-      generateAudio(response1, finalVoice1),
-      generateAudio(response2, finalVoice2),
+      generateAudio(response1, voice1),
+      generateAudio(response2, voice2),
     ])
 
     const audioUrl1 = await audioUrl1Promise
@@ -69,65 +63,49 @@ export default async function handler(req, res) {
 }
 
 // Function to generate a response for a character
-async function generateResponse(
-  persona,
-  otherPersona,
-  currentMessages,
-  topic,
-  format,
-  historicalContext,
-  exchangeCount,
-) {
-  // Use GPT-4 for better quality responses
-  const model = "gpt-4"
+async function generateResponse(persona, otherPersona, currentMessages, topic, format, historicalContext) {
+  // Build conversation context (last few messages only to save tokens)
+  const recentMessages = currentMessages.slice(-4) // Only last 4 messages
+  const conversationContext = recentMessages
+    .map((msg) => {
+      if (msg.character === "user") {
+        return `Question: ${msg.content}`
+      } else {
+        const speaker = msg.character === persona.id ? persona.name : otherPersona.name
+        return `${speaker}: ${msg.content}`
+      }
+    })
+    .join("\n")
+
+  const systemPrompt = `${persona.systemPrompt}
+You are ${persona.name} in a debate with ${otherPersona.name} on "${topic}".
+Keep your response very concise (40-60 words maximum). Be direct and engaging.
+
+Recent conversation:
+${conversationContext}`
 
   try {
-    // Simplified system prompt
-    const systemPrompt = `${persona.systemPrompt}
-You are ${persona.name} debating with ${otherPersona.name} on "${topic}".
-Keep your response concise (60-80 words).
-Respond directly to the points made by ${otherPersona.name}.`
-
-    // Create a simplified prompt from the current messages
-    let prompt = `Topic: "${topic}"\n\n`
-
-    // Only include the last 2 messages for context
-    const relevantMessages = currentMessages.slice(-2)
-    for (const msg of relevantMessages) {
-      if (msg.character === "user") {
-        prompt += `Question: ${msg.content}\n\n`
-      } else {
-        const speakerName = msg.character === persona.id ? persona.name : otherPersona.name
-        prompt += `${speakerName}: ${msg.content}\n\n`
-      }
-    }
-
-    prompt += `Your response:`
-
     const completion = await openai.chat.completions.create({
-      model,
+      model: "gpt-4",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
+        {
+          role: "user",
+          content: `Continue the debate. Give your next response. Be very concise and impactful.`,
+        },
       ],
       temperature: 0.7,
-      max_tokens: 125, // Reduced from 150 to 125
+      max_tokens: 80, // Reduced from 150 to 80
     })
 
-    // Ensure we have a valid response
-    if (!completion.choices || !completion.choices[0] || !completion.choices[0].message) {
-      throw new Error("Invalid response from OpenAI API")
-    }
-
-    return completion.choices[0].message.content.trim() || "I'm sorry, I don't have a response at this time."
+    return completion.choices[0].message.content.trim()
   } catch (error) {
     console.error("Error generating response:", error)
-    // Return a fallback response instead of throwing
-    return `As ${persona.name}, I would address this topic, but I'm having trouble formulating my thoughts at the moment.`
+    throw error
   }
 }
 
-// Function to generate audio for a response
+// Function to generate audio for a statement
 async function generateAudio(text, voiceId) {
   try {
     // Generate a unique ID for this audio file
