@@ -3,203 +3,333 @@
 import { useState } from "react"
 import Layout from "../components/layout"
 import DebateInterface from "../components/debate-interface"
-
-const heroes = [
-  {
-    id: "leonardo",
-    name: "Leonardo da Vinci",
-    period: "1452-1519",
-    description: "Renaissance polymath, artist, inventor, and scientist",
-    expertise: "Art, Science, Engineering, Anatomy",
-    avatar: "/da-vinci-renaissance-portrait.png",
-    color: "from-amber-500 to-orange-600",
-    bgColor: "from-amber-50 to-orange-50",
-  },
-  {
-    id: "socrates",
-    name: "Socrates",
-    period: "470-399 BCE",
-    description: "Classical Greek philosopher, founder of Western philosophy",
-    expertise: "Philosophy, Ethics, Logic, Dialectic Method",
-    avatar: "/placeholder.svg?height=120&width=120&query=Socrates ancient Greek philosopher",
-    color: "from-blue-500 to-indigo-600",
-    bgColor: "from-blue-50 to-indigo-50",
-  },
-  {
-    id: "frida",
-    name: "Frida Kahlo",
-    period: "1907-1954",
-    description: "Mexican artist known for self-portraits and surrealism",
-    expertise: "Painting, Self-expression, Mexican Culture, Feminism",
-    avatar: "/placeholder.svg?height=120&width=120&query=Frida Kahlo Mexican artist colorful",
-    color: "from-rose-500 to-pink-600",
-    bgColor: "from-rose-50 to-pink-50",
-  },
-  {
-    id: "shakespeare",
-    name: "William Shakespeare",
-    period: "1564-1616",
-    description: "English playwright and poet, greatest writer in English",
-    expertise: "Literature, Drama, Poetry, Human Nature",
-    avatar: "/placeholder.svg?height=120&width=120&query=William Shakespeare Elizabethan playwright",
-    color: "from-purple-500 to-violet-600",
-    bgColor: "from-purple-50 to-violet-50",
-  },
-  {
-    id: "mozart",
-    name: "Wolfgang Amadeus Mozart",
-    period: "1756-1791",
-    description: "Austrian composer of the Classical period",
-    expertise: "Music Composition, Piano, Opera, Symphony",
-    avatar: "/placeholder.svg?height=120&width=120&query=Mozart classical composer 18th century",
-    color: "from-emerald-500 to-teal-600",
-    bgColor: "from-emerald-50 to-teal-50",
-  },
-]
+import { personas } from "../lib/personas"
 
 export default function Home() {
+  const [mode, setMode] = useState(null) // null, 'debate', or 'qa'
   const [selectedHero, setSelectedHero] = useState(null)
+  const [selectedHeroes, setSelectedHeroes] = useState([])
 
-  if (selectedHero) {
+  // Convert personas object to array for easier handling
+  const heroesArray = Object.keys(personas).map((key) => ({
+    id: key,
+    ...personas[key],
+  }))
+
+  // Handle single hero selection for Q&A
+  const handleHeroSelect = (hero) => {
+    setSelectedHero(hero)
+    setMode("qa")
+  }
+
+  // Handle hero selection for debate
+  const handleDebateHeroSelect = (hero) => {
+    if (selectedHeroes.find((h) => h.id === hero.id)) {
+      // Remove if already selected
+      setSelectedHeroes(selectedHeroes.filter((h) => h.id !== hero.id))
+    } else if (selectedHeroes.length < 2) {
+      // Add if less than 2 selected
+      setSelectedHeroes([...selectedHeroes, hero])
+    }
+  }
+
+  const startDebate = () => {
+    if (selectedHeroes.length === 2) {
+      setMode("debate")
+    }
+  }
+
+  const resetSelection = () => {
+    setMode(null)
+    setSelectedHero(null)
+    setSelectedHeroes([])
+  }
+
+  // If in Q&A mode with a selected hero
+  if (mode === "qa" && selectedHero) {
     return (
-      <Layout title={`Debate with ${selectedHero.name}`}>
-        <DebateInterface hero={selectedHero} onBack={() => setSelectedHero(null)} />
+      <Layout title={`Q&A with ${selectedHero.name}`}>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="mb-8">
+            <button
+              onClick={resetSelection}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
+            >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back to Home
+            </button>
+          </div>
+
+          {/* Hero Q&A Interface */}
+          <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 rounded-2xl p-8 shadow-lg">
+            <div className="flex flex-col md:flex-row items-center mb-8">
+              <div className="w-32 h-32 rounded-full overflow-hidden mb-4 md:mb-0 md:mr-6 shadow-lg">
+                <img
+                  src={selectedHero.image || "/placeholder.svg?height=128&width=128"}
+                  alt={selectedHero.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="text-center md:text-left">
+                <h1 className="text-3xl font-bold text-slate-800 mb-2">{selectedHero.name}</h1>
+                <p className="text-slate-600 mb-4">{selectedHero.systemPrompt?.substring(8) || "Historical figure"}</p>
+              </div>
+            </div>
+
+            {/* Canned Questions */}
+            {selectedHero.questions && selectedHero.questions.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-xl font-semibold text-slate-800 mb-4">Suggested Questions</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {selectedHero.questions.map((question, index) => (
+                    <button
+                      key={index}
+                      className="p-4 text-left bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-slate-200 hover:border-slate-300"
+                    >
+                      <p className="text-slate-700">{question}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Voice Input Section */}
+            <div className="bg-white rounded-lg p-6 shadow-sm">
+              <h3 className="text-xl font-semibold text-slate-800 mb-4">Ask Your Own Question</h3>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <input
+                  type="text"
+                  placeholder="Type your question here..."
+                  className="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                  Ask Question
+                </button>
+              </div>
+              <div className="mt-4 text-center">
+                <button className="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                    />
+                  </svg>
+                  Record Voice Question
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </Layout>
     )
   }
 
+  // If in debate mode
+  if (mode === "debate" && selectedHeroes.length === 2) {
+    return (
+      <Layout title={`Debate: ${selectedHeroes[0].name} vs ${selectedHeroes[1].name}`}>
+        <DebateInterface character1={selectedHeroes[0].id} character2={selectedHeroes[1].id} onBack={resetSelection} />
+      </Layout>
+    )
+  }
+
+  // Main home page
   return (
     <Layout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Hero Section */}
         <div className="text-center mb-16">
           <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-800 via-blue-800 to-indigo-800 bg-clip-text text-transparent mb-6">
-            Debate with History's Greatest Minds
+            Heroes of History
           </h1>
-          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed">
-            Engage in thought-provoking conversations with legendary figures from across time. Challenge their ideas,
-            learn from their wisdom, and explore the depths of human knowledge.
+          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed mb-8">
+            Engage with history's greatest minds. Ask questions to learn from their wisdom, or watch them debate each
+            other on topics that shaped our world.
           </p>
+
+          {/* Mode Selection */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+            <button
+              onClick={() => setMode("qa-select")}
+              className={`px-8 py-4 rounded-xl font-semibold transition-all ${
+                mode === "qa-select"
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "bg-white text-slate-700 border-2 border-slate-200 hover:border-blue-300"
+              }`}
+            >
+              Ask Questions to a Hero
+            </button>
+            <button
+              onClick={() => setMode("debate-select")}
+              className={`px-8 py-4 rounded-xl font-semibold transition-all ${
+                mode === "debate-select"
+                  ? "bg-purple-600 text-white shadow-lg"
+                  : "bg-white text-slate-700 border-2 border-slate-200 hover:border-purple-300"
+              }`}
+            >
+              Watch Heroes Debate
+            </button>
+          </div>
         </div>
+
+        {/* Instructions */}
+        {mode === "qa-select" && (
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Choose a Hero to Question</h2>
+            <p className="text-slate-600">Click on any historical figure to start a conversation</p>
+          </div>
+        )}
+
+        {mode === "debate-select" && (
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-bold text-slate-800 mb-2">Select Two Heroes for a Debate</h2>
+            <p className="text-slate-600">Choose exactly 2 heroes ({selectedHeroes.length}/2 selected)</p>
+            {selectedHeroes.length === 2 && (
+              <button
+                onClick={startDebate}
+                className="mt-4 px-8 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors shadow-lg"
+              >
+                Start Debate: {selectedHeroes[0].name} vs {selectedHeroes[1].name}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Heroes Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {heroes.map((hero) => (
-            <div
-              key={hero.id}
-              onClick={() => setSelectedHero(hero)}
-              className="group cursor-pointer transform transition-all duration-300 hover:scale-105"
-            >
-              <div
-                className={`bg-gradient-to-br ${hero.bgColor} rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-white/50 backdrop-blur-sm`}
-              >
-                {/* Avatar */}
-                <div className="flex justify-center mb-6">
-                  <div className={`w-24 h-24 rounded-full bg-gradient-to-br ${hero.color} p-1 shadow-lg`}>
-                    <img
-                      src={hero.avatar || "/placeholder.svg"}
-                      alt={hero.name}
-                      className="w-full h-full rounded-full object-cover bg-white"
-                    />
-                  </div>
-                </div>
+        {(mode === "qa-select" || mode === "debate-select") && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {heroesArray.map((hero) => {
+              const isSelected = mode === "debate-select" && selectedHeroes.find((h) => h.id === hero.id)
+              const isDisabled = mode === "debate-select" && selectedHeroes.length >= 2 && !isSelected
 
-                {/* Content */}
-                <div className="text-center">
-                  <h3 className="text-2xl font-bold text-slate-800 mb-2 group-hover:text-slate-900 transition-colors">
-                    {hero.name}
-                  </h3>
-                  <p className="text-sm font-medium text-slate-500 mb-3 tracking-wide">{hero.period}</p>
-                  <p className="text-slate-600 mb-4 leading-relaxed">{hero.description}</p>
-
-                  {/* Expertise Tags */}
-                  <div className="flex flex-wrap justify-center gap-2 mb-6">
-                    {hero.expertise.split(", ").map((skill, index) => (
-                      <span
-                        key={index}
-                        className={`px-3 py-1 text-xs font-medium rounded-full bg-gradient-to-r ${hero.color} text-white shadow-sm`}
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* CTA Button */}
+              return (
+                <div
+                  key={hero.id}
+                  onClick={() => {
+                    if (isDisabled) return
+                    if (mode === "qa-select") {
+                      handleHeroSelect(hero)
+                    } else {
+                      handleDebateHeroSelect(hero)
+                    }
+                  }}
+                  className={`group cursor-pointer transform transition-all duration-300 ${
+                    isDisabled ? "opacity-50 cursor-not-allowed" : "hover:scale-105"
+                  }`}
+                >
                   <div
-                    className={`inline-flex items-center px-6 py-3 rounded-xl bg-gradient-to-r ${hero.color} text-white font-semibold shadow-lg group-hover:shadow-xl transition-all duration-300 transform group-hover:-translate-y-1`}
+                    className={`bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 border-2 ${
+                      isSelected
+                        ? "border-purple-500 bg-gradient-to-br from-purple-50 to-purple-100"
+                        : "border-white/50"
+                    }`}
                   >
-                    <span>Start Debate</span>
-                    <svg
-                      className="ml-2 w-4 h-4 transform group-hover:translate-x-1 transition-transform"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
+                    {/* Avatar */}
+                    <div className="flex justify-center mb-4">
+                      <div
+                        className={`w-20 h-20 rounded-full overflow-hidden shadow-lg border-4 ${
+                          isSelected ? "border-purple-500" : "border-white"
+                        }`}
+                      >
+                        <img
+                          src={hero.image || "/placeholder.svg?height=80&width=80"}
+                          alt={hero.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="text-center">
+                      <h3 className="text-lg font-bold text-slate-800 mb-2 group-hover:text-slate-900 transition-colors">
+                        {hero.name}
+                      </h3>
+
+                      {/* Selection indicator for debate mode */}
+                      {mode === "debate-select" && isSelected && (
+                        <div className="mb-2">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            Selected
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Action button */}
+                      <div
+                        className={`inline-flex items-center px-4 py-2 rounded-lg font-semibold shadow-sm transition-all duration-300 ${
+                          mode === "qa-select"
+                            ? "bg-blue-600 text-white group-hover:bg-blue-700"
+                            : isSelected
+                              ? "bg-purple-600 text-white"
+                              : "bg-slate-600 text-white group-hover:bg-slate-700"
+                        }`}
+                      >
+                        <span>
+                          {mode === "qa-select" ? "Ask Questions" : isSelected ? "Selected" : "Select for Debate"}
+                        </span>
+                        {mode === "qa-select" && (
+                          <svg
+                            className="ml-2 w-4 h-4 transform group-hover:translate-x-1 transition-transform"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Features Section - only show when no mode is selected */}
+        {!mode && (
+          <div className="mt-20 grid grid-cols-1 md:grid-cols-2 gap-12">
+            <div className="text-center p-8 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                  />
+                </svg>
               </div>
+              <h3 className="text-2xl font-semibold text-slate-800 mb-4">Personal Q&A Sessions</h3>
+              <p className="text-slate-600 leading-relaxed">
+                Have one-on-one conversations with history's greatest minds. Ask them anything and hear their responses
+                in their own voice.
+              </p>
             </div>
-          ))}
-        </div>
 
-        {/* Features Section */}
-        <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="text-center p-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                />
-              </svg>
+            <div className="text-center p-8 bg-gradient-to-br from-purple-50 to-violet-50 rounded-2xl">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-semibold text-slate-800 mb-4">Historical Debates</h3>
+              <p className="text-slate-600 leading-relaxed">
+                Watch fascinating debates between historical figures on topics that shaped our world. See how different
+                minds approach the same questions.
+              </p>
             </div>
-            <h3 className="text-xl font-semibold text-slate-800 mb-2">AI-Powered Conversations</h3>
-            <p className="text-slate-600">
-              Experience realistic debates powered by advanced AI that captures each figure's unique perspective and
-              knowledge.
-            </p>
           </div>
-
-          <div className="text-center p-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-                />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-slate-800 mb-2">Historical Accuracy</h3>
-            <p className="text-slate-600">
-              Each conversation is grounded in historical facts and the documented thoughts and philosophies of these
-              great minds.
-            </p>
-          </div>
-
-          <div className="text-center p-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-slate-800 mb-2">Learn & Explore</h3>
-            <p className="text-slate-600">
-              Discover new perspectives on timeless questions and deepen your understanding of history, philosophy, and
-              human nature.
-            </p>
-          </div>
-        </div>
+        )}
       </div>
     </Layout>
   )
