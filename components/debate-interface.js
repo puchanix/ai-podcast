@@ -1413,7 +1413,9 @@ export function DebateInterface() {
         isPlaying={isPlaying}
         isLoadingAudio={isLoadingAudio}
         isPreparing={isPreparing}
+        isIntroPlaying={isIntroPlaying}
         debateMessages={debateMessages}
+        currentTopic={currentTopic}
         onCharacter1Change={handleCharacter1Change}
         onCharacter2Change={handleCharacter2Change}
       />
@@ -1442,127 +1444,12 @@ export function DebateInterface() {
         </div>
       )}
 
-      {/* Current Debate Status */}
-      <div className="mb-8 bg-gray-800 p-4 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4 text-yellow-400">
-          {currentTopic ? `Debate: ${currentTopic}` : "Select a topic to begin"}
-        </h2>
-
-        {/* Voice-only interface */}
-        <div className="flex flex-col items-center justify-center p-8 bg-gray-900 rounded-lg">
-          {isIntroPlaying ? (
-            <div className="flex flex-col items-center">
-              <div className="w-48 h-48 relative mb-6">
-                {/* Left half circle (Character 1) */}
-                <div className="absolute top-0 left-0 w-24 h-48 overflow-hidden border-4 border-yellow-500 rounded-l-full">
-                  <div className="w-48 h-48 absolute top-0 left-0">
-                    <img
-                      src={char1?.image || "/placeholder.png"}
-                      alt={char1?.name || "Character 1"}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                </div>
-
-                {/* Right half circle (Character 2) */}
-                <div className="absolute top-0 right-0 w-24 h-48 overflow-hidden border-4 border-yellow-500 rounded-r-full">
-                  <div className="w-48 h-48 absolute top-0 right-0">
-                    <img
-                      src={char2?.image || "/placeholder.png"}
-                      alt={char2?.name || "Character 2"}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                </div>
-
-                {/* Overlay with pulsing effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/30 to-red-500/30 rounded-full animate-pulse"></div>
-              </div>
-              <h3 className="text-xl font-bold text-yellow-400 mb-2">Setting the stage...</h3>
-              <p className="text-gray-300">
-                Introducing the debate between {char1?.name} and {char2?.name}
-              </p>
-            </div>
-          ) : !isDebating ? (
-            <div className="w-full">
-              <EmbeddedTopicSelector onSelectTopic={startDebate} character1={character1} character2={character2} />
-            </div>
-          ) : (
-            <div className="flex flex-col items-center">
-              <div className="text-center mb-4">
-                {isLoadingAudio ? (
-                  <div>
-                    <h3 className="text-xl font-bold text-yellow-400">
-                      {currentSpeaker === "moderator"
-                        ? "Moderator"
-                        : currentSpeaker === character1
-                          ? `${char1.name}`
-                          : `${char2.name}`}{" "}
-                      is thinking...
-                    </h3>
-                    <div className="mt-2">
-                      <div className="h-8 w-8 animate-spin mx-auto text-yellow-400">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                ) : isPlaying && isAudioLoaded ? (
-                  <div>
-                    <h3 className="text-xl font-bold text-yellow-400">
-                      {currentSpeaker === "moderator"
-                        ? "Moderator"
-                        : currentSpeaker === character1
-                          ? `${char1.name}`
-                          : `${char2.name}`}{" "}
-                      is speaking...
-                    </h3>
-                    {(() => {
-                      // Find the most recent message for the current speaker
-                      const speakerMessages = debateMessages.filter((m) => m.character === currentSpeaker)
-                      const latestMessage = speakerMessages[speakerMessages.length - 1]
-                      return (
-                        latestMessage?.responseType && (
-                          <p className="text-sm text-gray-400 mb-2">{latestMessage.responseType}</p>
-                        )
-                      )
-                    })()}
-                    <div className="flex justify-center mt-2">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-8 bg-blue-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
-                        <div className="w-2 h-12 bg-yellow-500 rounded-full animate-[soundwave_0.7s_ease-in-out_infinite_0.1s]"></div>
-                        <div className="w-2 h-6 bg-green-500 rounded-full animate-[soundwave_0.4s_ease-in-out_infinite_0.2s]"></div>
-                        <div className="w-2 h-10 bg-red-500 rounded-full animate-[soundwave_0.6s_ease-in-out_infinite_0.3s]"></div>
-                        <div className="w-2 h-4 bg-purple-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite_0.4s]"></div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-400">
-                      {isDebating ? "Preparing next response..." : "Select a topic to begin"}
-                    </h3>
-                    {isDebating && !isPlaying && !isLoadingAudio && (
-                      <div className="mt-2 text-gray-500">
-                        <p className="animate-pulse">The debaters are formulating their thoughts...</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+      {/* Topic Selector - Only show when not debating and not playing intro */}
+      {!isDebating && !isIntroPlaying && (
+        <div className="mb-8">
+          <EmbeddedTopicSelector onSelectTopic={startDebate} character1={character1} character2={character2} />
         </div>
-      </div>
+      )}
 
       {/* Custom Question Input */}
       <div className="mb-8 bg-gray-800 p-4 rounded-lg">
