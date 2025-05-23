@@ -34,7 +34,7 @@ const staticDebateTopics = [
   },
 ]
 
-export default function DebateInterface() {
+export function DebateInterface() {
   // Initialize state with default values first
   const defaultState = {
     character1: Object.keys(personas)[0],
@@ -1681,3 +1681,5 @@ export default function DebateInterface() {
     )
   }
 }
+
+export default DebateInterface
