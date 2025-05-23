@@ -78,8 +78,8 @@ async function generateResponse(
   historicalContext,
   exchangeCount,
 ) {
-  // Use a faster model for response generation
-  const model = "gpt-3.5-turbo"
+  // Use GPT-4 for better quality responses
+  const model = "gpt-4"
 
   // Create a system prompt that encourages concise responses
   const systemPrompt = `${persona.systemPrompt}
@@ -112,7 +112,7 @@ Respond directly to the points made by ${otherPersona.name} in their last statem
         { role: "user", content: prompt },
       ],
       temperature: 0.7,
-      max_tokens: 200, // Limit token count for faster responses
+      max_tokens: 200,
     })
 
     return completion.choices[0].message.content.trim()

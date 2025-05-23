@@ -13,6 +13,8 @@ export function DebateHeader({
   debateMessages,
   currentTopic,
   speakerStatus,
+  isAutoplaying,
+  onToggleAutoplay,
   onCharacter1Change,
   onCharacter2Change,
 }) {
@@ -50,7 +52,16 @@ export function DebateHeader({
 
   return (
     <div className="mb-8 bg-gray-800 p-6 rounded-lg shadow-lg" style={{ minHeight: "200px" }}>
-      <h1 className="text-3xl font-bold text-center mb-4 text-yellow-400">Historical Debates</h1>
+      <div className="flex flex-col md:flex-row justify-between items-center mb-4">
+        <h1 className="text-3xl font-bold text-yellow-400">Historical Debates</h1>
+
+        {/* Display current topic during debate */}
+        {currentTopic && ((isDebating) => isIntroPlaying || isPlaying || isLoadingAudio || isPreparing) && (
+          <div className="mt-2 md:mt-0 text-center md:text-right">
+            <h2 className="text-xl font-semibold text-yellow-400">Topic: {currentTopic}</h2>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col md:flex-row items-center justify-between">
         {/* Character Selection */}
@@ -71,7 +82,7 @@ export function DebateHeader({
             <select
               value={character1}
               onChange={(e) => onCharacter1Change(e.target.value)}
-              className="w-[150px] p-1 text-sm rounded border bg-gray-800 text-white border-gray-600"
+              className="w-[180px] p-1 text-sm rounded border bg-gray-800 text-white border-gray-600"
             >
               {Object.keys(personas).map((id) => (
                 <option key={id} value={id}>
@@ -99,7 +110,7 @@ export function DebateHeader({
             <select
               value={character2}
               onChange={(e) => onCharacter2Change(e.target.value)}
-              className="w-[150px] p-1 text-sm rounded border bg-gray-800 text-white border-gray-600"
+              className="w-[180px] p-1 text-sm rounded border bg-gray-800 text-white border-gray-600"
             >
               {Object.keys(personas).map((id) => (
                 <option key={id} value={id}>
@@ -112,7 +123,7 @@ export function DebateHeader({
 
         {/* Current Speaker Display - Only show when there's a speaker */}
         {shouldShowSpeakerDisplay && (
-          <div className="flex flex-col items-center" style={{ minHeight: "180px" }}>
+          <div className="flex flex-col items-center" style={{ minHeight: "180px", width: "250px" }}>
             {speakerDisplay ? (
               <div className="flex flex-col items-center">
                 {speakerDisplay.type === "introduction" ? (
@@ -232,6 +243,14 @@ export function DebateHeader({
                     </div>
                   </>
                 )}
+
+                {/* Pause/Resume button - always visible during intro or debate */}
+                <button
+                  onClick={onToggleAutoplay}
+                  className="mt-4 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-full font-bold"
+                >
+                  {isAutoplaying ? "⏸️ Pause" : "▶️ Resume"}
+                </button>
               </div>
             ) : null}
           </div>
