@@ -206,7 +206,8 @@ export default function Home() {
       // Handle streaming response
       const reader = response.body.getReader()
       const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-      let audioBuffer = new ArrayBuffer(0)
+      const audioBuffer = new ArrayBuffer(0)
+      let completeBuffer = new Uint8Array(0) // Accumulate all received data
 
       // Create audio element for playback
       const audio = new Audio()
@@ -231,31 +232,28 @@ export default function Home() {
 
             if (done) {
               console.log("Stream completed")
-              break
-            }
 
-            // Append new chunk to buffer
-            const newBuffer = new ArrayBuffer(audioBuffer.byteLength + value.byteLength)
-            const newView = new Uint8Array(newBuffer)
-            newView.set(new Uint8Array(audioBuffer), 0)
-            newView.set(value, audioBuffer.byteLength)
-            audioBuffer = newBuffer
-
-            // If we have enough data and haven't started playing yet, start playback
-            if (audioBuffer.byteLength > 8192 && audio.src === "") {
-              const blob = new Blob([audioBuffer], { type: "audio/mpeg" })
+              // Play the complete buffer
+              const blob = new Blob([completeBuffer], { type: "audio/mpeg" })
               const audioUrl = URL.createObjectURL(blob)
               audio.src = audioUrl
 
               try {
                 await audio.play()
-                console.log("Started streaming audio playback")
+                console.log("Started audio playback from complete buffer")
               } catch (playError) {
                 console.error("Error starting audio playback:", playError)
                 setAudioError("Failed to start audio playback")
                 setIsPlaying(false)
               }
+              break
             }
+
+            // Append new chunk to the complete buffer
+            const newCompleteBuffer = new Uint8Array(completeBuffer.length + value.length)
+            newCompleteBuffer.set(completeBuffer, 0)
+            newCompleteBuffer.set(value, completeBuffer.length)
+            completeBuffer = newCompleteBuffer
           }
         } catch (streamError) {
           console.error("Stream processing error:", streamError)
@@ -283,6 +281,14 @@ export default function Home() {
     setMode(mode === "question" ? "debate" : "question")
     setSelectedPersona("")
     setSelectedCharacters([])
+  }
+
+  const handleAskQuestionClick = async () => {
+    if (!isListening) {
+      await startListening()
+    } else {
+      stopListening()
+    }
   }
 
   return (
@@ -330,9 +336,7 @@ export default function Home() {
 
           {/* Instructions */}
           <div className="text-center mb-8">
-            {mode === "question" ? (
-              <p className="text-lg text-gray-300">Select a historical figure and ask them anything using your voice</p>
-            ) : (
+            {mode === "debate" && (
               <p className="text-lg text-gray-300">
                 Select two historical figures to watch them debate fascinating topics
               </p>
@@ -360,7 +364,7 @@ export default function Home() {
                     <img
                       src={persona.image || "/placeholder.svg"}
                       alt={persona.name}
-                      className="w-full h-80 object-cover group-hover:scale-110 transition-transform duration-500"
+                      className="w-full h-24 object-cover group-hover:scale-110 transition-transform duration-500"
                     />
                   </div>
                   <div className="p-6">
@@ -422,7 +426,7 @@ export default function Home() {
                 {audioError && <div className="mb-4 p-3 bg-red-900 text-red-100 rounded-lg text-sm">{audioError}</div>}
 
                 <button
-                  onClick={isListening ? stopListening : startListening}
+                  onClick={handleAskQuestionClick}
                   disabled={isProcessing || isPlaying}
                   className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 ${
                     isListening
@@ -435,12 +439,12 @@ export default function Home() {
                   }`}
                 >
                   {isListening
-                    ? "🎤 Listening... (Click to stop)"
+                    ? "🎤 Recording (Click to finish)"
                     : isProcessing
                       ? "🤔 Processing..."
                       : isPlaying
                         ? "🔊 Playing Response..."
-                        : "🎤 Hold to Ask Question"}
+                        : "🎤 Ask Question"}
                 </button>
 
                 {isPlaying && (
@@ -462,7 +466,7 @@ export default function Home() {
                 )}
 
                 <p className="text-sm text-gray-400 mt-4">
-                  Click and hold the microphone button, ask your question, then release
+                  Click the microphone button to ask your question, then click again to stop recording.
                 </p>
               </div>
             </div>
