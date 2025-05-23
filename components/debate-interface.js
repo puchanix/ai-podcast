@@ -78,7 +78,7 @@ export function DebateInterface() {
   // UI state
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(isDebating ? true : false)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [nextSpeaker, setNextSpeaker] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -1264,18 +1264,13 @@ export function DebateInterface() {
           console.log(`${character} audio playing`)
           setIsPlaying(true)
 
-          // Start preparing the next exchange earlier - at 1/4 through this audio
+          // Start preparing the next exchange immediately
           if (character !== "moderator" && !isPreparing) {
-            // Make sure audio.duration is a valid number before using it
-            const audioDuration = audio.duration || 0
-            const preparePoint =
-              audioDuration && isFinite(audioDuration) ? Math.max(1000, (audioDuration * 1000) / 4) : 1000 // Default to 1 second if duration is invalid
-
-            console.log(`Scheduling next exchange preparation in ${preparePoint}ms`)
-
+            console.log(`Starting next exchange preparation immediately`)
+            // Use a minimal timeout to allow the current execution to complete
             prepareNextTimeoutRef.current = setTimeout(() => {
               prepareNextExchange()
-            }, preparePoint)
+            }, 100)
           }
         }
 
@@ -1301,14 +1296,12 @@ export function DebateInterface() {
           if (nextIndex < allMessages.length) {
             const nextMessage = allMessages[nextIndex]
             if (nextMessage.character !== "user") {
-              // Reduced delay before playing next audio
-              setTimeout(() => {
-                if (isAutoplaying) {
-                  playDebateAudio(nextMessage, allMessages, nextIndex)
-                } else {
-                  setCurrentSpeaker(null)
-                }
-              }, 200) // Reduced from 300ms to 200ms
+              // No delay between speakers
+              if (isAutoplaying) {
+                playDebateAudio(nextMessage, allMessages, nextIndex)
+              } else {
+                setCurrentSpeaker(null)
+              }
             }
           } else {
             setCurrentSpeaker(null)
@@ -1332,7 +1325,6 @@ export function DebateInterface() {
                 // Otherwise, continue the debate automatically after a shorter delay
                 console.log(`Automatically continuing to next exchange...`)
                 setTimeout(() => {
-                  // Add this debug log to check state right before continuing
                   console.log(
                     `Before continuing - isDebating: ${isDebatingRef.current}, isProcessing: ${isProcessing}, isAutoplaying: ${isAutoplaying}`,
                   )
@@ -1341,7 +1333,7 @@ export function DebateInterface() {
                     console.log(`Triggering next exchange...`)
                     continueDebate()
                   }
-                }, 500) // Reduced from 1000ms to 500ms
+                }, 100) // Reduced to minimal delay
               }
             }
           }
@@ -1618,6 +1610,21 @@ export function DebateInterface() {
             }
             50% {
               height: 16px;
+            }
+          }
+          
+          @keyframes micPass {
+            0% {
+              transform: translateX(-50px) rotate(-30deg);
+              opacity: 0;
+            }
+            50% {
+              transform: translateX(0) rotate(0deg);
+              opacity: 1;
+            }
+            100% {
+              transform: translateX(50px) rotate(30deg);
+              opacity: 0;
             }
           }
         `}</style>
