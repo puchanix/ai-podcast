@@ -504,7 +504,6 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
     <div className="bg-gray-800 rounded-lg p-6 w-full">
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-yellow-400 mb-2">Select a Debate Topic</h2>
-        <p className="text-gray-400">Choose a topic for these historical figures to debate</p>
       </div>
 
       {isLoading ? (

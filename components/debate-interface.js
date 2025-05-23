@@ -104,6 +104,7 @@ export function DebateInterface() {
   const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
   const [isPreparing, setIsPreparing] = useState(false)
   const [statusMessage, setStatusMessage] = useState("")
+  const [isSettingUp, setIsSettingUp] = useState(false)
 
   // Refs
   const audioRef = useRef(null)
@@ -304,6 +305,7 @@ export function DebateInterface() {
     setRequestData(null)
     setHasIntroduction(false)
     setIsIntroPlaying(false)
+    setIsSettingUp(false)
 
     // Clear any pending timeouts
     if (prepareNextTimeoutRef.current) {
@@ -477,6 +479,7 @@ export function DebateInterface() {
       if (!introAudioRef.current || !topic) return
 
       setIsIntroPlaying(true)
+      setIsSettingUp(true)
       setStatusMessage("Preparing introduction...")
 
       // Start preparing the debate in parallel
@@ -570,6 +573,7 @@ export function DebateInterface() {
       resetDebateState()
       setCurrentTopic(topic)
       setIsDebating(true)
+      setIsSettingUp(false)
 
       // Store the debate messages
       const messages = [
@@ -612,6 +616,7 @@ export function DebateInterface() {
       setCurrentTopic(topic)
       setIsDebating(true)
       setIsProcessing(true)
+      setIsSettingUp(true)
 
       // Set the current speaker to character1 immediately to show the correct image
       setCurrentSpeaker(character1)
@@ -658,6 +663,7 @@ export function DebateInterface() {
         ]
 
         setDebateMessages(messages)
+        setIsSettingUp(false)
 
         // Set the next speaker to be character2 (for the thinking UI)
         setNextSpeaker(character2)
@@ -667,6 +673,7 @@ export function DebateInterface() {
       } catch (error) {
         console.error("Error starting debate:", error)
         setIsDebating(false)
+        setIsSettingUp(false)
         setAudioError(`Failed to start debate: ${error.message}`)
       } finally {
         setIsProcessing(false)
@@ -690,6 +697,7 @@ export function DebateInterface() {
       if (!userQuestion.trim() || isProcessing) return
 
       setIsProcessing(true)
+      setIsSettingUp(true)
 
       // If no debate is in progress, start one with the custom question as the topic
       if (!isDebatingRef.current || !topicRef.current) {
@@ -735,6 +743,7 @@ export function DebateInterface() {
           ]
 
           setDebateMessages(messages)
+          setIsSettingUp(false)
 
           // Set the next speaker to be character2 (for the thinking UI)
           setNextSpeaker(character2)
@@ -744,6 +753,7 @@ export function DebateInterface() {
         } catch (error) {
           console.error("Error starting debate:", error)
           setIsDebating(false)
+          setIsSettingUp(false)
           setAudioError(`Failed to start debate: ${error.message}`)
         } finally {
           setIsProcessing(false)
@@ -807,6 +817,7 @@ export function DebateInterface() {
 
         const allMessages = [...updatedMessages, ...newMessages]
         setDebateMessages(allMessages)
+        setIsSettingUp(false)
 
         // Set the next speaker to be character2 (for the thinking UI)
         setNextSpeaker(character2)
@@ -816,6 +827,7 @@ export function DebateInterface() {
       } catch (error) {
         console.error("Error continuing debate:", error)
         setAudioError(`Failed to continue debate: ${error.message}`)
+        setIsSettingUp(false)
       } finally {
         setIsProcessing(false)
       }
@@ -944,6 +956,7 @@ export function DebateInterface() {
     console.log("Starting next exchange with topic:", topic)
     console.log("Current messages length:", messages.length)
     setIsProcessing(true)
+    setIsSettingUp(true)
     setAudioError(null) // Clear any previous errors
 
     // Check if we have a prepared exchange
@@ -1037,6 +1050,7 @@ export function DebateInterface() {
       const allMessages = [...messages, ...newMessages]
       setDebateMessages(allMessages)
       setRetryCount(0) // Reset retry count on success
+      setIsSettingUp(false)
 
       // Set the next speaker to be character2 (for the thinking UI)
       setNextSpeaker(character2)
@@ -1046,6 +1060,7 @@ export function DebateInterface() {
     } catch (error) {
       console.error("Error continuing debate:", error)
       setLastError(error.message)
+      setIsSettingUp(false)
 
       // Implement retry logic
       if (retryCount < 3) {
@@ -1242,19 +1257,19 @@ export function DebateInterface() {
         audio.oncanplaythrough = () => {
           console.log(`${character} audio loaded successfully`)
           setIsAudioLoaded(true)
+          setIsLoadingAudio(false) // Set to false when audio is loaded, not when it starts playing
         }
 
         audio.onplay = () => {
           console.log(`${character} audio playing`)
           setIsPlaying(true)
-          setIsLoadingAudio(false)
 
-          // Start preparing the next exchange earlier - at 1/3 through this audio
+          // Start preparing the next exchange earlier - at 1/4 through this audio
           if (character !== "moderator" && !isPreparing) {
             // Make sure audio.duration is a valid number before using it
             const audioDuration = audio.duration || 0
             const preparePoint =
-              audioDuration && isFinite(audioDuration) ? Math.max(2000, (audioDuration * 1000) / 3) : 2000 // Default to 2 seconds if duration is invalid
+              audioDuration && isFinite(audioDuration) ? Math.max(1000, (audioDuration * 1000) / 4) : 1000 // Default to 1 second if duration is invalid
 
             console.log(`Scheduling next exchange preparation in ${preparePoint}ms`)
 
@@ -1293,7 +1308,7 @@ export function DebateInterface() {
                 } else {
                   setCurrentSpeaker(null)
                 }
-              }, 300) // Reduced from 500ms to 300ms
+              }, 200) // Reduced from 300ms to 200ms
             }
           } else {
             setCurrentSpeaker(null)
@@ -1326,7 +1341,7 @@ export function DebateInterface() {
                     console.log(`Triggering next exchange...`)
                     continueDebate()
                   }
-                }, 1000) // Reduced from 2000ms to 1000ms
+                }, 500) // Reduced from 1000ms to 500ms
               }
             }
           }
@@ -1483,6 +1498,7 @@ export function DebateInterface() {
           currentTopic={currentTopic}
           speakerStatus={isLoadingAudio ? "thinking" : isPreparing ? "preparing" : isPlaying ? "speaking" : null}
           isAutoplaying={isAutoplaying}
+          isDebating={isDebating}
           onToggleAutoplay={toggleAutoplay}
           onCharacter1Change={handleCharacter1Change}
           onCharacter2Change={handleCharacter2Change}
@@ -1509,6 +1525,16 @@ export function DebateInterface() {
           {!isDebating && !isIntroPlaying && (
             <div className="mb-8">
               <EmbeddedTopicSelector onSelectTopic={startDebate} character1={character1} character2={character2} />
+            </div>
+          )}
+
+          {/* Setup animation */}
+          {isSettingUp && (
+            <div className="flex justify-center items-center mb-8">
+              <div className="text-center">
+                <div className="inline-block animate-spin h-10 w-10 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
+                <p className="text-yellow-400 text-lg">Setting up the debate...</p>
+              </div>
             </div>
           )}
 
