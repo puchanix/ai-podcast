@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Layout from "../components/layout"
 import DebateInterface from "../components/debate-interface"
 import { VoiceInput } from "../components/voice-input"
-import { personas } from "../lib/personas"
+import { personas, loadVoiceIds } from "../lib/personas"
 
 export default function Home() {
   const [mode, setMode] = useState(null) // null, 'debate', or 'qa'
@@ -17,9 +17,22 @@ export default function Home() {
   const [heroResponse, setHeroResponse] = useState("")
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
   const [currentAudioUrl, setCurrentAudioUrl] = useState("")
+  const [thinkingMessage, setThinkingMessage] = useState("")
+  const [voicesLoaded, setVoicesLoaded] = useState(false)
 
   // Audio ref for playing responses
   const audioRef = useRef(null)
+
+  // Thinking messages for dynamic display
+  const thinkingMessages = [
+    "Thinking...",
+    "Pondering your question...",
+    "Reflecting on this matter...",
+    "Considering the depths of this inquiry...",
+    "Gathering thoughts...",
+    "Contemplating...",
+    "Preparing a response...",
+  ]
 
   // Convert personas object to array for easier handling
   const heroesArray = Object.keys(personas).map((key) => ({
@@ -27,12 +40,45 @@ export default function Home() {
     ...personas[key],
   }))
 
+  // Load voice IDs on component mount
+  useEffect(() => {
+    const initVoices = async () => {
+      try {
+        await loadVoiceIds()
+        setVoicesLoaded(true)
+        console.log("Voice IDs loaded successfully")
+      } catch (error) {
+        console.error("Failed to load voice IDs:", error)
+        setVoicesLoaded(true) // Continue anyway
+      }
+    }
+    initVoices()
+  }, [])
+
   // Generate topics when two heroes are selected
   useEffect(() => {
     if (selectedHeroes.length === 2 && mode === "debate-select") {
       generateTopics()
     }
   }, [selectedHeroes, mode])
+
+  // Thinking message rotation effect
+  useEffect(() => {
+    let interval
+    if (isProcessingQuestion) {
+      let messageIndex = 0
+      setThinkingMessage(thinkingMessages[0])
+
+      interval = setInterval(() => {
+        messageIndex = (messageIndex + 1) % thinkingMessages.length
+        setThinkingMessage(thinkingMessages[messageIndex])
+      }, 2000) // Change message every 2 seconds
+    }
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [isProcessingQuestion])
 
   // Handle single hero selection for Q&A
   const handleHeroSelect = (hero) => {
@@ -94,10 +140,11 @@ export default function Home() {
     }
   }
 
-  // Start debate with selected topic - using original approach
+  // Start debate with selected topic - store topic for DebateInterface
   const startDebate = (topic) => {
     if (selectedHeroes.length !== 2) return
-    // Use the original DebateInterface component approach
+    // Store the topic in the selected heroes for the DebateInterface
+    setSelectedHeroes((prev) => prev.map((hero) => ({ ...hero, debateTopic: topic })))
     setMode("debate")
   }
 
@@ -109,13 +156,14 @@ export default function Home() {
     setUserQuestion("")
     setHeroResponse("")
     setCurrentAudioUrl("")
+    setThinkingMessage("")
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.src = ""
     }
   }
 
-  // Handle question submission - using the original working approach
+  // Handle question submission - optimized for speed
   const handleQuestionSubmit = async (question) => {
     if (!selectedHero) return
 
@@ -125,8 +173,8 @@ export default function Home() {
     setCurrentAudioUrl("")
 
     try {
-      // Use the same approach as the original working system
-      const response = await fetch("/api/chat", {
+      // Start both text generation and voice preparation in parallel
+      const textPromise = fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -137,17 +185,19 @@ export default function Home() {
         }),
       })
 
-      if (!response.ok) {
+      const textResponse = await textPromise
+      if (!textResponse.ok) {
         throw new Error("Failed to get response")
       }
 
-      const data = await response.json()
+      const data = await textResponse.json()
       setHeroResponse(data.response)
 
-      // Generate audio using the original approach with proper voice ID handling
+      // Generate audio using the correct ElevenLabs voice ID
       if (data.response) {
-        // Use the getVoiceId function from personas to get the correct ElevenLabs voice
+        // Use the getVoiceId function to get the correct ElevenLabs voice
         const voiceId = selectedHero.getVoiceId ? selectedHero.getVoiceId() : selectedHero.voiceId || "echo"
+        console.log(`Using voice ID for ${selectedHero.name}: ${voiceId}`)
 
         const audioResponse = await fetch("/api/speak", {
           method: "POST",
@@ -177,6 +227,7 @@ export default function Home() {
       setHeroResponse("I'm sorry, I couldn't process your question at this time.")
     } finally {
       setIsProcessingQuestion(false)
+      setThinkingMessage("")
     }
   }
 
@@ -236,18 +287,28 @@ export default function Home() {
           {/* Hero Q&A Interface */}
           <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 rounded-2xl p-8 shadow-lg">
             <div className="flex flex-col md:flex-row items-center mb-8">
-              <div className="w-32 h-32 rounded-full overflow-hidden mb-4 md:mb-0 md:mr-6 shadow-lg">
+              <div className="w-32 h-32 rounded-full overflow-hidden mb-4 md:mb-0 md:mr-6 shadow-lg relative">
                 <img
                   src={
                     selectedHero.image || `/placeholder.svg?height=128&width=128&query=${selectedHero.name} portrait`
                   }
                   alt={selectedHero.name}
-                  className="w-full h-full object-cover"
+                  className={`w-full h-full object-cover transition-all duration-500 ${
+                    isProcessingQuestion ? "animate-pulse opacity-75" : ""
+                  }`}
                 />
+                {/* Thinking indicator overlay */}
+                {isProcessingQuestion && (
+                  <div className="absolute inset-0 bg-blue-500 bg-opacity-20 rounded-full flex items-center justify-center">
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                )}
               </div>
               <div className="text-center md:text-left">
                 <h1 className="text-3xl font-bold text-slate-800 mb-2">{selectedHero.name}</h1>
                 <p className="text-slate-600 mb-4">{selectedHero.systemPrompt?.substring(8) || "Historical figure"}</p>
+                {/* Dynamic thinking message */}
+                {isProcessingQuestion && <p className="text-blue-600 font-medium animate-pulse">{thinkingMessage}</p>}
               </div>
             </div>
 
@@ -261,8 +322,17 @@ export default function Home() {
 
                 {isProcessingQuestion ? (
                   <div className="text-center py-4">
-                    <div className="inline-block animate-pulse">
-                      <span className="text-slate-500">Thinking...</span>
+                    <div className="inline-flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                      <div
+                        className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                        style={{ animationDelay: "0.1s" }}
+                      ></div>
+                      <div
+                        className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
+                        style={{ animationDelay: "0.2s" }}
+                      ></div>
+                      <span className="text-slate-500 ml-2">{thinkingMessage}</span>
                     </div>
                   </div>
                 ) : heroResponse ? (
@@ -338,11 +408,16 @@ export default function Home() {
     )
   }
 
-  // If in debate mode - use original approach
+  // If in debate mode - use original approach with proper props
   if (mode === "debate" && selectedHeroes.length === 2) {
     return (
       <Layout title={`Debate: ${selectedHeroes[0].name} vs ${selectedHeroes[1].name}`}>
-        <DebateInterface character1={selectedHeroes[0].id} character2={selectedHeroes[1].id} onBack={resetSelection} />
+        <DebateInterface
+          character1={selectedHeroes[0].id}
+          character2={selectedHeroes[1].id}
+          initialTopic={selectedHeroes[0].debateTopic}
+          onBack={resetSelection}
+        />
       </Layout>
     )
   }
@@ -357,6 +432,16 @@ export default function Home() {
             Heroes of History
           </h1>
         </div>
+
+        {/* Voice loading indicator */}
+        {!voicesLoaded && (
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg">
+              <div className="w-4 h-4 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+              Loading character voices...
+            </div>
+          </div>
+        )}
 
         {/* Mode Selection - Only show Watch Heroes Debate button */}
         <div className="flex justify-center mb-12">
@@ -381,8 +466,17 @@ export default function Home() {
 
             {isGeneratingTopics ? (
               <div className="text-center py-8">
-                <div className="inline-block animate-pulse">
-                  <span className="text-slate-500">Generating debate topics...</span>
+                <div className="inline-flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"></div>
+                  <div
+                    className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.1s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.2s" }}
+                  ></div>
+                  <span className="text-slate-500 ml-2">Generating debate topics...</span>
                 </div>
               </div>
             ) : (
