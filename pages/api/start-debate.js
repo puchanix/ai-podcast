@@ -69,7 +69,7 @@ async function generateOpening(persona, otherPersona, topic, format, historicalC
   // Create a system prompt that includes the character's persona and debate context
   const systemPrompt = `${persona.systemPrompt}
 You are participating in a debate with ${otherPersona.name} on the topic of "${topic}".
-Keep your opening statement concise (100-150 words) but insightful.
+Keep your opening statement concise (60-80 words) but insightful.
 ${historicalContext ? `Speak from your historical perspective and knowledge.` : ""}
 ${
   format === "pointCounterpoint"
@@ -86,11 +86,11 @@ ${
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `You are ${persona.name}. Give your opening statement on the topic: "${topic}". Keep it concise but insightful.`,
+          content: `You are ${persona.name}. Give your opening statement on the topic: "${topic}". Keep it concise (60-80 words) but insightful.`,
         },
       ],
       temperature: 0.7,
-      max_tokens: 200,
+      max_tokens: 150, // Reduced for shorter responses
     })
 
     return completion.choices[0].message.content.trim()

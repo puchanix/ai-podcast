@@ -85,7 +85,7 @@ async function generateResponse(
     // Create a system prompt that encourages concise responses
     const systemPrompt = `${persona.systemPrompt}
 You are participating in a debate with ${otherPersona.name} on the topic of "${topic}".
-Keep your response concise (100-150 words) but insightful.
+Keep your response concise (60-80 words) but insightful.
 This is exchange #${exchangeCount} in the debate.
 Respond directly to the points made by ${otherPersona.name} in their last statement.`
 
@@ -112,7 +112,7 @@ Respond directly to the points made by ${otherPersona.name} in their last statem
         { role: "user", content: prompt },
       ],
       temperature: 0.7,
-      max_tokens: 200,
+      max_tokens: 150, // Reduced for shorter responses
     })
 
     // Ensure we have a valid response

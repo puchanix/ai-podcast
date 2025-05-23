@@ -1,6 +1,7 @@
 "use client"
 
 import { personas } from "../lib/personas"
+import { useEffect, useState } from "react"
 
 export function DebateHeader({
   character1,
@@ -14,6 +15,7 @@ export function DebateHeader({
   currentTopic,
   speakerStatus,
   isAutoplaying,
+  isDebating,
   onToggleAutoplay,
   onCharacter1Change,
   onCharacter2Change,
@@ -21,6 +23,16 @@ export function DebateHeader({
   // Get character objects
   const char1 = personas[character1]
   const char2 = personas[character2]
+
+  // Track previous speaker to prevent blank state
+  const [displayedSpeaker, setDisplayedSpeaker] = useState(currentSpeaker)
+
+  // Update displayed speaker only when we have a valid new speaker
+  useEffect(() => {
+    if (currentSpeaker) {
+      setDisplayedSpeaker(currentSpeaker)
+    }
+  }, [currentSpeaker])
 
   // Get the current speaker's image and status
   const getCurrentSpeakerDisplay = () => {
@@ -32,10 +44,10 @@ export function DebateHeader({
       }
     }
 
-    if (!currentSpeaker) return null
+    if (!displayedSpeaker) return null
 
-    const speaker = currentSpeaker === character1 ? char1 : char2
-    const isChar1 = currentSpeaker === character1
+    const speaker = displayedSpeaker === character1 ? char1 : char2
+    const isChar1 = displayedSpeaker === character1
 
     return {
       type: "speaker",
@@ -48,29 +60,32 @@ export function DebateHeader({
   const speakerDisplay = getCurrentSpeakerDisplay()
 
   // Only show speaker display if there's actually a speaker or intro playing
-  const shouldShowSpeakerDisplay = Boolean(speakerDisplay) && (Boolean(currentSpeaker) || isIntroPlaying)
+  const shouldShowSpeakerDisplay = Boolean(speakerDisplay) && (Boolean(displayedSpeaker) || isIntroPlaying)
+
+  // Determine the actual speaker status
+  const actualSpeakerStatus = isLoadingAudio ? "thinking" : isPreparing ? "preparing" : isPlaying ? "speaking" : null
 
   return (
     <div className="mb-8 bg-gray-800 p-6 rounded-lg shadow-lg" style={{ minHeight: "200px" }}>
       <div className="flex flex-col md:flex-row justify-between items-center mb-4">
-        <h1 className="text-3xl font-bold text-yellow-400">Historical Debates</h1>
+        <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-400">Historical Debates</h1>
 
         {/* Display current topic during debate */}
-        {currentTopic && (isIntroPlaying || isPlaying || isLoadingAudio || isPreparing) && (
+        {currentTopic && (isIntroPlaying || isPlaying || isLoadingAudio || isPreparing || isDebating) && (
           <div className="mt-2 md:mt-0 text-center md:text-right">
             <h2 className="text-xl font-semibold text-yellow-400">Topic: {currentTopic}</h2>
           </div>
         )}
       </div>
 
-      <div className="flex flex-col md:flex-row items-center justify-between">
-        {/* Character Selection */}
-        <div className="flex flex-col md:flex-row items-center gap-6 mb-4 md:mb-0">
+      <div className="flex flex-col md:flex-row items-center justify-center md:justify-between">
+        {/* Character Selection - centered when not debating */}
+        <div className={`flex flex-col md:flex-row items-center gap-6 mb-4 md:mb-0 ${isDebating ? "" : "md:mx-auto"}`}>
           {/* Character 1 */}
           <div className="flex flex-col items-center">
             <div
               className={`w-20 h-20 rounded-full overflow-hidden mb-2 border-4 ${
-                currentSpeaker === character1 ? "border-blue-500 animate-pulse" : "border-blue-800"
+                displayedSpeaker === character1 ? "border-blue-500 animate-pulse" : "border-blue-800"
               }`}
             >
               <img
@@ -98,7 +113,7 @@ export function DebateHeader({
           <div className="flex flex-col items-center">
             <div
               className={`w-20 h-20 rounded-full overflow-hidden mb-2 border-4 ${
-                currentSpeaker === character2 ? "border-red-500 animate-pulse" : "border-red-800"
+                displayedSpeaker === character2 ? "border-red-500 animate-pulse" : "border-red-800"
               }`}
             >
               <img
@@ -210,17 +225,17 @@ export function DebateHeader({
                     </div>
                     <div className="text-center">
                       <h3 className="text-lg font-bold text-yellow-400 mb-1">
-                        {speakerStatus === "thinking"
+                        {actualSpeakerStatus === "thinking"
                           ? `${speakerDisplay.speaker?.name} is thinking...`
-                          : speakerStatus === "preparing"
+                          : actualSpeakerStatus === "preparing"
                             ? `${speakerDisplay.speaker?.name} is preparing...`
-                            : speakerStatus === "speaking"
+                            : actualSpeakerStatus === "speaking"
                               ? `${speakerDisplay.speaker?.name} is speaking...`
                               : speakerDisplay.speaker?.name}
                       </h3>
                       {(() => {
                         // Find the most recent message for the current speaker
-                        const speakerMessages = debateMessages.filter((m) => m.character === currentSpeaker)
+                        const speakerMessages = debateMessages.filter((m) => m.character === displayedSpeaker)
                         const latestMessage = speakerMessages[speakerMessages.length - 1]
                         return (
                           latestMessage?.responseType && (
