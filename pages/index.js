@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Layout from "../components/layout"
 import DebateInterface from "../components/debate-interface"
 import { VoiceInput } from "../components/voice-input"
-import { personas, loadVoiceIds } from "../lib/personas"
+import { personas } from "../lib/personas"
 
 export default function Home() {
   const [mode, setMode] = useState(null) // null, 'debate', or 'qa'
@@ -44,9 +44,25 @@ export default function Home() {
   useEffect(() => {
     const initVoices = async () => {
       try {
-        await loadVoiceIds()
-        setVoicesLoaded(true)
-        console.log("Voice IDs loaded successfully")
+        const response = await fetch("/api/get-voice-ids")
+        if (response.ok) {
+          const data = await response.json()
+
+          // Update personas with voice IDs
+          Object.keys(personas).forEach((key) => {
+            const voiceKey = key === "daVinci" ? "davinci" : key.toLowerCase()
+            if (data[voiceKey]) {
+              personas[key].voiceId = data[voiceKey]
+              console.log(`Updated voice ID for ${key}: ${data[voiceKey]}`)
+            }
+          })
+
+          setVoicesLoaded(true)
+          console.log("Voice IDs loaded successfully")
+        } else {
+          console.error("Failed to load voice IDs")
+          setVoicesLoaded(true) // Continue anyway
+        }
       } catch (error) {
         console.error("Failed to load voice IDs:", error)
         setVoicesLoaded(true) // Continue anyway
@@ -308,7 +324,6 @@ export default function Home() {
                 <h1 className="text-3xl font-bold text-slate-800 mb-2">{selectedHero.name}</h1>
                 <p className="text-slate-600 mb-4">{selectedHero.systemPrompt?.substring(8) || "Historical figure"}</p>
                 {/* Dynamic thinking message */}
-                {isProcessingQuestion && <p className="text-blue-600 font-medium animate-pulse">{thinkingMessage}</p>}
               </div>
             </div>
 
@@ -412,12 +427,7 @@ export default function Home() {
   if (mode === "debate" && selectedHeroes.length === 2) {
     return (
       <Layout title={`Debate: ${selectedHeroes[0].name} vs ${selectedHeroes[1].name}`}>
-        <DebateInterface
-          character1={selectedHeroes[0].id}
-          character2={selectedHeroes[1].id}
-          initialTopic={selectedHeroes[0].debateTopic}
-          onBack={resetSelection}
-        />
+        <DebateInterface />
       </Layout>
     )
   }
