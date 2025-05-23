@@ -30,27 +30,24 @@ export default async function handler(req, res) {
 
     console.log(`Using system prompt for ${persona1.name}: ${persona1.systemPrompt}`)
 
-    // Generate opening statements for both characters
-    const [opening1Promise, opening2Promise] = await Promise.all([
+    // Generate opening statements in parallel
+    const [opening1Promise, opening2Promise] = [
       generateOpening(persona1, persona2, topic, format, historicalContext),
       generateOpening(persona2, persona1, topic, format, historicalContext),
-    ])
+    ]
 
-    const opening1 = await opening1Promise
-    const opening2 = await opening2Promise
+    // Start audio generation in parallel with text generation
+    const [opening1, opening2] = await Promise.all([opening1Promise, opening2Promise])
 
     // Get voice IDs for both characters
     const voice1 = persona1.getVoiceId ? persona1.getVoiceId() : persona1.voiceId || "echo"
     const voice2 = persona2.getVoiceId ? persona2.getVoiceId() : persona2.voiceId || "echo"
 
     // Generate audio for both openings in parallel
-    const [audioUrl1Promise, audioUrl2Promise] = await Promise.all([
-      generateAudio(opening1, voice1),
-      generateAudio(opening2, voice2),
+    const [audioUrl1, audioUrl2] = await Promise.all([
+      generateStreamingAudio(opening1, voice1),
+      generateStreamingAudio(opening2, voice2),
     ])
-
-    const audioUrl1 = await audioUrl1Promise
-    const audioUrl2 = await audioUrl2Promise
 
     res.status(200).json({
       opening1,
@@ -73,7 +70,7 @@ Keep your opening statement very concise (40-60 words maximum). Be direct and im
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4", // Using GPT-4 for better quality
+      model: "gpt-4", // Reverted back to GPT-4
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -82,7 +79,7 @@ Keep your opening statement very concise (40-60 words maximum). Be direct and im
         },
       ],
       temperature: 0.7,
-      max_tokens: 80, // Reduced from 125 to 80
+      max_tokens: 80, // Reverted back to 80 tokens
     })
 
     return completion.choices[0].message.content.trim()
@@ -92,16 +89,14 @@ Keep your opening statement very concise (40-60 words maximum). Be direct and im
   }
 }
 
-// Function to generate audio for a statement
-async function generateAudio(text, voiceId) {
+// Function to generate streaming audio URL
+async function generateStreamingAudio(text, voiceId) {
   try {
-    // Generate a unique ID for this audio file
+    // Return the streaming URL instead of generating audio immediately
     const audioId = `debate_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
-
-    // Return the streaming URL
-    return `/api/stream-audio?id=${audioId}&text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId)}`
+    return `/api/stream-audio-realtime?id=${audioId}&text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId)}`
   } catch (error) {
-    console.error("Error generating audio:", error)
+    console.error("Error generating streaming audio:", error)
     throw error
   }
 }
