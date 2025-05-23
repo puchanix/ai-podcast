@@ -1,21 +1,39 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/router"
 import Layout from "../components/layout"
-import DebateInterface from "../components/debate-interface"
 import { VoiceInput } from "../components/voice-input"
 import { personas } from "../lib/personas"
 
 export default function Home() {
+  const router = useRouter()
   const [mode, setMode] = useState(null) // null, 'debate', or 'qa'
   const [selectedHero, setSelectedHero] = useState(null)
   const [selectedHeroes, setSelectedHeroes] = useState([])
+  const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
+  const [generatedTopics, setGeneratedTopics] = useState([])
+  const [userQuestion, setUserQuestion] = useState("")
+  const [isProcessingQuestion, setIsProcessingQuestion] = useState(false)
+  const [heroResponse, setHeroResponse] = useState("")
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [currentAudioUrl, setCurrentAudioUrl] = useState("")
+
+  // Audio ref for playing responses
+  const audioRef = useRef(null)
 
   // Convert personas object to array for easier handling
   const heroesArray = Object.keys(personas).map((key) => ({
     id: key,
     ...personas[key],
   }))
+
+  // Generate topics when two heroes are selected
+  useEffect(() => {
+    if (selectedHeroes.length === 2 && mode === "debate-select") {
+      generateTopics()
+    }
+  }, [selectedHeroes, mode])
 
   // Handle single hero selection for Q&A
   const handleHeroSelect = (hero) => {
@@ -34,24 +52,162 @@ export default function Home() {
     }
   }
 
-  const startDebate = () => {
-    if (selectedHeroes.length === 2) {
-      setMode("debate")
+  // Generate debate topics
+  const generateTopics = async () => {
+    if (selectedHeroes.length !== 2) return
+
+    setIsGeneratingTopics(true)
+    try {
+      const response = await fetch("/api/generate-character-topics", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          character1: selectedHeroes[0].id,
+          character2: selectedHeroes[1].id,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to generate topics")
+      }
+
+      const data = await response.json()
+      setGeneratedTopics(data.topics || [])
+    } catch (error) {
+      console.error("Error generating topics:", error)
+      setGeneratedTopics(["The nature of human knowledge and creativity", "The role of art and science in society"])
+    } finally {
+      setIsGeneratingTopics(false)
     }
+  }
+
+  // Start debate with selected topic
+  const startDebate = (topic) => {
+    if (selectedHeroes.length !== 2) return
+
+    router.push({
+      pathname: "/debate",
+      query: {
+        character1: selectedHeroes[0].id,
+        character2: selectedHeroes[1].id,
+        topic: topic,
+      },
+    })
   }
 
   const resetSelection = () => {
     setMode(null)
     setSelectedHero(null)
     setSelectedHeroes([])
+    setGeneratedTopics([])
+    setUserQuestion("")
+    setHeroResponse("")
+    setCurrentAudioUrl("")
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ""
+    }
   }
 
-  // Handle question submission
-  const handleQuestionSubmit = (question) => {
-    console.log(`Question for ${selectedHero.name}: ${question}`)
-    // Here you would implement the logic to process the question
-    // and get a response from the selected character
+  // Handle question submission - using the original working approach
+  const handleQuestionSubmit = async (question) => {
+    if (!selectedHero) return
+
+    setUserQuestion(question)
+    setIsProcessingQuestion(true)
+    setHeroResponse("")
+    setCurrentAudioUrl("")
+
+    try {
+      // Use the same approach as the original working system
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: question,
+          persona: selectedHero.id,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to get response")
+      }
+
+      const data = await response.json()
+      setHeroResponse(data.response)
+
+      // Generate audio using the same approach as the original system
+      if (data.response) {
+        const audioResponse = await fetch("/api/speak", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            text: data.response,
+            voice: selectedHero.voiceId || "echo",
+          }),
+        })
+
+        if (audioResponse.ok) {
+          const audioData = await audioResponse.json()
+          setCurrentAudioUrl(audioData.audioUrl)
+
+          // Auto-play the audio
+          if (audioRef.current && audioData.audioUrl) {
+            audioRef.current.src = audioData.audioUrl
+            audioRef.current.load()
+            audioRef.current.play().catch(console.error)
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error getting response:", error)
+      setHeroResponse("I'm sorry, I couldn't process your question at this time.")
+    } finally {
+      setIsProcessingQuestion(false)
+    }
   }
+
+  // Handle canned question click
+  const handleCannedQuestionClick = (question) => {
+    handleQuestionSubmit(question)
+  }
+
+  // Handle audio play/pause
+  const toggleAudio = () => {
+    if (!audioRef.current || !currentAudioUrl) return
+
+    if (isPlayingAudio) {
+      audioRef.current.pause()
+    } else {
+      audioRef.current.play().catch(console.error)
+    }
+  }
+
+  // Audio event handlers
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    const handlePlay = () => setIsPlayingAudio(true)
+    const handlePause = () => setIsPlayingAudio(false)
+    const handleEnded = () => setIsPlayingAudio(false)
+
+    audio.addEventListener("play", handlePlay)
+    audio.addEventListener("pause", handlePause)
+    audio.addEventListener("ended", handleEnded)
+
+    return () => {
+      audio.removeEventListener("play", handlePlay)
+      audio.removeEventListener("pause", handlePause)
+      audio.removeEventListener("ended", handleEnded)
+    }
+  }, [currentAudioUrl])
 
   // If in Q&A mode with a selected hero
   if (mode === "qa" && selectedHero) {
@@ -75,7 +231,9 @@ export default function Home() {
             <div className="flex flex-col md:flex-row items-center mb-8">
               <div className="w-32 h-32 rounded-full overflow-hidden mb-4 md:mb-0 md:mr-6 shadow-lg">
                 <img
-                  src={selectedHero.image || "/placeholder.svg?height=128&width=128&query=historical figure portrait"}
+                  src={
+                    selectedHero.image || `/placeholder.svg?height=128&width=128&query=${selectedHero.name} portrait`
+                  }
                   alt={selectedHero.name}
                   className="w-full h-full object-cover"
                 />
@@ -86,6 +244,58 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Conversation Area */}
+            {userQuestion && (
+              <div className="mb-8 bg-white rounded-lg p-6 shadow-sm">
+                <div className="mb-4">
+                  <p className="font-semibold text-slate-700">Your question:</p>
+                  <p className="text-slate-600 mt-2">{userQuestion}</p>
+                </div>
+
+                {isProcessingQuestion ? (
+                  <div className="text-center py-4">
+                    <div className="inline-block animate-pulse">
+                      <span className="text-slate-500">Thinking...</span>
+                    </div>
+                  </div>
+                ) : heroResponse ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-semibold text-slate-700">{selectedHero.name}'s response:</p>
+                      {currentAudioUrl && (
+                        <button
+                          onClick={toggleAudio}
+                          className="flex items-center px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          {isPlayingAudio ? (
+                            <>
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
+                              </svg>
+                              Pause
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293H15"
+                                />
+                              </svg>
+                              Play
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-slate-600 mt-2">{heroResponse}</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
             {/* Canned Questions */}
             {selectedHero.questions && selectedHero.questions.length > 0 && (
               <div className="mb-8">
@@ -94,7 +304,9 @@ export default function Home() {
                   {selectedHero.questions.map((question, index) => (
                     <button
                       key={index}
-                      className="p-4 text-left bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-slate-200 hover:border-slate-300"
+                      onClick={() => handleCannedQuestionClick(question)}
+                      disabled={isProcessingQuestion}
+                      className="p-4 text-left bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-slate-200 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <p className="text-slate-700">{question}</p>
                     </button>
@@ -112,16 +324,9 @@ export default function Home() {
             </div>
           </div>
         </div>
-      </Layout>
-    )
-  }
 
-  // If in debate mode
-  if (mode === "debate" && selectedHeroes.length === 2) {
-    return (
-      <Layout title={`Debate: ${selectedHeroes[0].name} vs ${selectedHeroes[1].name}`}>
-        {/* Pass only the character IDs to the DebateInterface component */}
-        <DebateInterface character1={selectedHeroes[0].id} character2={selectedHeroes[1].id} onBack={resetSelection} />
+        {/* Hidden audio element */}
+        <audio ref={audioRef} preload="auto" className="hidden" />
       </Layout>
     )
   }
@@ -135,34 +340,30 @@ export default function Home() {
           <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-800 via-blue-800 to-indigo-800 bg-clip-text text-transparent mb-6">
             Heroes of History
           </h1>
-          <p className="text-xl text-slate-600 max-w-3xl mx-auto leading-relaxed mb-8">
-            Engage with history's greatest minds. Ask questions to learn from their wisdom, or watch them debate each
-            other on topics that shaped our world.
-          </p>
+        </div>
 
-          {/* Mode Selection */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <button
-              onClick={() => setMode("qa-select")}
-              className={`px-8 py-4 rounded-xl font-semibold transition-all ${
-                mode === "qa-select"
-                  ? "bg-blue-600 text-white shadow-lg"
-                  : "bg-white text-slate-700 border-2 border-slate-200 hover:border-blue-300"
-              }`}
-            >
-              Ask Questions to a Hero
-            </button>
-            <button
-              onClick={() => setMode("debate-select")}
-              className={`px-8 py-4 rounded-xl font-semibold transition-all ${
-                mode === "debate-select"
-                  ? "bg-purple-600 text-white shadow-lg"
-                  : "bg-white text-slate-700 border-2 border-slate-200 hover:border-purple-300"
-              }`}
-            >
-              Watch Heroes Debate
-            </button>
-          </div>
+        {/* Mode Selection */}
+        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+          <button
+            onClick={() => setMode("qa-select")}
+            className={`px-8 py-4 rounded-xl font-semibold transition-all ${
+              mode === "qa-select"
+                ? "bg-blue-600 text-white shadow-lg"
+                : "bg-white text-slate-700 border-2 border-slate-200 hover:border-blue-300"
+            }`}
+          >
+            Ask Questions to a Hero
+          </button>
+          <button
+            onClick={() => setMode("debate-select")}
+            className={`px-8 py-4 rounded-xl font-semibold transition-all ${
+              mode === "debate-select"
+                ? "bg-purple-600 text-white shadow-lg"
+                : "bg-white text-slate-700 border-2 border-slate-200 hover:border-purple-300"
+            }`}
+          >
+            Watch Heroes Debate
+          </button>
         </div>
 
         {/* Instructions */}
@@ -177,24 +378,46 @@ export default function Home() {
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-slate-800 mb-2">Select Two Heroes for a Debate</h2>
             <p className="text-slate-600">Choose exactly 2 heroes ({selectedHeroes.length}/2 selected)</p>
-            {selectedHeroes.length === 2 && (
-              <div className="mt-6">
-                <button
-                  onClick={startDebate}
-                  className="px-8 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors shadow-lg"
-                >
-                  Start Debate: {selectedHeroes[0].name} vs {selectedHeroes[1].name}
-                </button>
-                <div className="mt-4">
-                  <VoiceInput
-                    onSubmit={(topic) => {
-                      console.log(`Custom debate topic: ${topic}`)
-                      startDebate()
-                    }}
-                    buttonText="Suggest Debate Topic"
-                  />
+          </div>
+        )}
+
+        {/* Debate Topic Selection - Show when two heroes are selected */}
+        {mode === "debate-select" && selectedHeroes.length === 2 && (
+          <div className="mb-12 bg-gradient-to-br from-purple-50 to-violet-50 rounded-2xl p-8 shadow-lg">
+            <h3 className="text-2xl font-bold text-slate-800 mb-4 text-center">
+              {selectedHeroes[0].name} vs {selectedHeroes[1].name}
+            </h3>
+
+            {isGeneratingTopics ? (
+              <div className="text-center py-8">
+                <div className="inline-block animate-pulse">
+                  <span className="text-slate-500">Generating debate topics...</span>
                 </div>
               </div>
+            ) : (
+              <>
+                <div className="mb-8">
+                  <h4 className="text-xl font-semibold text-slate-800 mb-4">Choose a Debate Topic</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {generatedTopics.map((topic, index) => (
+                      <button
+                        key={index}
+                        onClick={() => startDebate(topic)}
+                        className="p-4 text-left bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-slate-200 hover:border-slate-300"
+                      >
+                        <p className="text-slate-700">{topic}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg p-6 shadow-sm">
+                  <h4 className="text-xl font-semibold text-slate-800 mb-4">Suggest Your Own Topic</h4>
+                  <div className="flex justify-center">
+                    <VoiceInput onSubmit={(topic) => startDebate(topic)} buttonText="Record Custom Topic" />
+                  </div>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -236,7 +459,7 @@ export default function Home() {
                       }`}
                     >
                       <img
-                        src={hero.image || `/placeholder.svg?height=80&width=80&query=${hero.name} historical figure`}
+                        src={hero.image || `/placeholder.svg?height=80&width=80&query=${hero.name} portrait`}
                         alt={hero.name}
                         className="w-full h-full object-cover"
                       />
