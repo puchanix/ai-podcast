@@ -66,18 +66,10 @@ export default async function handler(req, res) {
 
 // Function to generate an opening statement for a character
 async function generateOpening(persona, otherPersona, topic, format, historicalContext) {
-  // Create a system prompt that includes the character's persona and debate context
+  // Simplified system prompt
   const systemPrompt = `${persona.systemPrompt}
-You are participating in a debate with ${otherPersona.name} on the topic of "${topic}".
-Keep your opening statement concise (60-80 words) but insightful.
-${historicalContext ? `Speak from your historical perspective and knowledge.` : ""}
-${
-  format === "pointCounterpoint"
-    ? "This debate will follow a point-counterpoint format. Present your initial position clearly."
-    : format === "socratic"
-      ? "This debate will follow a Socratic dialogue format. Ask thoughtful questions and present your views."
-      : "Present your opening statement on this topic."
-}`
+You are ${persona.name} debating with ${otherPersona.name} on "${topic}".
+Keep your opening statement concise (60-80 words).`
 
   try {
     const completion = await openai.chat.completions.create({
@@ -86,11 +78,11 @@ ${
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `You are ${persona.name}. Give your opening statement on the topic: "${topic}". Keep it concise (60-80 words) but insightful.`,
+          content: `Give your opening statement on: "${topic}". Be concise.`,
         },
       ],
       temperature: 0.7,
-      max_tokens: 150, // Reduced for shorter responses
+      max_tokens: 125, // Reduced from 150 to 125
     })
 
     return completion.choices[0].message.content.trim()

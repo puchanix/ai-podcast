@@ -27,12 +27,28 @@ export function DebateHeader({
   // Track previous speaker to prevent blank state
   const [displayedSpeaker, setDisplayedSpeaker] = useState(currentSpeaker)
 
-  // Update displayed speaker only when we have a valid new speaker
+  // Track when we're transitioning between speakers
+  const [isTransitioning, setIsTransitioning] = useState(false)
+
+  // Update displayed speaker with a transition animation
   useEffect(() => {
-    if (currentSpeaker) {
-      setDisplayedSpeaker(currentSpeaker)
+    if (currentSpeaker && displayedSpeaker !== currentSpeaker) {
+      // Start transition animation
+      setIsTransitioning(true)
+
+      // After a short delay, update the displayed speaker
+      const transitionTimer = setTimeout(() => {
+        setDisplayedSpeaker(currentSpeaker)
+
+        // End transition after the speaker has changed
+        setTimeout(() => {
+          setIsTransitioning(false)
+        }, 300)
+      }, 300)
+
+      return () => clearTimeout(transitionTimer)
     }
-  }, [currentSpeaker])
+  }, [currentSpeaker, displayedSpeaker])
 
   // Get the current speaker's image and status
   const getCurrentSpeakerDisplay = () => {
@@ -179,49 +195,74 @@ export function DebateHeader({
                   </>
                 ) : (
                   <>
-                    <div
-                      className={`w-32 h-32 rounded-full overflow-hidden border-4 ${speakerDisplay.borderColor} p-2 mb-4`}
-                    >
-                      {isLoadingAudio || isPreparing ? (
-                        <div className="relative w-full h-full">
-                          <img
-                            src={speakerDisplay.speaker?.image || "/placeholder.png"}
-                            alt={speakerDisplay.speaker?.name || "Speaker"}
-                            className="w-full h-full object-cover rounded-full"
-                          />
-                          <div className="absolute inset-0 bg-gray-800 opacity-50 flex items-center justify-center rounded-full">
-                            <div className="h-8 w-8 text-yellow-400 animate-spin">
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              >
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <path d="M12 6v6l4 2"></path>
-                              </svg>
-                            </div>
+                    <div className="relative">
+                      {/* Microphone passing animation */}
+                      {isTransitioning && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center">
+                          <div className="w-10 h-10 text-yellow-400 animate-bounce">
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                              <line x1="12" y1="19" x2="12" y2="22"></line>
+                            </svg>
                           </div>
                         </div>
-                      ) : isPlaying ? (
-                        <div className="relative w-full h-full">
+                      )}
+
+                      <div
+                        className={`w-32 h-32 rounded-full overflow-hidden border-4 ${speakerDisplay.borderColor} p-2 mb-4 ${
+                          isTransitioning ? "opacity-50" : "opacity-100"
+                        } transition-opacity duration-300`}
+                      >
+                        {isLoadingAudio || isPreparing ? (
+                          <div className="relative w-full h-full">
+                            <img
+                              src={speakerDisplay.speaker?.image || "/placeholder.png"}
+                              alt={speakerDisplay.speaker?.name || "Speaker"}
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                            <div className="absolute inset-0 bg-gray-800 opacity-50 flex items-center justify-center rounded-full">
+                              <div className="h-8 w-8 text-yellow-400 animate-spin">
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <circle cx="12" cy="12" r="10"></circle>
+                                  <path d="M12 6v6l4 2"></path>
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                        ) : isPlaying ? (
+                          <div className="relative w-full h-full">
+                            <img
+                              src={speakerDisplay.speaker?.image || "/placeholder.png"}
+                              alt={speakerDisplay.speaker?.name || "Speaker"}
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse rounded-full"></div>
+                          </div>
+                        ) : (
                           <img
                             src={speakerDisplay.speaker?.image || "/placeholder.png"}
                             alt={speakerDisplay.speaker?.name || "Speaker"}
                             className="w-full h-full object-cover rounded-full"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse rounded-full"></div>
-                        </div>
-                      ) : (
-                        <img
-                          src={speakerDisplay.speaker?.image || "/placeholder.png"}
-                          alt={speakerDisplay.speaker?.name || "Speaker"}
-                          className="w-full h-full object-cover rounded-full"
-                        />
-                      )}
+                        )}
+                      </div>
                     </div>
                     <div className="text-center">
                       <h3 className="text-lg font-bold text-yellow-400 mb-1">

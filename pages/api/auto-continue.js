@@ -82,28 +82,27 @@ async function generateResponse(
   const model = "gpt-4"
 
   try {
-    // Create a system prompt that encourages concise responses
+    // Simplified system prompt
     const systemPrompt = `${persona.systemPrompt}
-You are participating in a debate with ${otherPersona.name} on the topic of "${topic}".
-Keep your response concise (60-80 words) but insightful.
-This is exchange #${exchangeCount} in the debate.
-Respond directly to the points made by ${otherPersona.name} in their last statement.`
+You are ${persona.name} debating with ${otherPersona.name} on "${topic}".
+Keep your response concise (60-80 words).
+Respond directly to the points made by ${otherPersona.name}.`
 
-    // Create a prompt from the current messages
-    let prompt = `The debate topic is: "${topic}"\n\n`
+    // Create a simplified prompt from the current messages
+    let prompt = `Topic: "${topic}"\n\n`
 
-    // Add the last few messages for context (to keep the prompt shorter)
-    const relevantMessages = currentMessages.slice(-4)
+    // Only include the last 2 messages for context
+    const relevantMessages = currentMessages.slice(-2)
     for (const msg of relevantMessages) {
       if (msg.character === "user") {
-        prompt += `Question from audience: ${msg.content}\n\n`
+        prompt += `Question: ${msg.content}\n\n`
       } else {
         const speakerName = msg.character === persona.id ? persona.name : otherPersona.name
         prompt += `${speakerName}: ${msg.content}\n\n`
       }
     }
 
-    prompt += `Now, ${persona.name}, provide your response:`
+    prompt += `Your response:`
 
     const completion = await openai.chat.completions.create({
       model,
@@ -112,7 +111,7 @@ Respond directly to the points made by ${otherPersona.name} in their last statem
         { role: "user", content: prompt },
       ],
       temperature: 0.7,
-      max_tokens: 150, // Reduced for shorter responses
+      max_tokens: 125, // Reduced from 150 to 125
     })
 
     // Ensure we have a valid response

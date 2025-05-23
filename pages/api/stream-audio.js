@@ -42,7 +42,7 @@ export default async function handler(req, res) {
       console.log(`Streaming with ElevenLabs voice: ${voice}`)
 
       try {
-        // Use the ElevenLabs API directly
+        // Use the ElevenLabs API directly with lower quality settings for faster generation
         const elevenLabsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}/stream`, {
           method: "POST",
           headers: {
@@ -52,6 +52,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             text: text,
             model_id: "eleven_monolingual_v1",
+            output_format: "mp3_44100_64", // Lower bitrate for faster generation
             voice_settings: {
               stability: 0.5,
               similarity_boost: 0.75,
@@ -88,6 +89,7 @@ export default async function handler(req, res) {
       model: "tts-1",
       voice: finalVoice,
       input: text,
+      speed: 1.1, // Slightly faster speech
     })
 
     const buffer = await mp3.arrayBuffer()
