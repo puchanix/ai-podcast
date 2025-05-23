@@ -81,30 +81,30 @@ async function generateResponse(
   // Use GPT-4 for better quality responses
   const model = "gpt-4"
 
-  // Create a system prompt that encourages concise responses
-  const systemPrompt = `${persona.systemPrompt}
+  try {
+    // Create a system prompt that encourages concise responses
+    const systemPrompt = `${persona.systemPrompt}
 You are participating in a debate with ${otherPersona.name} on the topic of "${topic}".
 Keep your response concise (100-150 words) but insightful.
 This is exchange #${exchangeCount} in the debate.
 Respond directly to the points made by ${otherPersona.name} in their last statement.`
 
-  // Create a prompt from the current messages
-  let prompt = `The debate topic is: "${topic}"\n\n`
+    // Create a prompt from the current messages
+    let prompt = `The debate topic is: "${topic}"\n\n`
 
-  // Add the last few messages for context (to keep the prompt shorter)
-  const relevantMessages = currentMessages.slice(-4)
-  for (const msg of relevantMessages) {
-    if (msg.character === "user") {
-      prompt += `Question from audience: ${msg.content}\n\n`
-    } else {
-      const speakerName = msg.character === persona.id ? persona.name : otherPersona.name
-      prompt += `${speakerName}: ${msg.content}\n\n`
+    // Add the last few messages for context (to keep the prompt shorter)
+    const relevantMessages = currentMessages.slice(-4)
+    for (const msg of relevantMessages) {
+      if (msg.character === "user") {
+        prompt += `Question from audience: ${msg.content}\n\n`
+      } else {
+        const speakerName = msg.character === persona.id ? persona.name : otherPersona.name
+        prompt += `${speakerName}: ${msg.content}\n\n`
+      }
     }
-  }
 
-  prompt += `Now, ${persona.name}, provide your response:`
+    prompt += `Now, ${persona.name}, provide your response:`
 
-  try {
     const completion = await openai.chat.completions.create({
       model,
       messages: [
@@ -115,10 +115,16 @@ Respond directly to the points made by ${otherPersona.name} in their last statem
       max_tokens: 200,
     })
 
-    return completion.choices[0].message.content.trim()
+    // Ensure we have a valid response
+    if (!completion.choices || !completion.choices[0] || !completion.choices[0].message) {
+      throw new Error("Invalid response from OpenAI API")
+    }
+
+    return completion.choices[0].message.content.trim() || "I'm sorry, I don't have a response at this time."
   } catch (error) {
     console.error("Error generating response:", error)
-    throw error
+    // Return a fallback response instead of throwing
+    return `As ${persona.name}, I would address this topic, but I'm having trouble formulating my thoughts at the moment.`
   }
 }
 

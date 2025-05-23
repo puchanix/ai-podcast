@@ -54,6 +54,9 @@ export function DebateInterface() {
   const [currentTopic, setCurrentTopic] = useState(defaultState.topic)
   const [exchangeCount, setExchangeCount] = useState(defaultState.exchangeCount)
 
+  // Add at the top of the component, right after all the state declarations
+  const [hasError, setHasError] = useState(false)
+
   // Voice state
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
@@ -1111,9 +1114,15 @@ export function DebateInterface() {
     URL.revokeObjectURL(url)
   }, [char1?.name, char2?.name, character1, character2])
 
-  // Preload the next speaker's audio
   const preloadNextAudio = useCallback(
     async (message, allMessages, nextIndex) => {
+      // Check for valid inputs
+      if (!message || !message.character || !message.content) {
+        console.error("Invalid message for preloading:", message)
+        setIsPreloadingAudio(false)
+        return
+      }
+
       const { character, content } = message
       console.log(`Preloading audio for next speaker ${character}...`)
       setIsPreloadingAudio(true)
@@ -1219,7 +1228,13 @@ export function DebateInterface() {
 
         // Preload the next speaker's audio if available
         const nextIndex = currentIndex + 1
-        if (nextIndex < allMessages.length && allMessages[nextIndex].character !== "user") {
+        if (
+          nextIndex < allMessages.length &&
+          allMessages[nextIndex] &&
+          allMessages[nextIndex].character !== "user" &&
+          allMessages[nextIndex].character &&
+          allMessages[nextIndex].content
+        ) {
           preloadNextAudio(allMessages[nextIndex], allMessages, nextIndex)
         }
 
@@ -1236,7 +1251,11 @@ export function DebateInterface() {
 
           // Start preparing the next exchange earlier - at 1/3 through this audio
           if (character !== "moderator" && !isPreparing) {
-            const preparePoint = Math.max(2000, (audio.duration * 1000) / 3)
+            // Make sure audio.duration is a valid number before using it
+            const audioDuration = audio.duration || 0
+            const preparePoint =
+              audioDuration && isFinite(audioDuration) ? Math.max(2000, (audioDuration * 1000) / 3) : 2000 // Default to 2 seconds if duration is invalid
+
             console.log(`Scheduling next exchange preparation in ${preparePoint}ms`)
 
             prepareNextTimeoutRef.current = setTimeout(() => {
@@ -1418,132 +1437,190 @@ export function DebateInterface() {
     flexDirection: "column",
   }
 
-  return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white" style={containerStyle}>
-      <DebateHeader
-        character1={character1}
-        character2={character2}
-        currentSpeaker={currentSpeaker}
-        isPlaying={isPlaying}
-        isLoadingAudio={isLoadingAudio}
-        isPreparing={isPreparing}
-        isIntroPlaying={isIntroPlaying}
-        debateMessages={debateMessages}
-        currentTopic={currentTopic}
-        speakerStatus={isLoadingAudio ? "thinking" : isPreparing ? "preparing" : isPlaying ? "speaking" : null}
-        isAutoplaying={isAutoplaying}
-        onToggleAutoplay={toggleAutoplay}
-        onCharacter1Change={handleCharacter1Change}
-        onCharacter2Change={handleCharacter2Change}
-      />
+  // Add this useEffect to catch and recover from errors
+  useEffect(() => {
+    if (hasError) {
+      // Try to recover from error
+      const recoverFromError = async () => {
+        try {
+          // Stop any playing audio
+          if (currentAudioRef.current) {
+            currentAudioRef.current.pause()
+            currentAudioRef.current = null
+          }
 
-      <div style={mainContentStyle}>
-        {isLoadingVoices && (
-          <div className="mb-4 p-4 bg-yellow-800 text-yellow-100 rounded-lg text-center">
-            <div className="inline-block animate-spin h-5 w-5 border-2 border-yellow-500 border-t-transparent rounded-full mr-2"></div>
-            Loading voice data... Please wait.
+          // Clear any timeouts
+          if (prepareNextTimeoutRef.current) {
+            clearTimeout(prepareNextTimeoutRef.current)
+            prepareNextTimeoutRef.current = null
+          }
+
+          // Reset error state
+          setHasError(false)
+          setAudioError("An error occurred. The application has recovered.")
+        } catch (e) {
+          console.error("Failed to recover from error:", e)
+        }
+      }
+
+      recoverFromError()
+    }
+  }, [hasError])
+
+  // Add a try-catch block around the return statement
+  try {
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white" style={containerStyle}>
+        <DebateHeader
+          character1={character1}
+          character2={character2}
+          currentSpeaker={currentSpeaker}
+          isPlaying={isPlaying}
+          isLoadingAudio={isLoadingAudio}
+          isPreparing={isPreparing}
+          isIntroPlaying={isIntroPlaying}
+          debateMessages={debateMessages}
+          currentTopic={currentTopic}
+          speakerStatus={isLoadingAudio ? "thinking" : isPreparing ? "preparing" : isPlaying ? "speaking" : null}
+          isAutoplaying={isAutoplaying}
+          onToggleAutoplay={toggleAutoplay}
+          onCharacter1Change={handleCharacter1Change}
+          onCharacter2Change={handleCharacter2Change}
+        />
+
+        <div style={mainContentStyle}>
+          {isLoadingVoices && (
+            <div className="mb-4 p-4 bg-yellow-800 text-yellow-100 rounded-lg text-center">
+              <div className="inline-block animate-spin h-5 w-5 border-2 border-yellow-500 border-t-transparent rounded-full mr-2"></div>
+              Loading voice data... Please wait.
+            </div>
+          )}
+
+          {/* Display any errors */}
+          {audioError && (
+            <div className="mb-4 p-4 bg-red-900 text-red-100 rounded-lg">
+              <p className="font-bold">Error:</p>
+              <p>{audioError}</p>
+              {retryCount > 0 && retryCount < 3 && <p className="mt-2">Retrying automatically ({retryCount}/3)...</p>}
+            </div>
+          )}
+
+          {/* Topic Selector - Only show when not debating and not playing intro */}
+          {!isDebating && !isIntroPlaying && (
+            <div className="mb-8">
+              <EmbeddedTopicSelector onSelectTopic={startDebate} character1={character1} character2={character2} />
+            </div>
+          )}
+
+          {/* Voice Input for Custom Questions */}
+          {isDebating && (
+            <div className="mb-8 flex justify-center">
+              <VoiceInput onSubmit={submitCustomQuestion} buttonText="Ask Custom Question" />
+            </div>
+          )}
+
+          {/* Return to Home button */}
+          <div className="mt-auto mb-4 text-center">
+            <a href="/" className="inline-block bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-full">
+              Return to Home
+            </a>
+          </div>
+        </div>
+
+        {debugMode && (
+          <div className="mt-8 p-4 bg-gray-800 border border-gray-700 rounded-lg">
+            <h3 className="text-lg font-bold mb-2">Debug Panel</h3>
+
+            <div className="mb-4">
+              <p>Voice IDs Ready: {!isLoadingVoices ? "Yes" : "No"}</p>
+              <p>Current Speaker: {currentSpeaker || "None"}</p>
+              <p>Next Speaker: {nextSpeaker || "None"}</p>
+              <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
+              <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
+              <p>Audio Loaded: {isAudioLoaded ? "Yes" : "No"}</p>
+              <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
+              <p>Is Unlocking Audio: {isUnlockingAudio ? "Yes" : "No"}</p>
+              <p>Is Initializing: {isInitializing ? "Yes" : "No"}</p>
+              <p>Exchange Count: {exchangeCount}</p>
+              <p>Max Exchanges: {maxExchanges}</p>
+              <p>Is Autoplaying: {isAutoplaying ? "Yes" : "No"}</p>
+              <p>Is Preparing Next: {isPreparing ? "Yes" : "No"}</p>
+              <p>Has Introduction: {hasIntroduction ? "Yes" : "No"}</p>
+              <p>Retry Count: {retryCount}/3</p>
+              <p>Current Topic (state): "{currentTopic}"</p>
+              <p>Current Topic (ref): "{topicRef.current}"</p>
+              <p>Is Debating (state): {isDebating ? "Yes" : "No"}</p>
+              <p>Is Debating (ref): {isDebatingRef.current ? "Yes" : "No"}</p>
+              <p>Debate Messages Count (state): {debateMessages.length}</p>
+              <p>Debate Messages Count (ref): {debateMessagesRef.current.length}</p>
+              {lastError && <p>Last Error: {lastError}</p>}
+            </div>
+
+            <div className="mb-4">
+              <button
+                onClick={() => {
+                  console.log("Clearing localStorage and resetting state")
+                  clearDebateState()
+                  resetDebateState()
+                }}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+              >
+                Clear Storage & Reset
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Display any errors */}
-        {audioError && (
-          <div className="mb-4 p-4 bg-red-900 text-red-100 rounded-lg">
-            <p className="font-bold">Error:</p>
-            <p>{audioError}</p>
-            {retryCount > 0 && retryCount < 3 && <p className="mt-2">Retrying automatically ({retryCount}/3)...</p>}
-          </div>
-        )}
+        {/* Add a debug mode toggle button */}
+        <div className="mt-4 text-center">
+          <button onClick={() => setDebugMode(!debugMode)} className="text-sm text-gray-500 hover:text-gray-300">
+            {debugMode ? "Hide Debug Panel" : "Show Debug Panel"}
+          </button>
+        </div>
 
-        {/* Topic Selector - Only show when not debating and not playing intro */}
-        {!isDebating && !isIntroPlaying && (
-          <div className="mb-8">
-            <EmbeddedTopicSelector onSelectTopic={startDebate} character1={character1} character2={character2} />
-          </div>
-        )}
+        {/* Audio elements - hidden by default, visible in debug mode */}
+        <audio ref={silentAudioRef} preload="auto" className="hidden" />
+        <audio ref={introAudioRef} preload="auto" className="hidden" />
+        <audio ref={char1AudioRef} preload="auto" className="hidden" />
+        <audio ref={char2AudioRef} preload="auto" className="hidden" />
 
-        {/* Voice Input for Custom Questions */}
-        {isDebating && (
-          <div className="mb-8 flex justify-center">
-            <VoiceInput onSubmit={submitCustomQuestion} buttonText="Ask Custom Question" />
-          </div>
-        )}
+        <style jsx global>{`
+          @keyframes soundwave {
+            0%,
+            100% {
+              height: 4px;
+            }
+            50% {
+              height: 16px;
+            }
+          }
+        `}</style>
+      </div>
+    )
+  } catch (error) {
+    console.error("Render error:", error)
+    setHasError(true)
 
-        {/* Return to Home button */}
-        <div className="mt-auto mb-4 text-center">
+    // Fallback UI
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-6xl bg-gray-900 text-white">
+        <h1 className="text-3xl font-bold text-center mb-4 text-yellow-400">Historical Debates</h1>
+        <div className="bg-red-900 text-white p-4 rounded-lg mb-4">
+          <p className="font-bold">An error occurred</p>
+          <p>Please refresh the page to continue.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-2 bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded"
+          >
+            Refresh Page
+          </button>
+        </div>
+        <div className="text-center">
           <a href="/" className="inline-block bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-full">
             Return to Home
           </a>
         </div>
       </div>
-
-      {debugMode && (
-        <div className="mt-8 p-4 bg-gray-800 border border-gray-700 rounded-lg">
-          <h3 className="text-lg font-bold mb-2">Debug Panel</h3>
-
-          <div className="mb-4">
-            <p>Voice IDs Ready: {!isLoadingVoices ? "Yes" : "No"}</p>
-            <p>Current Speaker: {currentSpeaker || "None"}</p>
-            <p>Next Speaker: {nextSpeaker || "None"}</p>
-            <p>Is Playing: {isPlaying ? "Yes" : "No"}</p>
-            <p>Is Loading: {isLoadingAudio ? "Yes" : "No"}</p>
-            <p>Audio Loaded: {isAudioLoaded ? "Yes" : "No"}</p>
-            <p>Audio Initialized: {audioInitialized ? "Yes" : "No"}</p>
-            <p>Is Unlocking Audio: {isUnlockingAudio ? "Yes" : "No"}</p>
-            <p>Is Initializing: {isInitializing ? "Yes" : "No"}</p>
-            <p>Exchange Count: {exchangeCount}</p>
-            <p>Max Exchanges: {maxExchanges}</p>
-            <p>Is Autoplaying: {isAutoplaying ? "Yes" : "No"}</p>
-            <p>Is Preparing Next: {isPreparing ? "Yes" : "No"}</p>
-            <p>Has Introduction: {hasIntroduction ? "Yes" : "No"}</p>
-            <p>Retry Count: {retryCount}/3</p>
-            <p>Current Topic (state): "{currentTopic}"</p>
-            <p>Current Topic (ref): "{topicRef.current}"</p>
-            <p>Is Debating (state): {isDebating ? "Yes" : "No"}</p>
-            <p>Is Debating (ref): {isDebatingRef.current ? "Yes" : "No"}</p>
-            <p>Debate Messages Count (state): {debateMessages.length}</p>
-            <p>Debate Messages Count (ref): {debateMessagesRef.current.length}</p>
-            {lastError && <p>Last Error: {lastError}</p>}
-          </div>
-
-          <div className="mb-4">
-            <button
-              onClick={() => {
-                console.log("Clearing localStorage and resetting state")
-                clearDebateState()
-                resetDebateState()
-              }}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
-            >
-              Clear Storage & Reset
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Add a debug mode toggle button */}
-      <div className="mt-4 text-center">
-        <button onClick={() => setDebugMode(!debugMode)} className="text-sm text-gray-500 hover:text-gray-300">
-          {debugMode ? "Hide Debug Panel" : "Show Debug Panel"}
-        </button>
-      </div>
-
-      {/* Audio elements - hidden by default, visible in debug mode */}
-      <audio ref={silentAudioRef} preload="auto" className="hidden" />
-      <audio ref={introAudioRef} preload="auto" className="hidden" />
-      <audio ref={char1AudioRef} preload="auto" className="hidden" />
-      <audio ref={char2AudioRef} preload="auto" className="hidden" />
-
-      <style jsx global>{`
-        @keyframes soundwave {
-          0%,
-          100% {
-            height: 4px;
-          }
-          50% {
-            height: 16px;
-          }
-        }
-      `}</style>
-    </div>
-  )
+    )
+  }
 }
