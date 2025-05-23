@@ -102,7 +102,7 @@ export function DebateInterface() {
   const [isIntroPlaying, setIsIntroPlaying] = useState(false)
   const [characterSpecificTopics, setCharacterSpecificTopics] = useState([])
   const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
-  const [isPreparing, setIsPreparing] = useState(false)
+  const [isPreparing, setIsPreparing] = useState(isDebating ? true : false)
   const [statusMessage, setStatusMessage] = useState("")
   const [isSettingUp, setIsSettingUp] = useState(false)
 
@@ -433,6 +433,23 @@ export function DebateInterface() {
       console.log("debateMessages updated, length:", debateMessages.length)
     }
   }, [debateMessages])
+
+  // Handle initial topic from URL params or props
+  useEffect(() => {
+    if (isBrowser && initialStateLoaded) {
+      // Check if there's a topic in URL params
+      const urlParams = new URLSearchParams(window.location.search)
+      const topicFromUrl = urlParams.get("topic")
+
+      if (topicFromUrl && !currentTopic) {
+        setCurrentTopic(topicFromUrl)
+        // Auto-start debate with the topic
+        setTimeout(() => {
+          startDebateMain(topicFromUrl)
+        }, 1000)
+      }
+    }
+  }, [initialStateLoaded, currentTopic])
 
   // Get the appropriate voice for a character
   const getVoiceForCharacter = useCallback(
@@ -1520,12 +1537,19 @@ export function DebateInterface() {
             </div>
           )}
 
-          {/* Setup animation */}
-          {isSettingUp && (
+          {/* Setup animation with dynamic status */}
+          {(isSettingUp || isPreparing) && (
             <div className="flex justify-center items-center mb-8">
               <div className="text-center">
                 <div className="inline-block animate-spin h-10 w-10 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
-                <p className="text-yellow-400 text-lg">Setting up the debate...</p>
+                <p className="text-yellow-400 text-lg">
+                  {isSettingUp
+                    ? "Setting up the debate..."
+                    : isPreparing
+                      ? "Preparing next response..."
+                      : "Processing..."}
+                </p>
+                {statusMessage && <p className="text-yellow-300 text-sm mt-2">{statusMessage}</p>}
               </div>
             </div>
           )}
