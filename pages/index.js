@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Layout from "../components/layout"
 import DebateInterface from "../components/debate-interface"
+import { VoiceInput } from "../components/voice-input"
 import { personas } from "../lib/personas"
 
 export default function Home() {
@@ -45,6 +46,13 @@ export default function Home() {
     setSelectedHeroes([])
   }
 
+  // Handle question submission
+  const handleQuestionSubmit = (question) => {
+    console.log(`Question for ${selectedHero.name}: ${question}`)
+    // Here you would implement the logic to process the question
+    // and get a response from the selected character
+  }
+
   // If in Q&A mode with a selected hero
   if (mode === "qa" && selectedHero) {
     return (
@@ -67,7 +75,7 @@ export default function Home() {
             <div className="flex flex-col md:flex-row items-center mb-8">
               <div className="w-32 h-32 rounded-full overflow-hidden mb-4 md:mb-0 md:mr-6 shadow-lg">
                 <img
-                  src={selectedHero.image || "/placeholder.svg?height=128&width=128"}
+                  src={selectedHero.image || "/placeholder.svg?height=128&width=128&query=historical figure portrait"}
                   alt={selectedHero.name}
                   className="w-full h-full object-cover"
                 />
@@ -98,28 +106,8 @@ export default function Home() {
             {/* Voice Input Section */}
             <div className="bg-white rounded-lg p-6 shadow-sm">
               <h3 className="text-xl font-semibold text-slate-800 mb-4">Ask Your Own Question</h3>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <input
-                  type="text"
-                  placeholder="Type your question here..."
-                  className="flex-1 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <button className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                  Ask Question
-                </button>
-              </div>
-              <div className="mt-4 text-center">
-                <button className="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                    />
-                  </svg>
-                  Record Voice Question
-                </button>
+              <div className="flex justify-center">
+                <VoiceInput onSubmit={handleQuestionSubmit} buttonText={`Ask ${selectedHero.name}`} />
               </div>
             </div>
           </div>
@@ -132,6 +120,7 @@ export default function Home() {
   if (mode === "debate" && selectedHeroes.length === 2) {
     return (
       <Layout title={`Debate: ${selectedHeroes[0].name} vs ${selectedHeroes[1].name}`}>
+        {/* Pass only the character IDs to the DebateInterface component */}
         <DebateInterface character1={selectedHeroes[0].id} character2={selectedHeroes[1].id} onBack={resetSelection} />
       </Layout>
     )
@@ -189,79 +178,91 @@ export default function Home() {
             <h2 className="text-2xl font-bold text-slate-800 mb-2">Select Two Heroes for a Debate</h2>
             <p className="text-slate-600">Choose exactly 2 heroes ({selectedHeroes.length}/2 selected)</p>
             {selectedHeroes.length === 2 && (
-              <button
-                onClick={startDebate}
-                className="mt-4 px-8 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors shadow-lg"
-              >
-                Start Debate: {selectedHeroes[0].name} vs {selectedHeroes[1].name}
-              </button>
+              <div className="mt-6">
+                <button
+                  onClick={startDebate}
+                  className="px-8 py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors shadow-lg"
+                >
+                  Start Debate: {selectedHeroes[0].name} vs {selectedHeroes[1].name}
+                </button>
+                <div className="mt-4">
+                  <VoiceInput
+                    onSubmit={(topic) => {
+                      console.log(`Custom debate topic: ${topic}`)
+                      startDebate()
+                    }}
+                    buttonText="Suggest Debate Topic"
+                  />
+                </div>
+              </div>
             )}
           </div>
         )}
 
-        {/* Heroes Grid */}
-        {(mode === "qa-select" || mode === "debate-select") && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {heroesArray.map((hero) => {
-              const isSelected = mode === "debate-select" && selectedHeroes.find((h) => h.id === hero.id)
-              const isDisabled = mode === "debate-select" && selectedHeroes.length >= 2 && !isSelected
+        {/* Heroes Grid - Always show this */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {heroesArray.map((hero) => {
+            const isSelected = mode === "debate-select" && selectedHeroes.find((h) => h.id === hero.id)
+            const isDisabled = mode === "debate-select" && selectedHeroes.length >= 2 && !isSelected
 
-              return (
+            return (
+              <div
+                key={hero.id}
+                onClick={() => {
+                  if (isDisabled) return
+                  if (mode === "qa-select") {
+                    handleHeroSelect(hero)
+                  } else if (mode === "debate-select") {
+                    handleDebateHeroSelect(hero)
+                  } else {
+                    // If no mode is selected, default to Q&A
+                    handleHeroSelect(hero)
+                  }
+                }}
+                className={`group cursor-pointer transform transition-all duration-300 ${
+                  isDisabled ? "opacity-50 cursor-not-allowed" : "hover:scale-105"
+                }`}
+              >
                 <div
-                  key={hero.id}
-                  onClick={() => {
-                    if (isDisabled) return
-                    if (mode === "qa-select") {
-                      handleHeroSelect(hero)
-                    } else {
-                      handleDebateHeroSelect(hero)
-                    }
-                  }}
-                  className={`group cursor-pointer transform transition-all duration-300 ${
-                    isDisabled ? "opacity-50 cursor-not-allowed" : "hover:scale-105"
+                  className={`bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 border-2 ${
+                    isSelected ? "border-purple-500 bg-gradient-to-br from-purple-50 to-purple-100" : "border-white/50"
                   }`}
                 >
-                  <div
-                    className={`bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 border-2 ${
-                      isSelected
-                        ? "border-purple-500 bg-gradient-to-br from-purple-50 to-purple-100"
-                        : "border-white/50"
-                    }`}
-                  >
-                    {/* Avatar */}
-                    <div className="flex justify-center mb-4">
-                      <div
-                        className={`w-20 h-20 rounded-full overflow-hidden shadow-lg border-4 ${
-                          isSelected ? "border-purple-500" : "border-white"
-                        }`}
-                      >
-                        <img
-                          src={hero.image || "/placeholder.svg?height=80&width=80"}
-                          alt={hero.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
+                  {/* Avatar */}
+                  <div className="flex justify-center mb-4">
+                    <div
+                      className={`w-20 h-20 rounded-full overflow-hidden shadow-lg border-4 ${
+                        isSelected ? "border-purple-500" : "border-white"
+                      }`}
+                    >
+                      <img
+                        src={hero.image || `/placeholder.svg?height=80&width=80&query=${hero.name} historical figure`}
+                        alt={hero.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
+                  </div>
 
-                    {/* Content */}
-                    <div className="text-center">
-                      <h3 className="text-lg font-bold text-slate-800 mb-2 group-hover:text-slate-900 transition-colors">
-                        {hero.name}
-                      </h3>
+                  {/* Content */}
+                  <div className="text-center">
+                    <h3 className="text-lg font-bold text-slate-800 mb-2 group-hover:text-slate-900 transition-colors">
+                      {hero.name}
+                    </h3>
 
-                      {/* Selection indicator for debate mode */}
-                      {mode === "debate-select" && isSelected && (
-                        <div className="mb-2">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                            Selected
-                          </span>
-                        </div>
-                      )}
+                    {/* Selection indicator for debate mode */}
+                    {mode === "debate-select" && isSelected && (
+                      <div className="mb-2">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                          Selected
+                        </span>
+                      </div>
+                    )}
 
-                      {/* Action button */}
+                    {/* Action button - only show if a mode is selected */}
+                    {mode && (
                       <div
                         className={`inline-flex items-center px-4 py-2 rounded-lg font-semibold shadow-sm transition-all duration-300 ${
-                          mode === "qa-select"
+                          mode === "qa-select" || !mode
                             ? "bg-blue-600 text-white group-hover:bg-blue-700"
                             : isSelected
                               ? "bg-purple-600 text-white"
@@ -269,9 +270,13 @@ export default function Home() {
                         }`}
                       >
                         <span>
-                          {mode === "qa-select" ? "Ask Questions" : isSelected ? "Selected" : "Select for Debate"}
+                          {mode === "qa-select" || !mode
+                            ? "Ask Questions"
+                            : isSelected
+                              ? "Selected"
+                              : "Select for Debate"}
                         </span>
-                        {mode === "qa-select" && (
+                        {(mode === "qa-select" || !mode) && (
                           <svg
                             className="ml-2 w-4 h-4 transform group-hover:translate-x-1 transition-transform"
                             fill="none"
@@ -282,13 +287,13 @@ export default function Home() {
                           </svg>
                         )}
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        )}
+              </div>
+            )
+          })}
+        </div>
 
         {/* Features Section - only show when no mode is selected */}
         {!mode && (
