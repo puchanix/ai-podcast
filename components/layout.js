@@ -1,48 +1,93 @@
-import Head from "next/head"
+"use client"
 
-export default function Layout({ children, title = "Heroes of History" }) {
+import { useState } from "react"
+
+export default function Layout({ children }) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+
   return (
-    <>
-      <Head>
-        <title>{title}</title>
-        <meta name="description" content="Engage in debates with historical figures" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <header className="bg-white/80 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-lg">H</span>
-                </div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                  Heroes of History
-                </h1>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <header className="bg-white shadow">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex">
+              <div className="flex-shrink-0 flex items-center">
+                <a href="/">
+                  <span className="font-bold text-slate-900">My App</span>
+                </a>
               </div>
-              <nav className="hidden md:flex space-x-6">
-                <a href="/" className="text-slate-600 hover:text-slate-900 transition-colors font-medium">
+            </div>
+            <div className="hidden md:flex items-center">
+              <nav className="hidden md:flex space-x-8">
+                <a href="/" className="text-slate-600 hover:text-slate-900 transition-colors">
                   Home
                 </a>
-                <a href="#about" className="text-slate-600 hover:text-slate-900 transition-colors font-medium">
+                <a href="/about" className="text-slate-600 hover:text-slate-900 transition-colors">
                   About
+                </a>
+                <a href="/feedback" className="text-slate-600 hover:text-slate-900 transition-colors">
+                  Feedback
                 </a>
               </nav>
             </div>
-          </div>
-        </header>
-
-        <main className="flex-1">{children}</main>
-
-        <footer className="bg-white/60 backdrop-blur-sm border-t border-slate-200 mt-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="text-center text-slate-600">
-              <p className="text-sm">© 2024 Heroes of History. Engage with the greatest minds in human history.</p>
+            <div className="-mr-2 flex items-center md:hidden">
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                type="button"
+                className="bg-white inline-flex items-center justify-center p-2 rounded-md text-slate-400 hover:text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                aria-controls="mobile-menu"
+                aria-expanded="false"
+              >
+                <span className="sr-only">Open main menu</span>
+                <svg
+                  className={`${isMenuOpen ? "hidden" : "block"} h-6 w-6`}
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                <svg
+                  className={`${isMenuOpen ? "block" : "hidden"} h-6 w-6`}
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           </div>
-        </footer>
-      </div>
-    </>
+        </div>
+
+        <div className={`${isMenuOpen ? "block" : "hidden"} md:hidden`} id="mobile-menu">
+          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+            <a href="/" className="block px-3 py-2 text-slate-600 hover:text-slate-900 transition-colors">
+              Home
+            </a>
+            <a href="/about" className="block px-3 py-2 text-slate-600 hover:text-slate-900 transition-colors">
+              About
+            </a>
+            <a href="/feedback" className="block px-3 py-2 text-slate-600 hover:text-slate-900 transition-colors">
+              Feedback
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-grow">
+        <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">{children}</div>
+      </main>
+
+      <footer className="bg-white shadow mt-8">
+        <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 text-center text-slate-500">
+          &copy; {new Date().getFullYear()} My App. All rights reserved.
+        </div>
+      </footer>
+    </div>
   )
 }
