@@ -19,8 +19,6 @@ export function DebateHeader({
   onToggleAutoplay,
   onCharacter1Change,
   onCharacter2Change,
-  onFinishDebate,
-  onDownloadTranscript,
 }) {
   // Get character objects
   const char1 = personas[character1]
@@ -54,6 +52,14 @@ export function DebateHeader({
 
   // Get the current speaker's image and status
   const getCurrentSpeakerDisplay = () => {
+    if (isIntroPlaying) {
+      return {
+        type: "introduction",
+        speaker: null,
+        borderColor: "border-yellow-500",
+      }
+    }
+
     if (!displayedSpeaker) return null
 
     const speaker = displayedSpeaker === character1 ? char1 : char2
@@ -69,8 +75,8 @@ export function DebateHeader({
 
   const speakerDisplay = getCurrentSpeakerDisplay()
 
-  // Only show speaker display if there's actually a speaker
-  const shouldShowSpeakerDisplay = Boolean(speakerDisplay) && Boolean(displayedSpeaker)
+  // Only show speaker display if there's actually a speaker or intro playing
+  const shouldShowSpeakerDisplay = Boolean(speakerDisplay) && (Boolean(displayedSpeaker) || isIntroPlaying)
 
   // Determine the actual speaker status
   const actualSpeakerStatus = isLoadingAudio ? "thinking" : isPreparing ? "preparing" : isPlaying ? "speaking" : null
@@ -81,7 +87,7 @@ export function DebateHeader({
         <h1 className="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-400">Historical Debates</h1>
 
         {/* Display current topic during debate */}
-        {currentTopic && (isPlaying || isLoadingAudio || isPreparing || isDebating) && (
+        {currentTopic && (isIntroPlaying || isPlaying || isLoadingAudio || isPreparing || isDebating) && (
           <div className="mt-2 md:mt-0 text-center md:text-right">
             <h2 className="text-xl font-semibold text-yellow-400">Topic: {currentTopic}</h2>
           </div>
@@ -151,42 +157,49 @@ export function DebateHeader({
           <div className="flex flex-col items-center" style={{ minHeight: "180px", width: "250px" }}>
             {speakerDisplay ? (
               <div className="flex flex-col items-center">
-                <div className="relative">
-                  {/* Microphone passing animation */}
-                  {isTransitioning && (
-                    <div className="absolute inset-0 z-10 flex items-center justify-center">
-                      <div className="w-10 h-10 text-yellow-400 animate-bounce">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
-                          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                          <line x1="12" y1="19" x2="12" y2="22"></line>
-                        </svg>
+                {speakerDisplay.type === "introduction" ? (
+                  <>
+                    <div className="w-32 h-32 relative mb-4">
+                      {/* Left half circle (Character 1) */}
+                      <div className="absolute top-0 left-0 w-16 h-32 overflow-hidden border-4 border-yellow-500 rounded-l-full">
+                        <div className="w-32 h-32 absolute top-0 left-0">
+                          <img
+                            src={char1?.image || "/placeholder.png"}
+                            alt={char1?.name || "Character 1"}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
 
-                  <div
-                    className={`w-32 h-32 rounded-full overflow-hidden border-4 ${speakerDisplay.borderColor} p-2 mb-4 ${
-                      isTransitioning ? "opacity-50" : "opacity-100"
-                    } transition-opacity duration-300`}
-                  >
-                    {isLoadingAudio || isPreparing ? (
-                      <div className="relative w-full h-full">
-                        <img
-                          src={speakerDisplay.speaker?.image || "/placeholder.png"}
-                          alt={speakerDisplay.speaker?.name || "Speaker"}
-                          className="w-full h-full object-cover rounded-full"
-                        />
-                        <div className="absolute inset-0 bg-gray-800 opacity-50 flex items-center justify-center rounded-full">
-                          <div className="h-8 w-8 text-yellow-400 animate-spin">
+                      {/* Right half circle (Character 2) */}
+                      <div className="absolute top-0 right-0 w-16 h-32 overflow-hidden border-4 border-yellow-500 rounded-r-full">
+                        <div className="w-32 h-32 absolute top-0 right-0">
+                          <img
+                            src={char2?.image || "/placeholder.png"}
+                            alt={char2?.name || "Character 2"}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Overlay with pulsing effect */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/30 to-red-500/30 rounded-full animate-pulse"></div>
+                    </div>
+                    <div className="text-center">
+                      <h3 className="text-lg font-bold text-yellow-400 mb-1">Setting the stage...</h3>
+                      <p className="text-sm text-gray-300">
+                        Introducing the debate between {char1?.name} and {char2?.name}
+                      </p>
+                      {currentTopic && <p className="text-xs text-gray-400 mt-1">Topic: {currentTopic}</p>}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="relative">
+                      {/* Microphone passing animation */}
+                      {isTransitioning && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center">
+                          <div className="w-10 h-10 text-yellow-400 animate-bounce">
                             <svg
                               xmlns="http://www.w3.org/2000/svg"
                               viewBox="0 0 24 24"
@@ -196,63 +209,96 @@ export function DebateHeader({
                               strokeLinecap="round"
                               strokeLinejoin="round"
                             >
-                              <circle cx="12" cy="12" r="10"></circle>
-                              <path d="M12 6v6l4 2"></path>
+                              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                              <line x1="12" y1="19" x2="12" y2="22"></line>
                             </svg>
                           </div>
                         </div>
+                      )}
+
+                      <div
+                        className={`w-32 h-32 rounded-full overflow-hidden border-4 ${speakerDisplay.borderColor} p-2 mb-4 ${
+                          isTransitioning ? "opacity-50" : "opacity-100"
+                        } transition-opacity duration-300`}
+                      >
+                        {isLoadingAudio || isPreparing ? (
+                          <div className="relative w-full h-full">
+                            <img
+                              src={speakerDisplay.speaker?.image || "/placeholder.png"}
+                              alt={speakerDisplay.speaker?.name || "Speaker"}
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                            <div className="absolute inset-0 bg-gray-800 opacity-50 flex items-center justify-center rounded-full">
+                              <div className="h-8 w-8 text-yellow-400 animate-spin">
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <circle cx="12" cy="12" r="10"></circle>
+                                  <path d="M12 6v6l4 2"></path>
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
+                        ) : isPlaying ? (
+                          <div className="relative w-full h-full">
+                            <img
+                              src={speakerDisplay.speaker?.image || "/placeholder.png"}
+                              alt={speakerDisplay.speaker?.name || "Speaker"}
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse rounded-full"></div>
+                          </div>
+                        ) : (
+                          <img
+                            src={speakerDisplay.speaker?.image || "/placeholder.png"}
+                            alt={speakerDisplay.speaker?.name || "Speaker"}
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        )}
                       </div>
-                    ) : isPlaying ? (
-                      <div className="relative w-full h-full">
-                        <img
-                          src={speakerDisplay.speaker?.image || "/placeholder.png"}
-                          alt={speakerDisplay.speaker?.name || "Speaker"}
-                          className="w-full h-full object-cover rounded-full"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse rounded-full"></div>
+                    </div>
+                    <div className="text-center">
+                      <h3 className="text-lg font-bold text-yellow-400 mb-1">
+                        {actualSpeakerStatus === "thinking"
+                          ? `${speakerDisplay.speaker?.name} is thinking...`
+                          : actualSpeakerStatus === "preparing"
+                            ? `${speakerDisplay.speaker?.name} is preparing...`
+                            : actualSpeakerStatus === "speaking"
+                              ? `${speakerDisplay.speaker?.name} is speaking...`
+                              : speakerDisplay.speaker?.name}
+                      </h3>
+                      {(() => {
+                        // Find the most recent message for the current speaker
+                        const speakerMessages = debateMessages.filter((m) => m.character === displayedSpeaker)
+                        const latestMessage = speakerMessages[speakerMessages.length - 1]
+                        return (
+                          latestMessage?.responseType && (
+                            <p className="text-sm text-gray-400 mb-2">{latestMessage.responseType}</p>
+                          )
+                        )
+                      })()}
+                      {/* Fixed height container for sound wave animation */}
+                      <div className="h-6 flex justify-center items-center">
+                        {isPlaying && (
+                          <div className="flex space-x-1">
+                            <div className="w-1 h-4 bg-blue-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
+                            <div className="w-1 h-6 bg-yellow-500 rounded-full animate-[soundwave_0.7s_ease-in-out_infinite_0.1s]"></div>
+                            <div className="w-1 h-3 bg-green-500 rounded-full animate-[soundwave_0.4s_ease-in-out_infinite_0.2s]"></div>
+                            <div className="w-1 h-5 bg-red-500 rounded-full animate-[soundwave_0.6s_ease-in-out_infinite_0.3s]"></div>
+                            <div className="w-1 h-2 bg-purple-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite_0.4s]"></div>
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <img
-                        src={speakerDisplay.speaker?.image || "/placeholder.png"}
-                        alt={speakerDisplay.speaker?.name || "Speaker"}
-                        className="w-full h-full object-cover rounded-full"
-                      />
-                    )}
-                  </div>
-                </div>
-                <div className="text-center">
-                  <h3 className="text-lg font-bold text-yellow-400 mb-1">
-                    {actualSpeakerStatus === "thinking"
-                      ? `${speakerDisplay.speaker?.name} is thinking...`
-                      : actualSpeakerStatus === "preparing"
-                        ? `${speakerDisplay.speaker?.name} is preparing...`
-                        : actualSpeakerStatus === "speaking"
-                          ? `${speakerDisplay.speaker?.name} is speaking...`
-                          : speakerDisplay.speaker?.name}
-                  </h3>
-                  {(() => {
-                    // Find the most recent message for the current speaker
-                    const speakerMessages = debateMessages.filter((m) => m.character === displayedSpeaker)
-                    const latestMessage = speakerMessages[speakerMessages.length - 1]
-                    return (
-                      latestMessage?.responseType && (
-                        <p className="text-sm text-gray-400 mb-2">{latestMessage.responseType}</p>
-                      )
-                    )
-                  })()}
-                  {/* Fixed height container for sound wave animation */}
-                  <div className="h-6 flex justify-center items-center">
-                    {isPlaying && (
-                      <div className="flex space-x-1">
-                        <div className="w-1 h-4 bg-blue-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
-                        <div className="w-1 h-6 bg-yellow-500 rounded-full animate-[soundwave_0.7s_ease-in-out_infinite_0.1s]"></div>
-                        <div className="w-1 h-3 bg-green-500 rounded-full animate-[soundwave_0.4s_ease-in-out_infinite_0.2s]"></div>
-                        <div className="w-1 h-5 bg-red-500 rounded-full animate-[soundwave_0.6s_ease-in-out_infinite_0.3s]"></div>
-                        <div className="w-1 h-2 bg-purple-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite_0.4s]"></div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Pause/Resume button - always visible during intro or debate */}
                 <button
@@ -261,26 +307,6 @@ export function DebateHeader({
                 >
                   {isAutoplaying ? "⏸️ Pause" : "▶️ Resume"}
                 </button>
-
-                {/* Finish Debate button */}
-                {isDebating && (
-                  <button
-                    onClick={onFinishDebate}
-                    className="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-full font-bold"
-                  >
-                    Finish Debate
-                  </button>
-                )}
-
-                {/* Download Transcript button */}
-                {isDebating && (
-                  <button
-                    onClick={onDownloadTranscript}
-                    className="mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-full font-bold"
-                  >
-                    Download Transcript
-                  </button>
-                )}
               </div>
             ) : null}
           </div>
