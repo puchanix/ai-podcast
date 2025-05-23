@@ -66,10 +66,10 @@ export default async function handler(req, res) {
 
 // Function to generate an opening statement for a character
 async function generateOpening(persona, otherPersona, topic, format, historicalContext) {
-  // Simplified system prompt
+  // Simplified system prompt with token limit guidance
   const systemPrompt = `${persona.systemPrompt}
 You are ${persona.name} debating with ${otherPersona.name} on "${topic}".
-Keep your opening statement concise (60-80 words).`
+Keep your opening statement very concise (40-60 words maximum). Be direct and impactful.`
 
   try {
     const completion = await openai.chat.completions.create({
@@ -78,11 +78,11 @@ Keep your opening statement concise (60-80 words).`
         { role: "system", content: systemPrompt },
         {
           role: "user",
-          content: `Give your opening statement on: "${topic}". Be concise.`,
+          content: `Give your opening statement on: "${topic}". Be very concise and powerful.`,
         },
       ],
       temperature: 0.7,
-      max_tokens: 125, // Reduced from 150 to 125
+      max_tokens: 80, // Reduced from 125 to 80
     })
 
     return completion.choices[0].message.content.trim()

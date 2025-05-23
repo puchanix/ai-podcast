@@ -1,63 +1,93 @@
 // pages/api/speak.js
-import OpenAI from "openai"
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" })
-  }
-
-  try {
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" })
+    }
+  
     const { text, voice } = req.body
-
+  
     if (!text) {
       return res.status(400).json({ error: "Text is required" })
     }
-
-    console.log(`Generating audio for text: ${text.substring(0, 50)}...`)
-
-    // Check if the voice is an ElevenLabs voice ID (UUID format or 21-character alphanumeric)
-    const isElevenLabsVoice =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(voice) ||
-      /^[a-zA-Z0-9]{20,25}$/i.test(voice)
-
-    let audioUrl
-
-    if (isElevenLabsVoice) {
-      // Use ElevenLabs for voice generation via our streaming endpoint
-      console.log(`Using ElevenLabs voice: ${voice}`)
-
-      // Generate a unique ID for this audio file
-      const audioId = `elevenlabs_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
-
-      // Return the streaming URL
-      audioUrl = `/api/stream-audio?id=${audioId}&text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`
-    } else {
-      // Use OpenAI TTS as fallback
-      console.log(`Using OpenAI voice: ${voice || "alloy"}`)
-
-      const mp3 = await openai.audio.speech.create({
-        model: "tts-1",
-        voice: voice || "alloy",
-        input: text,
-      })
-
-      const buffer = Buffer.from(await mp3.arrayBuffer())
-
-      // Convert buffer to base64
-      const base64Audio = buffer.toString("base64")
-
-      // Create a data URL
-      audioUrl = `data:audio/mpeg;base64,${base64Audio}`
+  
+    try {
+      console.log(`Generating audio for text: ${text.substring(0, 50)}...`)
+      console.log(`Using voice: ${voice}`)
+  
+      // Check if it's an ElevenLabs voice ID (longer than typical OpenAI voice names)
+      const isElevenLabsVoice = voice && voice.length > 10
+  
+      if (isElevenLabsVoice && process.env.ELEVENLABS_API_KEY) {
+        console.log("Using ElevenLabs voice:", voice)
+  
+        // Use ElevenLabs API
+        const elevenLabsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}`, {
+          method: "POST",
+          headers: {
+            Accept: "audio/mpeg",
+            "Content-Type": "application/json",
+            "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          },
+          body: JSON.stringify({
+            text: text,
+            model_id: "eleven_monolingual_v1",
+            voice_settings: {
+              stability: 0.5,
+              similarity_boost: 0.5,
+            },
+          }),
+        })
+  
+        if (!elevenLabsResponse.ok) {
+          console.error("ElevenLabs API error:", elevenLabsResponse.status, elevenLabsResponse.statusText)
+          throw new Error(`ElevenLabs API error: ${elevenLabsResponse.status}`)
+        }
+  
+        // Get the audio data as array buffer
+        const audioBuffer = await elevenLabsResponse.arrayBuffer()
+  
+        // Convert to base64 for data URL
+        const audioBase64 = Buffer.from(audioBuffer).toString("base64")
+        const audioUrl = `data:audio/mpeg;base64,${audioBase64}`
+  
+        return res.status(200).json({ audioUrl })
+      } else {
+        console.log("Using OpenAI voice:", voice || "alloy")
+  
+        // Use OpenAI TTS API
+        const openaiResponse = await fetch("https://api.openai.com/v1/audio/speech", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "tts-1", // Use faster model for reduced latency
+            input: text,
+            voice: voice || "alloy",
+            response_format: "mp3",
+            speed: 1.0,
+          }),
+        })
+  
+        if (!openaiResponse.ok) {
+          console.error("OpenAI TTS API error:", openaiResponse.status, openaiResponse.statusText)
+          throw new Error(`OpenAI TTS API error: ${openaiResponse.status}`)
+        }
+  
+        // Get the audio data as array buffer
+        const audioBuffer = await openaiResponse.arrayBuffer()
+  
+        // Convert to base64 for data URL
+        const audioBase64 = Buffer.from(audioBuffer).toString("base64")
+        const audioUrl = `data:audio/mpeg;base64,${audioBase64}`
+  
+        return res.status(200).json({ audioUrl })
+      }
+    } catch (error) {
+      console.error("Error generating speech:", error)
+      res.status(500).json({ error: "Failed to generate speech" })
     }
-
-    res.status(200).json({ audioUrl })
-  } catch (error) {
-    console.error("Error generating speech:", error)
-    res.status(500).json({ error: "Failed to generate speech" })
   }
-}
+  
