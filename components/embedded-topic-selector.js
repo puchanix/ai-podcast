@@ -176,13 +176,10 @@ const characterSpecificTopics = {
 export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 }) {
   const [topics, setTopics] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [customTopic, setCustomTopic] = useState("")
-
-  // Add voice input state at the top of the component
+  const [error, setError] = useState(null)
   const [isListening, setIsListening] = useState(false)
   const [recognition, setRecognition] = useState(null)
-
-  const [error, setError] = useState(null)
+  const [transcript, setTranscript] = useState("")
 
   // Load character-specific topics when the component mounts or characters change
   useEffect(() => {
@@ -272,7 +269,7 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
     fetchTopics()
   }, [character1, character2])
 
-  // Add voice input setup useEffect
+  // Set up speech recognition
   useEffect(() => {
     if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
       const speechRecognition = new window.webkitSpeechRecognition()
@@ -286,7 +283,14 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
 
       speechRecognition.onresult = (event) => {
         const speechResult = event.results[0][0].transcript
-        setCustomTopic(speechResult)
+        setTranscript(speechResult)
+
+        // Auto-submit after a short delay
+        setTimeout(() => {
+          if (speechResult.trim()) {
+            onSelectTopic(speechResult.trim())
+          }
+        }, 500)
       }
 
       speechRecognition.onerror = (event) => {
@@ -300,10 +304,11 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
 
       setRecognition(speechRecognition)
     }
-  }, [])
+  }, [onSelectTopic])
 
   const startListening = () => {
     if (recognition && !isListening) {
+      setTranscript("")
       recognition.start()
     }
   }
@@ -533,37 +538,39 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
         </>
       )}
 
-      <div className="mt-4 border-t border-gray-700 pt-4">
-        <h3 className="font-semibold mb-2">Or enter your own topic:</h3>
-        <div className="flex gap-2">
-          <input
-            value={customTopic}
-            onChange={(e) => setCustomTopic(e.target.value)}
-            placeholder="Enter a debate topic..."
-            className="flex-1 p-2 rounded border bg-gray-700 text-white border-gray-600 placeholder-gray-400"
-          />
+      <div className="mt-4 border-t border-gray-700 pt-4 flex justify-center">
+        <div className="flex flex-col items-center">
           <button
             onClick={isListening ? stopListening : startListening}
-            className={`px-3 py-2 rounded ${
+            className={`px-6 py-3 rounded-full font-bold ${
               isListening
                 ? "bg-red-600 hover:bg-red-700 text-white animate-pulse"
-                : "bg-gray-600 hover:bg-gray-500 text-white"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
             }`}
-            title={isListening ? "Stop listening" : "Voice input"}
           >
-            🎤
+            {isListening ? "Stop Recording" : "Speak Your Own Topic"}
           </button>
-          <button
-            onClick={() => {
-              if (customTopic.trim()) {
-                onSelectTopic(customTopic.trim())
-              }
-            }}
-            disabled={!customTopic.trim()}
-            className="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-gray-600 disabled:text-gray-400"
-          >
-            Submit
-          </button>
+
+          {isListening && (
+            <div className="mt-2 text-center text-gray-300">
+              <div className="flex justify-center mt-2 mb-2">
+                <div className="flex space-x-1">
+                  <div className="w-1 h-4 bg-blue-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
+                  <div className="w-1 h-6 bg-yellow-500 rounded-full animate-[soundwave_0.7s_ease-in-out_infinite_0.1s]"></div>
+                  <div className="w-1 h-3 bg-green-500 rounded-full animate-[soundwave_0.4s_ease-in-out_infinite_0.2s]"></div>
+                  <div className="w-1 h-5 bg-red-500 rounded-full animate-[soundwave_0.6s_ease-in-out_infinite_0.3s]"></div>
+                  <div className="w-1 h-2 bg-purple-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite_0.4s]"></div>
+                </div>
+              </div>
+              <p>Listening...</p>
+            </div>
+          )}
+
+          {transcript && !isListening && (
+            <div className="mt-2 text-center">
+              <p className="text-gray-400">"{transcript}"</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
