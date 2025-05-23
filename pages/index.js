@@ -73,7 +73,19 @@ export default function Home() {
       }
 
       const data = await response.json()
-      setGeneratedTopics(data.topics || [])
+      // Ensure we're getting the topic strings, not objects
+      const topics = data.topics || []
+      const topicStrings = topics.map((topic) => {
+        if (typeof topic === "string") {
+          return topic
+        } else if (topic && topic.title) {
+          return topic.title
+        } else if (topic && topic.description) {
+          return topic.description
+        }
+        return "A debate topic for these historical figures"
+      })
+      setGeneratedTopics(topicStrings)
     } catch (error) {
       console.error("Error generating topics:", error)
       setGeneratedTopics(["The nature of human knowledge and creativity", "The role of art and science in society"])
@@ -346,18 +358,8 @@ export default function Home() {
           </h1>
         </div>
 
-        {/* Mode Selection */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-          <button
-            onClick={() => setMode("qa-select")}
-            className={`px-8 py-4 rounded-xl font-semibold transition-all ${
-              mode === "qa-select"
-                ? "bg-blue-600 text-white shadow-lg"
-                : "bg-white text-slate-700 border-2 border-slate-200 hover:border-blue-300"
-            }`}
-          >
-            Ask Questions to a Hero
-          </button>
+        {/* Mode Selection - Only show Watch Heroes Debate button */}
+        <div className="flex justify-center mb-12">
           <button
             onClick={() => setMode("debate-select")}
             className={`px-8 py-4 rounded-xl font-semibold transition-all ${
@@ -369,21 +371,6 @@ export default function Home() {
             Watch Heroes Debate
           </button>
         </div>
-
-        {/* Instructions */}
-        {mode === "qa-select" && (
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Choose a Hero to Question</h2>
-            <p className="text-slate-600">Click on any historical figure to start a conversation</p>
-          </div>
-        )}
-
-        {mode === "debate-select" && (
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-slate-800 mb-2">Select Two Heroes for a Debate</h2>
-            <p className="text-slate-600">Choose exactly 2 heroes ({selectedHeroes.length}/2 selected)</p>
-          </div>
-        )}
 
         {/* Debate Topic Selection - Show when two heroes are selected */}
         {mode === "debate-select" && selectedHeroes.length === 2 && (
@@ -435,19 +422,8 @@ export default function Home() {
             return (
               <div
                 key={hero.id}
-                onClick={() => {
-                  if (isDisabled) return
-                  if (mode === "qa-select") {
-                    handleHeroSelect(hero)
-                  } else if (mode === "debate-select") {
-                    handleDebateHeroSelect(hero)
-                  } else {
-                    // If no mode is selected, default to Q&A
-                    handleHeroSelect(hero)
-                  }
-                }}
-                className={`group cursor-pointer transform transition-all duration-300 ${
-                  isDisabled ? "opacity-50 cursor-not-allowed" : "hover:scale-105"
+                className={`group transform transition-all duration-300 ${
+                  isDisabled ? "opacity-50" : "hover:scale-105"
                 }`}
               >
                 <div
@@ -472,38 +448,28 @@ export default function Home() {
 
                   {/* Content */}
                   <div className="text-center">
-                    <h3 className="text-lg font-bold text-slate-800 mb-2 group-hover:text-slate-900 transition-colors">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4 group-hover:text-slate-900 transition-colors">
                       {hero.name}
                     </h3>
 
                     {/* Selection indicator for debate mode */}
                     {mode === "debate-select" && isSelected && (
-                      <div className="mb-2">
+                      <div className="mb-4">
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          Selected
+                          Selected for Debate
                         </span>
                       </div>
                     )}
 
-                    {/* Action button - only show if a mode is selected */}
-                    {mode && (
-                      <div
-                        className={`inline-flex items-center px-4 py-2 rounded-lg font-semibold shadow-sm transition-all duration-300 ${
-                          mode === "qa-select" || !mode
-                            ? "bg-blue-600 text-white group-hover:bg-blue-700"
-                            : isSelected
-                              ? "bg-purple-600 text-white"
-                              : "bg-slate-600 text-white group-hover:bg-slate-700"
-                        }`}
-                      >
-                        <span>
-                          {mode === "qa-select" || !mode
-                            ? "Ask Questions"
-                            : isSelected
-                              ? "Selected"
-                              : "Select for Debate"}
-                        </span>
-                        {(mode === "qa-select" || !mode) && (
+                    {/* Action buttons */}
+                    <div className="space-y-2">
+                      {/* Ask Question button - always show unless in debate mode */}
+                      {mode !== "debate-select" && (
+                        <button
+                          onClick={() => handleHeroSelect(hero)}
+                          className="w-full inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold shadow-sm transition-all duration-300 bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          <span>Ask a Question</span>
                           <svg
                             className="ml-2 w-4 h-4 transform group-hover:translate-x-1 transition-transform"
                             fill="none"
@@ -512,9 +478,30 @@ export default function Home() {
                           >
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
-                        )}
-                      </div>
-                    )}
+                        </button>
+                      )}
+
+                      {/* Select for Debate button - only show in debate mode */}
+                      {mode === "debate-select" && (
+                        <button
+                          onClick={() => {
+                            if (!isDisabled) {
+                              handleDebateHeroSelect(hero)
+                            }
+                          }}
+                          disabled={isDisabled}
+                          className={`w-full inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold shadow-sm transition-all duration-300 ${
+                            isSelected
+                              ? "bg-purple-600 text-white"
+                              : isDisabled
+                                ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                                : "bg-slate-600 text-white hover:bg-slate-700"
+                          }`}
+                        >
+                          <span>{isSelected ? "Selected" : "Select for Debate"}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
