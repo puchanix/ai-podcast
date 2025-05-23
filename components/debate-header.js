@@ -48,7 +48,7 @@ export function DebateHeader({
   const speakerDisplay = getCurrentSpeakerDisplay()
 
   // Only show speaker display if there's actually a speaker or intro playing
-  const shouldShowSpeakerDisplay = speakerDisplay && (currentSpeaker || isIntroPlaying)
+  const shouldShowSpeakerDisplay = Boolean(speakerDisplay) && (Boolean(currentSpeaker) || isIntroPlaying)
 
   return (
     <div className="mb-8 bg-gray-800 p-6 rounded-lg shadow-lg" style={{ minHeight: "200px" }}>
@@ -56,7 +56,7 @@ export function DebateHeader({
         <h1 className="text-3xl font-bold text-yellow-400">Historical Debates</h1>
 
         {/* Display current topic during debate */}
-        {currentTopic && ((isDebating) => isIntroPlaying || isPlaying || isLoadingAudio || isPreparing) && (
+        {currentTopic && (isIntroPlaying || isPlaying || isLoadingAudio || isPreparing) && (
           <div className="mt-2 md:mt-0 text-center md:text-right">
             <h2 className="text-xl font-semibold text-yellow-400">Topic: {currentTopic}</h2>
           </div>
