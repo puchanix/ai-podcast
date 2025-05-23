@@ -23,7 +23,7 @@ export default async function handler(req, res) {
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4", // Reverted back to GPT-4
       messages: [
         {
           role: "system",
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
           content: message,
         },
       ],
-      max_tokens: 100, // Reduced from 500 to 100
+      max_tokens: 100, // Reverted back to 100 tokens
       temperature: 0.7,
     })
 

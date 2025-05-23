@@ -1,52 +1,35 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import Layout from "../components/layout"
-import DebateInterface from "../components/debate-interface"
-import { VoiceInput } from "../components/voice-input"
 import { personas } from "../lib/personas"
+import Layout from "../components/layout"
 
 export default function Home() {
-  const [mode, setMode] = useState(null) // null, 'debate', or 'qa'
-  const [selectedHero, setSelectedHero] = useState(null)
-  const [selectedHeroes, setSelectedHeroes] = useState([])
-  const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
-  const [generatedTopics, setGeneratedTopics] = useState([])
-  const [userQuestion, setUserQuestion] = useState("")
-  const [isProcessingQuestion, setIsProcessingQuestion] = useState(false)
-  const [heroResponse, setHeroResponse] = useState("")
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
-  const [currentAudioUrl, setCurrentAudioUrl] = useState("")
-  const [thinkingMessage, setThinkingMessage] = useState("")
-  const [voicesLoaded, setVoicesLoaded] = useState(false)
+  const [selectedPersona, setSelectedPersona] = useState("")
+  const [isListening, setIsListening] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [audioError, setAudioError] = useState(null)
+  const [mode, setMode] = useState("question") // 'question' or 'debate'
+  const [selectedCharacters, setSelectedCharacters] = useState([])
+  const [isLoadingVoices, setIsLoadingVoices] = useState(true)
+  const [voiceIds, setVoiceIds] = useState({})
 
-  // Audio ref for playing responses
+  // Audio refs
   const audioRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
+  const streamRef = useRef(null)
 
-  // Thinking messages for dynamic display
-  const thinkingMessages = [
-    "Thinking...",
-    "Pondering your question...",
-    "Reflecting on this matter...",
-    "Considering the depths of this inquiry...",
-    "Gathering thoughts...",
-    "Contemplating...",
-    "Preparing a response...",
-  ]
-
-  // Convert personas object to array for easier handling
-  const heroesArray = Object.keys(personas).map((key) => ({
-    id: key,
-    ...personas[key],
-  }))
-
-  // Load voice IDs on component mount
+  // Load voice IDs when component mounts
   useEffect(() => {
-    const initVoices = async () => {
+    async function loadVoiceIds() {
       try {
         const response = await fetch("/api/get-voice-ids")
         if (response.ok) {
           const data = await response.json()
+          setVoiceIds(data)
+          console.log("Voice IDs loaded:", data)
 
           // Update personas with voice IDs
           Object.keys(personas).forEach((key) => {
@@ -56,140 +39,116 @@ export default function Home() {
               console.log(`Updated voice ID for ${key}: ${data[voiceKey]}`)
             }
           })
-
-          setVoicesLoaded(true)
-          console.log("Voice IDs loaded successfully")
         } else {
           console.error("Failed to load voice IDs")
-          setVoicesLoaded(true) // Continue anyway
         }
       } catch (error) {
-        console.error("Failed to load voice IDs:", error)
-        setVoicesLoaded(true) // Continue anyway
+        console.error("Error loading voice IDs:", error)
+      } finally {
+        setIsLoadingVoices(false)
       }
     }
-    initVoices()
+
+    loadVoiceIds()
   }, [])
 
-  // Generate topics when two heroes are selected
-  useEffect(() => {
-    if (selectedHeroes.length === 2 && mode === "debate-select") {
-      generateTopics()
-    }
-  }, [selectedHeroes, mode])
-
-  // Thinking message rotation effect
-  useEffect(() => {
-    let interval
-    if (isProcessingQuestion) {
-      let messageIndex = 0
-      setThinkingMessage(thinkingMessages[0])
-
-      interval = setInterval(() => {
-        messageIndex = (messageIndex + 1) % thinkingMessages.length
-        setThinkingMessage(thinkingMessages[messageIndex])
-      }, 2000) // Change message every 2 seconds
-    }
-
-    return () => {
-      if (interval) clearInterval(interval)
-    }
-  }, [isProcessingQuestion])
-
-  // Handle single hero selection for Q&A
-  const handleHeroSelect = (hero) => {
-    setSelectedHero(hero)
-    setMode("qa")
-  }
-
-  // Handle hero selection for debate
-  const handleDebateHeroSelect = (hero) => {
-    if (selectedHeroes.find((h) => h.id === hero.id)) {
-      // Remove if already selected
-      setSelectedHeroes(selectedHeroes.filter((h) => h.id !== hero.id))
-    } else if (selectedHeroes.length < 2) {
-      // Add if less than 2 selected
-      setSelectedHeroes([...selectedHeroes, hero])
+  const handleCharacterSelect = (characterId) => {
+    if (mode === "question") {
+      setSelectedPersona(characterId)
+      setSelectedCharacters([characterId])
+    } else if (mode === "debate") {
+      if (selectedCharacters.includes(characterId)) {
+        setSelectedCharacters(selectedCharacters.filter((id) => id !== characterId))
+      } else if (selectedCharacters.length < 2) {
+        setSelectedCharacters([...selectedCharacters, characterId])
+      }
     }
   }
 
-  // Generate debate topics
-  const generateTopics = async () => {
-    if (selectedHeroes.length !== 2) return
-
-    setIsGeneratingTopics(true)
+  const startListening = async () => {
     try {
-      const response = await fetch("/api/generate-character-topics", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          character1: selectedHeroes[0].id,
-          character2: selectedHeroes[1].id,
-        }),
-      })
+      setAudioError(null)
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
 
-      if (!response.ok) {
-        throw new Error("Failed to generate topics")
+      const mediaRecorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = mediaRecorder
+      audioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data)
       }
 
-      const data = await response.json()
-      // Ensure we're getting the topic strings, not objects
-      const topics = data.topics || []
-      const topicStrings = topics.map((topic) => {
-        if (typeof topic === "string") {
-          return topic
-        } else if (topic && topic.title) {
-          return topic.title
-        } else if (topic && topic.description) {
-          return topic.description
-        }
-        return "A debate topic for these historical figures"
-      })
-      setGeneratedTopics(topicStrings)
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" })
+        await processAudioQuestion(audioBlob)
+      }
+
+      mediaRecorder.start()
+      setIsListening(true)
     } catch (error) {
-      console.error("Error generating topics:", error)
-      setGeneratedTopics(["The nature of human knowledge and creativity", "The role of art and science in society"])
-    } finally {
-      setIsGeneratingTopics(false)
+      console.error("Error accessing microphone:", error)
+      setAudioError("Could not access microphone. Please check permissions.")
     }
   }
 
-  // Start debate with selected topic - store topic for DebateInterface
-  const startDebate = (topic) => {
-    if (selectedHeroes.length !== 2) return
-    // Store the topic in the selected heroes for the DebateInterface
-    setSelectedHeroes((prev) => prev.map((hero) => ({ ...hero, debateTopic: topic })))
-    setMode("debate")
-  }
+  const stopListening = () => {
+    if (mediaRecorderRef.current && isListening) {
+      mediaRecorderRef.current.stop()
+      setIsListening(false)
+    }
 
-  const resetSelection = () => {
-    setMode(null)
-    setSelectedHero(null)
-    setSelectedHeroes([])
-    setGeneratedTopics([])
-    setUserQuestion("")
-    setHeroResponse("")
-    setCurrentAudioUrl("")
-    setThinkingMessage("")
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.src = ""
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
     }
   }
 
-  // Handle question submission - optimized for speed
-  const handleQuestionSubmit = async (question) => {
-    if (!selectedHero) return
+  const processAudioQuestion = async (audioBlob) => {
+    if (!selectedPersona) {
+      setAudioError("Please select a character first")
+      return
+    }
 
-    setUserQuestion(question)
-    setIsProcessingQuestion(true)
-    setHeroResponse("")
-    setCurrentAudioUrl("")
+    setIsProcessing(true)
+    setAudioError(null)
 
     try {
-      // Start both text generation and voice preparation in parallel
+      // Convert audio to text
+      const formData = new FormData()
+      formData.append("audio", audioBlob, "question.wav")
+
+      const transcriptionResponse = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!transcriptionResponse.ok) {
+        throw new Error("Failed to transcribe audio")
+      }
+
+      const { text } = await transcriptionResponse.json()
+      console.log("Transcribed text:", text)
+
+      if (!text || text.trim().length === 0) {
+        throw new Error("No speech detected. Please try again.")
+      }
+
+      // Start parallel processing: text generation and audio preparation
+      await processQuestionWithStreaming(text, selectedPersona)
+    } catch (error) {
+      console.error("Error processing audio question:", error)
+      setAudioError(`Error: ${error.message}`)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // New function for parallel processing with streaming
+  const processQuestionWithStreaming = async (question, persona) => {
+    try {
+      setIsPlaying(true)
+
+      // Start text generation
       const textPromise = fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -197,462 +156,343 @@ export default function Home() {
         },
         body: JSON.stringify({
           message: question,
-          persona: selectedHero.id,
+          persona: persona,
         }),
       })
 
+      // Wait for text response
       const textResponse = await textPromise
       if (!textResponse.ok) {
-        throw new Error("Failed to get response")
+        throw new Error("Failed to generate response")
       }
 
-      const data = await textResponse.json()
-      setHeroResponse(data.response)
+      const { response: responseText } = await textResponse.json()
+      console.log("Generated response:", responseText)
 
-      // Generate audio using the correct ElevenLabs voice ID
-      if (data.response) {
-        // Use the getVoiceId function to get the correct ElevenLabs voice
-        const voiceId = selectedHero.getVoiceId ? selectedHero.getVoiceId() : selectedHero.voiceId || "echo"
-        console.log(`Using voice ID for ${selectedHero.name}: ${voiceId}`)
+      // Start streaming audio generation immediately
+      await streamAudioResponse(responseText, persona)
+    } catch (error) {
+      console.error("Error in parallel processing:", error)
+      setAudioError(`Error: ${error.message}`)
+      setIsPlaying(false)
+    }
+  }
 
-        const audioResponse = await fetch("/api/speak", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            text: data.response,
-            voice: voiceId,
-          }),
-        })
+  // New streaming audio function
+  const streamAudioResponse = async (text, persona) => {
+    try {
+      // Get voice for character
+      const character = personas[persona]
+      const voice = character?.voiceId || (character?.getVoiceId ? character.getVoiceId() : "echo")
 
-        if (audioResponse.ok) {
-          const audioData = await audioResponse.json()
-          setCurrentAudioUrl(audioData.audioUrl)
+      console.log(`Streaming audio for ${persona} with voice: ${voice}`)
 
-          // Auto-play the audio
-          if (audioRef.current && audioData.audioUrl) {
-            audioRef.current.src = audioData.audioUrl
-            audioRef.current.load()
-            audioRef.current.play().catch(console.error)
+      // Start audio generation with streaming
+      const response = await fetch("/api/stream-audio-realtime", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: text,
+          voice: voice,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Audio generation failed: ${response.status}`)
+      }
+
+      // Handle streaming response
+      const reader = response.body.getReader()
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+      let audioBuffer = new ArrayBuffer(0)
+
+      // Create audio element for playback
+      const audio = new Audio()
+      audioRef.current = audio
+
+      audio.onended = () => {
+        setIsPlaying(false)
+        console.log("Audio playback completed")
+      }
+
+      audio.onerror = (e) => {
+        console.error("Audio playback error:", e)
+        setAudioError("Audio playback failed")
+        setIsPlaying(false)
+      }
+
+      // Read streaming chunks
+      const processStream = async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+
+            if (done) {
+              console.log("Stream completed")
+              break
+            }
+
+            // Append new chunk to buffer
+            const newBuffer = new ArrayBuffer(audioBuffer.byteLength + value.byteLength)
+            const newView = new Uint8Array(newBuffer)
+            newView.set(new Uint8Array(audioBuffer), 0)
+            newView.set(value, audioBuffer.byteLength)
+            audioBuffer = newBuffer
+
+            // If we have enough data and haven't started playing yet, start playback
+            if (audioBuffer.byteLength > 8192 && audio.src === "") {
+              const blob = new Blob([audioBuffer], { type: "audio/mpeg" })
+              const audioUrl = URL.createObjectURL(blob)
+              audio.src = audioUrl
+
+              try {
+                await audio.play()
+                console.log("Started streaming audio playback")
+              } catch (playError) {
+                console.error("Error starting audio playback:", playError)
+                setAudioError("Failed to start audio playback")
+                setIsPlaying(false)
+              }
+            }
           }
+        } catch (streamError) {
+          console.error("Stream processing error:", streamError)
+          setAudioError("Audio streaming failed")
+          setIsPlaying(false)
         }
       }
+
+      await processStream()
     } catch (error) {
-      console.error("Error getting response:", error)
-      setHeroResponse("I'm sorry, I couldn't process your question at this time.")
-    } finally {
-      setIsProcessingQuestion(false)
-      setThinkingMessage("")
+      console.error("Error in streaming audio:", error)
+      setAudioError(`Audio error: ${error.message}`)
+      setIsPlaying(false)
     }
   }
 
-  // Handle canned question click
-  const handleCannedQuestionClick = (question) => {
-    handleQuestionSubmit(question)
-  }
-
-  // Handle audio play/pause
-  const toggleAudio = () => {
-    if (!audioRef.current || !currentAudioUrl) return
-
-    if (isPlayingAudio) {
-      audioRef.current.pause()
-    } else {
-      audioRef.current.play().catch(console.error)
+  const handleDebateStart = () => {
+    if (selectedCharacters.length === 2) {
+      const [char1, char2] = selectedCharacters
+      window.location.href = `/debate?char1=${char1}&char2=${char2}`
     }
   }
 
-  // Audio event handlers
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio) return
-
-    const handlePlay = () => setIsPlayingAudio(true)
-    const handlePause = () => setIsPlayingAudio(false)
-    const handleEnded = () => setIsPlayingAudio(false)
-
-    audio.addEventListener("play", handlePlay)
-    audio.addEventListener("pause", handlePause)
-    audio.addEventListener("ended", handleEnded)
-
-    return () => {
-      audio.removeEventListener("play", handlePlay)
-      audio.removeEventListener("pause", handlePause)
-      audio.removeEventListener("ended", handleEnded)
-    }
-  }, [currentAudioUrl])
-
-  // If in Q&A mode with a selected hero
-  if (mode === "qa" && selectedHero) {
-    return (
-      <Layout title={`Q&A with ${selectedHero.name}`}>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="mb-8">
-            <button
-              onClick={resetSelection}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to Home
-            </button>
-          </div>
-
-          {/* Hero Q&A Interface */}
-          <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 rounded-2xl p-8 shadow-lg">
-            <div className="flex flex-col md:flex-row items-center mb-8">
-              <div className="w-32 h-32 rounded-full overflow-hidden mb-4 md:mb-0 md:mr-6 shadow-lg relative">
-                <img
-                  src={
-                    selectedHero.image || `/placeholder.svg?height=128&width=128&query=${selectedHero.name} portrait`
-                  }
-                  alt={selectedHero.name}
-                  className={`w-full h-full object-cover transition-all duration-500 ${
-                    isProcessingQuestion ? "animate-pulse opacity-75" : ""
-                  }`}
-                />
-                {/* Thinking indicator overlay */}
-                {isProcessingQuestion && (
-                  <div className="absolute inset-0 bg-blue-500 bg-opacity-20 rounded-full flex items-center justify-center">
-                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                )}
-              </div>
-              <div className="text-center md:text-left">
-                <h1 className="text-3xl font-bold text-slate-800 mb-2">{selectedHero.name}</h1>
-                <p className="text-slate-600 mb-4">{selectedHero.systemPrompt?.substring(8) || "Historical figure"}</p>
-                {/* Dynamic thinking message */}
-              </div>
-            </div>
-
-            {/* Conversation Area */}
-            {userQuestion && (
-              <div className="mb-8 bg-white rounded-lg p-6 shadow-sm">
-                <div className="mb-4">
-                  <p className="font-semibold text-slate-700">Your question:</p>
-                  <p className="text-slate-600 mt-2">{userQuestion}</p>
-                </div>
-
-                {isProcessingQuestion ? (
-                  <div className="text-center py-4">
-                    <div className="inline-flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                      <div
-                        className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      ></div>
-                      <span className="text-slate-500 ml-2">{thinkingMessage}</span>
-                    </div>
-                  </div>
-                ) : heroResponse ? (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="font-semibold text-slate-700">{selectedHero.name}'s response:</p>
-                      {currentAudioUrl && (
-                        <button
-                          onClick={toggleAudio}
-                          className="flex items-center px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                        >
-                          {isPlayingAudio ? (
-                            <>
-                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6" />
-                              </svg>
-                              Pause
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293H15"
-                                />
-                              </svg>
-                              Play
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-slate-600 mt-2">{heroResponse}</p>
-                  </div>
-                ) : null}
-              </div>
-            )}
-
-            {/* Canned Questions */}
-            {selectedHero.questions && selectedHero.questions.length > 0 && (
-              <div className="mb-8">
-                <h3 className="text-xl font-semibold text-slate-800 mb-4">Suggested Questions</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {selectedHero.questions.map((question, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleCannedQuestionClick(question)}
-                      disabled={isProcessingQuestion}
-                      className="p-4 text-left bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-slate-200 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <p className="text-slate-700">{question}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Voice Input Section */}
-            <div className="bg-white rounded-lg p-6 shadow-sm">
-              <h3 className="text-xl font-semibold text-slate-800 mb-4">Ask Your Own Question</h3>
-              <div className="flex justify-center">
-                <VoiceInput onSubmit={handleQuestionSubmit} buttonText={`Ask ${selectedHero.name}`} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Hidden audio element */}
-        <audio ref={audioRef} preload="auto" className="hidden" />
-      </Layout>
-    )
+  const toggleMode = () => {
+    setMode(mode === "question" ? "debate" : "question")
+    setSelectedPersona("")
+    setSelectedCharacters([])
   }
 
-  // If in debate mode - use original approach with proper props
-  if (mode === "debate" && selectedHeroes.length === 2) {
-    return (
-      <Layout title={`Debate: ${selectedHeroes[0].name} vs ${selectedHeroes[1].name}`}>
-        <DebateInterface />
-      </Layout>
-    )
-  }
-
-  // Main home page
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {/* Hero Section */}
-        <div className="text-center mb-16">
-          <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-slate-800 via-blue-800 to-indigo-800 bg-clip-text text-transparent mb-6">
-            Heroes of History
-          </h1>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white">
+        <div className="container mx-auto px-4 py-8">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+              Heroes of History
+            </h1>
+            <p className="text-xl text-gray-300 mb-8">
+              Engage in conversations and debates with history's greatest minds
+            </p>
 
-        {/* Voice loading indicator */}
-        {!voicesLoaded && (
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg">
-              <div className="w-4 h-4 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin mr-2"></div>
-              Loading character voices...
-            </div>
-          </div>
-        )}
-
-        {/* Mode Selection - Only show Watch Heroes Debate button */}
-        <div className="flex justify-center mb-12">
-          <button
-            onClick={() => setMode("debate-select")}
-            className={`px-8 py-4 rounded-xl font-semibold transition-all ${
-              mode === "debate-select"
-                ? "bg-purple-600 text-white shadow-lg"
-                : "bg-white text-slate-700 border-2 border-slate-200 hover:border-purple-300"
-            }`}
-          >
-            Watch Heroes Debate
-          </button>
-        </div>
-
-        {/* Debate Topic Selection - Show when two heroes are selected */}
-        {mode === "debate-select" && selectedHeroes.length === 2 && (
-          <div className="mb-12 bg-gradient-to-br from-purple-50 to-violet-50 rounded-2xl p-8 shadow-lg">
-            <h3 className="text-2xl font-bold text-slate-800 mb-4 text-center">
-              {selectedHeroes[0].name} vs {selectedHeroes[1].name}
-            </h3>
-
-            {isGeneratingTopics ? (
-              <div className="text-center py-8">
-                <div className="inline-flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"></div>
-                  <div
-                    className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.1s" }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-purple-500 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.2s" }}
-                  ></div>
-                  <span className="text-slate-500 ml-2">Generating debate topics...</span>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="mb-8">
-                  <h4 className="text-xl font-semibold text-slate-800 mb-4">Choose a Debate Topic</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {generatedTopics.map((topic, index) => (
-                      <button
-                        key={index}
-                        onClick={() => startDebate(topic)}
-                        className="p-4 text-left bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow border border-slate-200 hover:border-slate-300"
-                      >
-                        <p className="text-slate-700">{topic}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-lg p-6 shadow-sm">
-                  <h4 className="text-xl font-semibold text-slate-800 mb-4">Suggest Your Own Topic</h4>
-                  <div className="flex justify-center">
-                    <VoiceInput onSubmit={(topic) => startDebate(topic)} buttonText="Record Custom Topic" />
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Heroes Grid - Always show this */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {heroesArray.map((hero) => {
-            const isSelected = mode === "debate-select" && selectedHeroes.find((h) => h.id === hero.id)
-            const isDisabled = mode === "debate-select" && selectedHeroes.length >= 2 && !isSelected
-
-            return (
-              <div
-                key={hero.id}
-                className={`group transform transition-all duration-300 ${
-                  isDisabled ? "opacity-50" : "hover:scale-105"
-                }`}
-              >
-                <div
-                  className={`bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-300 border-2 ${
-                    isSelected ? "border-purple-500 bg-gradient-to-br from-purple-50 to-purple-100" : "border-white/50"
+            {/* Mode Toggle */}
+            <div className="flex justify-center mb-8">
+              <div className="bg-gray-800 rounded-full p-1 flex">
+                <button
+                  onClick={toggleMode}
+                  className={`px-6 py-3 rounded-full transition-all duration-300 ${
+                    mode === "question" ? "bg-yellow-500 text-black font-semibold" : "text-gray-300 hover:text-white"
                   }`}
                 >
-                  {/* Avatar */}
-                  <div className="flex justify-center mb-4">
-                    <div
-                      className={`w-20 h-20 rounded-full overflow-hidden shadow-lg border-4 ${
-                        isSelected ? "border-purple-500" : "border-white"
-                      }`}
-                    >
-                      <img
-                        src={hero.image || `/placeholder.svg?height=80&width=80&query=${hero.name} portrait`}
-                        alt={hero.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                  Ask Questions
+                </button>
+                <button
+                  onClick={toggleMode}
+                  className={`px-6 py-3 rounded-full transition-all duration-300 ${
+                    mode === "debate" ? "bg-yellow-500 text-black font-semibold" : "text-gray-300 hover:text-white"
+                  }`}
+                >
+                  Watch Debates
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {isLoadingVoices && (
+            <div className="mb-8 p-4 bg-yellow-800 text-yellow-100 rounded-lg text-center">
+              <div className="inline-block animate-spin h-5 w-5 border-2 border-yellow-500 border-t-transparent rounded-full mr-2"></div>
+              Loading voice data... Please wait.
+            </div>
+          )}
+
+          {/* Instructions */}
+          <div className="text-center mb-8">
+            {mode === "question" ? (
+              <p className="text-lg text-gray-300">Select a historical figure and ask them anything using your voice</p>
+            ) : (
+              <p className="text-lg text-gray-300">
+                Select two historical figures to watch them debate fascinating topics
+              </p>
+            )}
+          </div>
+
+          {/* Character Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+            {Object.entries(personas).map(([key, persona]) => (
+              <div
+                key={key}
+                onClick={() => handleCharacterSelect(key)}
+                className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
+                  mode === "question"
+                    ? selectedPersona === key
+                      ? "ring-4 ring-yellow-400"
+                      : ""
+                    : selectedCharacters.includes(key)
+                      ? "ring-4 ring-yellow-400"
+                      : ""
+                }`}
+              >
+                <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl">
+                  <div className="aspect-w-3 aspect-h-4">
+                    <img
+                      src={persona.image || "/placeholder.svg"}
+                      alt={persona.name}
+                      className="w-full h-80 object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
                   </div>
+                  <div className="p-6">
+                    <h3 className="text-2xl font-bold mb-2 text-yellow-400">{persona.name}</h3>
+                    <p className="text-gray-300 mb-4">{persona.period}</p>
+                    <p className="text-sm text-gray-400 leading-relaxed">{persona.description}</p>
 
-                  {/* Content */}
-                  <div className="text-center">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4 group-hover:text-slate-900 transition-colors">
-                      {hero.name}
-                    </h3>
-
-                    {/* Selection indicator for debate mode */}
-                    {mode === "debate-select" && isSelected && (
-                      <div className="mb-4">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                          Selected for Debate
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Action buttons */}
-                    <div className="space-y-2">
-                      {/* Ask Question button - always show unless in debate mode */}
-                      {mode !== "debate-select" && (
+                    {/* Dynamic Button */}
+                    <div className="mt-4">
+                      {mode === "question" ? (
                         <button
-                          onClick={() => handleHeroSelect(hero)}
-                          className="w-full inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold shadow-sm transition-all duration-300 bg-blue-600 text-white hover:bg-blue-700"
-                        >
-                          <span>Ask a Question</span>
-                          <svg
-                            className="ml-2 w-4 h-4 transform group-hover:translate-x-1 transition-transform"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                      )}
-
-                      {/* Select for Debate button - only show in debate mode */}
-                      {mode === "debate-select" && (
-                        <button
-                          onClick={() => {
-                            if (!isDisabled) {
-                              handleDebateHeroSelect(hero)
-                            }
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleCharacterSelect(key)
                           }}
-                          disabled={isDisabled}
-                          className={`w-full inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold shadow-sm transition-all duration-300 ${
-                            isSelected
-                              ? "bg-purple-600 text-white"
-                              : isDisabled
-                                ? "bg-slate-300 text-slate-500 cursor-not-allowed"
-                                : "bg-slate-600 text-white hover:bg-slate-700"
+                          className={`w-full py-2 px-4 rounded-lg font-semibold transition-all duration-300 ${
+                            selectedPersona === key
+                              ? "bg-yellow-500 text-black"
+                              : "bg-gray-700 text-white hover:bg-gray-600"
                           }`}
                         >
-                          <span>{isSelected ? "Selected" : "Select for Debate"}</span>
+                          {selectedPersona === key ? "Selected" : "Ask a Question"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleCharacterSelect(key)
+                          }}
+                          className={`w-full py-2 px-4 rounded-lg font-semibold transition-all duration-300 ${
+                            selectedCharacters.includes(key)
+                              ? "bg-yellow-500 text-black"
+                              : selectedCharacters.length >= 2
+                                ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                                : "bg-gray-700 text-white hover:bg-gray-600"
+                          }`}
+                          disabled={selectedCharacters.length >= 2 && !selectedCharacters.includes(key)}
+                        >
+                          {selectedCharacters.includes(key)
+                            ? "Selected for Debate"
+                            : selectedCharacters.length >= 2
+                              ? "Max 2 Characters"
+                              : "Select for Debate"}
                         </button>
                       )}
                     </div>
                   </div>
                 </div>
               </div>
-            )
-          })}
-        </div>
-
-        {/* Features Section - only show when no mode is selected */}
-        {!mode && (
-          <div className="mt-20 grid grid-cols-1 md:grid-cols-2 gap-12">
-            <div className="text-center p-8 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-semibold text-slate-800 mb-4">Personal Q&A Sessions</h3>
-              <p className="text-slate-600 leading-relaxed">
-                Have one-on-one conversations with history's greatest minds. Ask them anything and hear their responses
-                in their own voice.
-              </p>
-            </div>
-
-            <div className="text-center p-8 bg-gradient-to-br from-purple-50 to-violet-50 rounded-2xl">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-semibold text-slate-800 mb-4">Historical Debates</h3>
-              <p className="text-slate-600 leading-relaxed">
-                Watch fascinating debates between historical figures on topics that shaped our world. See how different
-                minds approach the same questions.
-              </p>
-            </div>
+            ))}
           </div>
-        )}
+
+          {/* Action Section */}
+          {mode === "question" && selectedPersona && (
+            <div className="text-center">
+              <div className="bg-gray-800 rounded-xl p-8 max-w-md mx-auto">
+                <h3 className="text-2xl font-bold mb-4 text-yellow-400">Ask {personas[selectedPersona]?.name}</h3>
+
+                {audioError && <div className="mb-4 p-3 bg-red-900 text-red-100 rounded-lg text-sm">{audioError}</div>}
+
+                <button
+                  onClick={isListening ? stopListening : startListening}
+                  disabled={isProcessing || isPlaying}
+                  className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 ${
+                    isListening
+                      ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
+                      : isProcessing
+                        ? "bg-gray-600 text-gray-300 cursor-not-allowed"
+                        : isPlaying
+                          ? "bg-green-500 text-white cursor-not-allowed"
+                          : "bg-yellow-500 hover:bg-yellow-600 text-black"
+                  }`}
+                >
+                  {isListening
+                    ? "🎤 Listening... (Click to stop)"
+                    : isProcessing
+                      ? "🤔 Processing..."
+                      : isPlaying
+                        ? "🔊 Playing Response..."
+                        : "🎤 Hold to Ask Question"}
+                </button>
+
+                {isPlaying && (
+                  <div className="mt-4 flex justify-center">
+                    <div className="flex space-x-1">
+                      {[...Array(5)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="w-1 bg-yellow-400 rounded-full animate-pulse"
+                          style={{
+                            height: "20px",
+                            animationDelay: `${i * 0.1}s`,
+                            animationDuration: "0.6s",
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <p className="text-sm text-gray-400 mt-4">
+                  Click and hold the microphone button, ask your question, then release
+                </p>
+              </div>
+            </div>
+          )}
+
+          {mode === "debate" && (
+            <div className="text-center">
+              <div className="bg-gray-800 rounded-xl p-8 max-w-md mx-auto">
+                <h3 className="text-2xl font-bold mb-4 text-yellow-400">Start Debate</h3>
+                <p className="text-gray-300 mb-4">Selected: {selectedCharacters.length}/2 characters</p>
+                {selectedCharacters.length === 2 && (
+                  <p className="text-sm text-gray-400 mb-4">
+                    {personas[selectedCharacters[0]]?.name} vs {personas[selectedCharacters[1]]?.name}
+                  </p>
+                )}
+                <button
+                  onClick={handleDebateStart}
+                  disabled={selectedCharacters.length !== 2}
+                  className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 ${
+                    selectedCharacters.length === 2
+                      ? "bg-yellow-500 hover:bg-yellow-600 text-black"
+                      : "bg-gray-600 text-gray-400 cursor-not-allowed"
+                  }`}
+                >
+                  {selectedCharacters.length === 2 ? "Start Debate" : "Select 2 Characters"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </Layout>
   )

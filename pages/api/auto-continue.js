@@ -28,27 +28,23 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid character selection" })
     }
 
-    // Generate responses for both characters
-    const [response1Promise, response2Promise] = await Promise.all([
+    // Generate responses in parallel
+    const [response1Promise, response2Promise] = [
       generateResponse(persona1, persona2, currentMessages, topic, format, historicalContext),
       generateResponse(persona2, persona1, currentMessages, topic, format, historicalContext),
-    ])
+    ]
 
-    const response1 = await response1Promise
-    const response2 = await response2Promise
+    const [response1, response2] = await Promise.all([response1Promise, response2Promise])
 
     // Get voice IDs for both characters
     const voice1 = persona1.getVoiceId ? persona1.getVoiceId() : persona1.voiceId || "echo"
     const voice2 = persona2.getVoiceId ? persona2.getVoiceId() : persona2.voiceId || "echo"
 
-    // Generate audio for both responses in parallel
-    const [audioUrl1Promise, audioUrl2Promise] = await Promise.all([
-      generateAudio(response1, voice1),
-      generateAudio(response2, voice2),
+    // Generate streaming audio URLs in parallel
+    const [audioUrl1, audioUrl2] = await Promise.all([
+      generateStreamingAudio(response1, voice1),
+      generateStreamingAudio(response2, voice2),
     ])
-
-    const audioUrl1 = await audioUrl1Promise
-    const audioUrl2 = await audioUrl2Promise
 
     res.status(200).json({
       response1,
@@ -86,7 +82,7 @@ ${conversationContext}`
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4", // Reverted back to GPT-4
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -95,7 +91,7 @@ ${conversationContext}`
         },
       ],
       temperature: 0.7,
-      max_tokens: 80, // Reduced from 150 to 80
+      max_tokens: 80, // Reverted back to 80 tokens
     })
 
     return completion.choices[0].message.content.trim()
@@ -105,16 +101,14 @@ ${conversationContext}`
   }
 }
 
-// Function to generate audio for a statement
-async function generateAudio(text, voiceId) {
+// Function to generate streaming audio URL
+async function generateStreamingAudio(text, voiceId) {
   try {
-    // Generate a unique ID for this audio file
+    // Return the streaming URL instead of generating audio immediately
     const audioId = `debate_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
-
-    // Return the streaming URL
-    return `/api/stream-audio?id=${audioId}&text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId)}`
+    return `/api/stream-audio-realtime?id=${audioId}&text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId)}`
   } catch (error) {
-    console.error("Error generating audio:", error)
+    console.error("Error generating streaming audio:", error)
     throw error
   }
 }
