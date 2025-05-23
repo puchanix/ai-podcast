@@ -40,8 +40,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid character selection" })
     }
 
-    // Create a cache key based on the character pair
-    const cacheKey = `debate_topics:${character1}:${character2}`
+    // Create a cache key based on the character pair (sorted for consistency)
+    const sortedChars = [character1, character2].sort()
+    const cacheKey = `debate_topics:${sortedChars[0]}:${sortedChars[1]}`
 
     // Try to get topics from cache first if Redis is available
     if (redis) {
@@ -57,75 +58,165 @@ export default async function handler(req, res) {
       }
     }
 
-    // Special case for da Vinci and Socrates
-    if (
-      (character1 === "daVinci" && character2 === "socrates") ||
-      (character1 === "socrates" && character2 === "daVinci")
-    ) {
-      const daVinciSocratesTopics = [
+    console.log(`Generating new topics for ${persona1.name} and ${persona2.name}`)
+
+    // Use GPT-3.5-turbo for faster topic generation
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
         {
-          id: "knowledge-truth",
-          title: "Knowledge vs. Truth",
-          description: "Is knowledge the same as truth, and how do we discover either?",
-          category: "philosophy",
+          role: "system",
+          content: `You are a debate topic generator. Create exactly 2 compelling debate topics that would be particularly relevant for ${persona1.name} and ${persona2.name} to debate, considering their historical backgrounds, expertise, and philosophical differences. 
+
+Return a JSON array with exactly 2 objects, each having:
+- id: a unique kebab-case identifier
+- title: a concise, engaging topic title (max 50 characters)
+- description: a brief explanation of why this topic suits these debaters (max 100 characters)
+- category: one of "philosophy", "arts", "science", "politics", "history", "education"
+
+Focus on topics that would create meaningful intellectual tension between these specific historical figures.`,
         },
         {
-          id: "art-science-relationship",
-          title: "Art and Science",
-          description: "The relationship between artistic expression and scientific inquiry",
-          category: "arts",
+          role: "user",
+          content: `Generate 2 debate topics specifically for ${persona1.name} and ${persona2.name}. Consider:
+- ${persona1.name}: ${persona1.systemPrompt.substring(8, 100)}...
+- ${persona2.name}: ${persona2.systemPrompt.substring(8, 100)}...
+
+Return only valid JSON.`,
         },
-      ]
+      ],
+      temperature: 0.8,
+      max_tokens: 500,
+    })
 
-      // Cache the topics if Redis is available
-      if (redis) {
-        try {
-          await redis.set(cacheKey, JSON.stringify(daVinciSocratesTopics), "EX", 86400)
-        } catch (error) {
-          console.error("Redis caching error:", error)
-        }
-      }
-
-      return res.status(200).json({ topics: daVinciSocratesTopics })
+    let generatedTopics
+    try {
+      generatedTopics = JSON.parse(completion.choices[0].message.content.trim())
+    } catch (parseError) {
+      console.error("Failed to parse GPT response:", completion.choices[0].message.content)
+      throw new Error("Invalid response format from GPT")
     }
 
-    // Special case for other character pairs - use predefined topics
-    const defaultTopics = getDefaultTopics(character1, character2)
+    // Validate the response structure
+    if (!Array.isArray(generatedTopics) || generatedTopics.length !== 2) {
+      throw new Error("GPT did not return exactly 2 topics")
+    }
 
-    // Cache the topics if Redis is available
+    // Ensure each topic has required fields
+    const validatedTopics = generatedTopics.map((topic, index) => ({
+      id: topic.id || `${character1}-${character2}-topic-${index + 1}`,
+      title: topic.title || `Topic ${index + 1}`,
+      description: topic.description || "A debate topic for these historical figures",
+      category: topic.category || "philosophy",
+    }))
+
+    // Cache the topics if Redis is available (cache for 7 days)
     if (redis) {
       try {
-        await redis.set(cacheKey, JSON.stringify(defaultTopics), "EX", 86400)
+        await redis.set(cacheKey, JSON.stringify(validatedTopics), "EX", 604800)
+        console.log(`Cached topics for ${character1} and ${character2}`)
       } catch (error) {
         console.error("Redis caching error:", error)
       }
     }
 
-    return res.status(200).json({ topics: defaultTopics })
+    return res.status(200).json({ topics: validatedTopics })
   } catch (error) {
     console.error("Error generating topics:", error)
-    res.status(500).json({ error: "Failed to generate topics", details: error.message })
+
+    // Fallback to default topics if GPT fails
+    const { character1, character2 } = req.body // Declare character1 and character2 here
+    const fallbackTopics = getDefaultTopics(character1, character2)
+
+    // Still try to cache the fallback topics
+    if (redis) {
+      try {
+        const sortedChars = [character1, character2].sort()
+        const cacheKey = `debate_topics:${sortedChars[0]}:${sortedChars[1]}`
+        await redis.set(cacheKey, JSON.stringify(fallbackTopics), "EX", 604800)
+      } catch (cacheError) {
+        console.error("Redis caching error for fallback:", cacheError)
+      }
+    }
+
+    res.status(200).json({ topics: fallbackTopics })
   }
 }
 
-// Add a helper function to get default topics
+// Enhanced fallback function
 function getDefaultTopics(character1, character2) {
-  // Get the personas for each character
   const persona1 = personas[character1]
   const persona2 = personas[character2]
 
-  // Create default topics based on character names
+  if (!persona1 || !persona2) {
+    return [
+      {
+        id: "general-philosophy",
+        title: "Philosophy and Knowledge",
+        description: "The pursuit of wisdom and understanding",
+        category: "philosophy",
+      },
+      {
+        id: "general-legacy",
+        title: "Historical Legacy",
+        description: "The lasting impact on humanity",
+        category: "history",
+      },
+    ]
+  }
+
+  // Character-specific fallback topics
+  const characterPairs = {
+    [`${character1}_${character2}`]: true,
+    [`${character2}_${character1}`]: true,
+  }
+
+  if (characterPairs["daVinci_socrates"]) {
+    return [
+      {
+        id: "knowledge-vs-wisdom",
+        title: "Knowledge vs. Wisdom",
+        description: "Is accumulated knowledge the same as true wisdom?",
+        category: "philosophy",
+      },
+      {
+        id: "art-as-truth",
+        title: "Art as Truth",
+        description: "Can artistic expression reveal deeper truths than logic?",
+        category: "arts",
+      },
+    ]
+  }
+
+  if (characterPairs["daVinci_frida"]) {
+    return [
+      {
+        id: "personal-vs-universal",
+        title: "Personal vs. Universal Art",
+        description: "Should art express personal pain or universal beauty?",
+        category: "arts",
+      },
+      {
+        id: "innovation-vs-tradition",
+        title: "Innovation vs. Tradition",
+        description: "Breaking new ground versus respecting artistic heritage",
+        category: "arts",
+      },
+    ]
+  }
+
+  // Default fallback
   return [
     {
-      id: `${character1}-${character2}-philosophy`,
-      title: "Philosophy and Knowledge",
-      description: `How ${persona1.name} and ${persona2.name} view the pursuit of wisdom`,
+      id: `${character1}-${character2}-expertise`,
+      title: "Approaches to Excellence",
+      description: `How ${persona1.name} and ${persona2.name} define mastery`,
       category: "philosophy",
     },
     {
       id: `${character1}-${character2}-legacy`,
-      title: "Historical Legacy",
-      description: `The lasting impact of ${persona1.name} and ${persona2.name} on humanity`,
+      title: "Lasting Impact",
+      description: `The enduring influence of ${persona1.name} and ${persona2.name}`,
       category: "history",
     },
   ]

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { personas } from "../lib/personas" // Fix the import path to point to the correct location
+import { personas } from "../lib/personas"
 
 // Static debate topics as fallback
 const staticDebateTopics = [
@@ -19,26 +19,169 @@ const staticDebateTopics = [
   },
 ]
 
-// Character-specific topics for da Vinci and Socrates
-const daVinciSocratesTopics = [
-  {
-    id: "knowledge-truth",
-    title: "Knowledge vs. Truth",
-    description: "Is knowledge the same as truth, and how do we discover either?",
-    category: "philosophy",
-  },
-  {
-    id: "art-science-relationship",
-    title: "Art and Science",
-    description: "The relationship between artistic expression and scientific inquiry",
-    category: "arts",
-  },
-]
+// Character-specific topics for different combinations
+const characterSpecificTopics = {
+  // da Vinci and Socrates
+  daVinci_socrates: [
+    {
+      id: "knowledge-truth",
+      title: "Knowledge vs. Truth",
+      description: "Is knowledge the same as truth, and how do we discover either?",
+      category: "philosophy",
+    },
+    {
+      id: "art-science-relationship",
+      title: "Art and Science",
+      description: "The relationship between artistic expression and scientific inquiry",
+      category: "arts",
+    },
+  ],
+  // da Vinci and Frida
+  daVinci_frida: [
+    {
+      id: "artistic-expression",
+      title: "Personal vs. Universal Art",
+      description: "Is art more powerful when it's personal or when it's universal?",
+      category: "arts",
+    },
+    {
+      id: "innovation-tradition",
+      title: "Innovation vs. Tradition",
+      description: "The balance between breaking new ground and respecting artistic traditions",
+      category: "arts",
+    },
+  ],
+  // da Vinci and Shakespeare
+  daVinci_shakespeare: [
+    {
+      id: "creative-genius",
+      title: "Nature of Creative Genius",
+      description: "What constitutes genius in art and literature?",
+      category: "arts",
+    },
+    {
+      id: "human-condition",
+      title: "Portraying the Human Condition",
+      description: "Visual art versus written word in capturing humanity",
+      category: "arts",
+    },
+  ],
+  // da Vinci and Mozart
+  daVinci_mozart: [
+    {
+      id: "artistic-disciplines",
+      title: "Visual Art vs. Music",
+      description: "The different ways visual art and music affect human emotion",
+      category: "arts",
+    },
+    {
+      id: "patronage-freedom",
+      title: "Patronage and Artistic Freedom",
+      description: "How financial support affects creative expression",
+      category: "arts",
+    },
+  ],
+  // Socrates and Frida
+  socrates_frida: [
+    {
+      id: "self-knowledge",
+      title: "Self-Knowledge Through Art",
+      description: "Can artistic expression lead to philosophical understanding?",
+      category: "philosophy",
+    },
+    {
+      id: "suffering-wisdom",
+      title: "Suffering and Wisdom",
+      description: "The relationship between personal pain and deeper understanding",
+      category: "philosophy",
+    },
+  ],
+  // Socrates and Shakespeare
+  socrates_shakespeare: [
+    {
+      id: "moral-questions",
+      title: "Exploring Moral Questions",
+      description: "Philosophy versus drama as tools for ethical inquiry",
+      category: "philosophy",
+    },
+    {
+      id: "human-nature-understanding",
+      title: "Understanding Human Nature",
+      description: "Dialogue, questioning, and character development as means to truth",
+      category: "philosophy",
+    },
+  ],
+  // Socrates and Mozart
+  socrates_mozart: [
+    {
+      id: "beauty-truth",
+      title: "Beauty and Truth",
+      description: "The relationship between aesthetic beauty and philosophical truth",
+      category: "philosophy",
+    },
+    {
+      id: "structure-freedom",
+      title: "Structure vs. Freedom",
+      description: "The balance between formal rules and creative expression",
+      category: "arts",
+    },
+  ],
+  // Frida and Shakespeare
+  frida_shakespeare: [
+    {
+      id: "self-expression",
+      title: "Self-Expression and Identity",
+      description: "Personal identity in art and literature across different eras",
+      category: "arts",
+    },
+    {
+      id: "political-art",
+      title: "Art as Political Statement",
+      description: "How creative works can challenge or reinforce social norms",
+      category: "politics",
+    },
+  ],
+  // Frida and Mozart
+  frida_mozart: [
+    {
+      id: "emotion-expression",
+      title: "Emotional Expression",
+      description: "Visual versus musical approaches to conveying human emotion",
+      category: "arts",
+    },
+    {
+      id: "tradition-rebellion",
+      title: "Tradition vs. Rebellion",
+      description: "Breaking artistic conventions across different time periods",
+      category: "arts",
+    },
+  ],
+  // Shakespeare and Mozart
+  shakespeare_mozart: [
+    {
+      id: "structure-creativity",
+      title: "Structure and Creativity",
+      description: "How formal structures enable or constrain artistic expression",
+      category: "arts",
+    },
+    {
+      id: "entertainment-enlightenment",
+      title: "Entertainment vs. Enlightenment",
+      description: "The balance between pleasing audiences and elevating them",
+      category: "arts",
+    },
+  ],
+}
 
 export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 }) {
   const [topics, setTopics] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [customTopic, setCustomTopic] = useState("")
+
+  // Add voice input state at the top of the component
+  const [isListening, setIsListening] = useState(false)
+  const [recognition, setRecognition] = useState(null)
+
   const [error, setError] = useState(null)
 
   // Load character-specific topics when the component mounts or characters change
@@ -47,6 +190,18 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
     if (!isBrowser) return
 
     setIsLoading(true)
+
+    // Create a key for the character pair (sorted alphabetically to ensure consistency)
+    const chars = [character1, character2].sort()
+    const pairKey = `${chars[0]}_${chars[1]}`
+
+    // Check if we have predefined topics for this character pair
+    if (characterSpecificTopics[pairKey]) {
+      console.log(`Using predefined topics for ${pairKey}`)
+      setTopics(characterSpecificTopics[pairKey])
+      setIsLoading(false)
+      return
+    }
 
     // Check if we already have topics for this character pair in localStorage
     const topicKey = `${character1}_${character2}_topics`
@@ -62,21 +217,6 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
       } catch (e) {
         console.error("Error parsing stored topics:", e)
       }
-    }
-
-    // Special case for da Vinci and Socrates
-    if (
-      (character1 === "daVinci" && character2 === "socrates") ||
-      (character1 === "socrates" && character2 === "daVinci")
-    ) {
-      setTopics(daVinciSocratesTopics)
-      setIsLoading(false)
-      try {
-        localStorage.setItem(topicKey, JSON.stringify(daVinciSocratesTopics))
-      } catch (e) {
-        console.error("Error storing topics in localStorage:", e)
-      }
-      return
     }
 
     // If no stored topics, try to fetch from API
@@ -132,6 +272,48 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
     fetchTopics()
   }, [character1, character2])
 
+  // Add voice input setup useEffect
+  useEffect(() => {
+    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
+      const speechRecognition = new window.webkitSpeechRecognition()
+      speechRecognition.continuous = false
+      speechRecognition.interimResults = false
+      speechRecognition.lang = "en-US"
+
+      speechRecognition.onstart = () => {
+        setIsListening(true)
+      }
+
+      speechRecognition.onresult = (event) => {
+        const speechResult = event.results[0][0].transcript
+        setCustomTopic(speechResult)
+      }
+
+      speechRecognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error)
+        setIsListening(false)
+      }
+
+      speechRecognition.onend = () => {
+        setIsListening(false)
+      }
+
+      setRecognition(speechRecognition)
+    }
+  }, [])
+
+  const startListening = () => {
+    if (recognition && !isListening) {
+      recognition.start()
+    }
+  }
+
+  const stopListening = () => {
+    if (recognition && isListening) {
+      recognition.stop()
+    }
+  }
+
   // Add this function to generate fallback topics based on character pair
   function generateFallbackTopics(char1, char2) {
     const persona1 = personas[char1]
@@ -139,20 +321,58 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
 
     if (!persona1 || !persona2) return staticDebateTopics
 
-    return [
-      {
-        id: `${char1}-${char2}-expertise`,
-        title: `${persona1.name.split(" ")[0]}'s vs ${persona2.name.split(" ")[0]}'s Expertise`,
-        description: `Comparing the approaches and philosophies of these historical figures`,
-        category: "philosophy",
-      },
-      {
-        id: `${char1}-${char2}-legacy`,
-        title: "Historical Impact and Legacy",
-        description: `How ${persona1.name} and ${persona2.name} changed their respective fields`,
-        category: "history",
-      },
-    ]
+    // Generate topics based on the characters' backgrounds
+    const topics = []
+
+    // Topic 1: Based on their expertise/fields
+    let field1 = ""
+    let field2 = ""
+
+    // Determine fields based on character
+    if (char1 === "daVinci") field1 = "art and science"
+    else if (char1 === "socrates") field1 = "philosophy"
+    else if (char1 === "frida") field1 = "personal expression in art"
+    else if (char1 === "shakespeare") field1 = "literature and drama"
+    else if (char1 === "mozart") field1 = "music composition"
+
+    if (char2 === "daVinci") field2 = "art and science"
+    else if (char2 === "socrates") field2 = "philosophy"
+    else if (char2 === "frida") field2 = "personal expression in art"
+    else if (char2 === "shakespeare") field2 = "literature and drama"
+    else if (char2 === "mozart") field2 = "music composition"
+
+    topics.push({
+      id: `${char1}-${char2}-expertise`,
+      title: `${field1} vs ${field2}`,
+      description: `Comparing the approaches and philosophies of these historical figures`,
+      category: "philosophy",
+    })
+
+    // Topic 2: Based on their time periods/cultural contexts
+    let era1 = ""
+    let era2 = ""
+
+    // Determine eras based on character
+    if (char1 === "daVinci") era1 = "Renaissance Italy"
+    else if (char1 === "socrates") era1 = "Ancient Greece"
+    else if (char1 === "frida") era1 = "20th century Mexico"
+    else if (char1 === "shakespeare") era1 = "Elizabethan England"
+    else if (char1 === "mozart") era1 = "Classical Europe"
+
+    if (char2 === "daVinci") era2 = "Renaissance Italy"
+    else if (char2 === "socrates") era2 = "Ancient Greece"
+    else if (char2 === "frida") era2 = "20th century Mexico"
+    else if (char2 === "shakespeare") era2 = "Elizabethan England"
+    else if (char2 === "mozart") era2 = "Classical Europe"
+
+    topics.push({
+      id: `${char1}-${char2}-historical`,
+      title: `${era1} vs ${era2}`,
+      description: `How different historical contexts shaped these figures' worldviews`,
+      category: "history",
+    })
+
+    return topics
   }
 
   // Helper function to get category color
@@ -322,6 +542,17 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
             placeholder="Enter a debate topic..."
             className="flex-1 p-2 rounded border bg-gray-700 text-white border-gray-600 placeholder-gray-400"
           />
+          <button
+            onClick={isListening ? stopListening : startListening}
+            className={`px-3 py-2 rounded ${
+              isListening
+                ? "bg-red-600 hover:bg-red-700 text-white animate-pulse"
+                : "bg-gray-600 hover:bg-gray-500 text-white"
+            }`}
+            title={isListening ? "Stop listening" : "Voice input"}
+          >
+            🎤
+          </button>
           <button
             onClick={() => {
               if (customTopic.trim()) {
