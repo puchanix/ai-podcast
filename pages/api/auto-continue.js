@@ -112,7 +112,7 @@ Respond directly to the points made by ${otherPersona.name} in their last statem
         { role: "user", content: prompt },
       ],
       temperature: 0.7,
-      max_tokens: 250, // Limit token count for faster responses
+      max_tokens: 200, // Limit token count for faster responses
     })
 
     return completion.choices[0].message.content.trim()

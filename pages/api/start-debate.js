@@ -81,7 +81,7 @@ ${
 
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-3.5-turbo", // Changed from gpt-4
       messages: [
         { role: "system", content: systemPrompt },
         {
@@ -90,7 +90,7 @@ ${
         },
       ],
       temperature: 0.7,
-      max_tokens: 250,
+      max_tokens: 200, // Reduced from 250 for faster generation
     })
 
     return completion.choices[0].message.content.trim()

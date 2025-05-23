@@ -57,6 +57,11 @@ export function DebateInterface() {
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
 
+  // Add these state variables after the existing state declarations
+  const [isListening, setIsListening] = useState(false)
+  const [transcript, setTranscript] = useState("")
+  const [recognition, setRecognition] = useState(null)
+
   // Load initial state from localStorage on client-side only
   useEffect(() => {
     if (isBrowser && !initialStateLoaded) {
@@ -229,6 +234,53 @@ export function DebateInterface() {
       return () => clearTimeout(timer)
     }
   }, [])
+
+  // Add voice input functions after the existing useEffect hooks
+  useEffect(() => {
+    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
+      const speechRecognition = new window.webkitSpeechRecognition()
+      speechRecognition.continuous = false
+      speechRecognition.interimResults = false
+      speechRecognition.lang = "en-US"
+
+      speechRecognition.onstart = () => {
+        setIsListening(true)
+      }
+
+      speechRecognition.onresult = (event) => {
+        const speechResult = event.results[0][0].transcript
+        setTranscript(speechResult)
+        // Auto-submit the voice input
+        if (speechResult.trim()) {
+          startDebate(speechResult.trim())
+        }
+      }
+
+      speechRecognition.onerror = (event) => {
+        console.error("Speech recognition error:", event.error)
+        setIsListening(false)
+      }
+
+      speechRecognition.onend = () => {
+        setIsListening(false)
+      }
+
+      setRecognition(speechRecognition)
+    }
+  }, [])
+
+  const startListening = () => {
+    if (recognition && !isListening) {
+      setTranscript("")
+      recognition.start()
+    }
+  }
+
+  const stopListening = () => {
+    if (recognition && isListening) {
+      recognition.stop()
+    }
+  }
 
   // Function to unlock audio on iOS
   const unlockAudio = useCallback(async () => {
@@ -1416,6 +1468,7 @@ export function DebateInterface() {
         isIntroPlaying={isIntroPlaying}
         debateMessages={debateMessages}
         currentTopic={currentTopic}
+        speakerStatus={isLoadingAudio ? "thinking" : isPreparing ? "preparing" : isPlaying ? "speaking" : null}
         onCharacter1Change={handleCharacter1Change}
         onCharacter2Change={handleCharacter2Change}
       />
@@ -1448,132 +1501,6 @@ export function DebateInterface() {
       {!isDebating && !isIntroPlaying && (
         <div className="mb-8">
           <EmbeddedTopicSelector onSelectTopic={startDebate} character1={character1} character2={character2} />
-        </div>
-      )}
-
-      {/* Custom Question Input */}
-      <div className="mb-8 bg-gray-800 p-4 rounded-lg">
-        <h2 className="text-xl font-semibold mb-4 text-yellow-400">Ask Your Own Question</h2>
-        <div className="flex gap-2">
-          <input
-            value={customQuestion}
-            onChange={(e) => setCustomQuestion(e.target.value)}
-            placeholder="Enter a debate question or topic..."
-            disabled={isProcessing}
-            className="flex-1 p-2 rounded border bg-gray-700 text-white border-gray-600 placeholder-gray-400"
-          />
-          <button
-            onClick={submitCustomQuestion}
-            disabled={isProcessing || !customQuestion.trim()}
-            className="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-gray-600 disabled:text-gray-400"
-          >
-            {isProcessing ? "Processing..." : "Submit"}
-          </button>
-        </div>
-      </div>
-
-      {/* Replace the Continue Debate button with Pause/Continue button */}
-      {isDebating && (
-        <div className="flex justify-center mb-8">
-          {isPlaying ? (
-            <button
-              onClick={toggleAutoplay}
-              className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-full font-bold"
-            >
-              {isAutoplaying ? "⏸️ Pause Debate" : "▶️ Resume Debate"}
-            </button>
-          ) : (
-            <button
-              onClick={exchangeCount >= maxExchanges ? continueDebate : toggleAutoplay}
-              disabled={isProcessing}
-              className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-3 rounded-full disabled:bg-gray-600 disabled:text-gray-400 font-bold"
-            >
-              {isProcessing ? (
-                <span className="flex items-center">
-                  <svg
-                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    ></circle>
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    ></path>
-                  </svg>
-                  Processing...
-                </span>
-              ) : exchangeCount >= maxExchanges ? (
-                "Continue Debate"
-              ) : (
-                "Resume Debate"
-              )}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Manual Continue Button */}
-      {isDebating && !isPlaying && !isProcessing && debateMessages.length >= 2 && (
-        <div className="flex justify-center mb-8">
-          <button
-            onClick={forceNextExchange}
-            className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full font-bold"
-          >
-            Force Next Exchange
-          </button>
-        </div>
-      )}
-
-      {/* Add transcript display */}
-      {showTranscript && (
-        <div className="mt-8 p-4 bg-gray-800 border border-gray-700 rounded-lg max-h-96 overflow-y-auto">
-          <h3 className="text-lg font-bold mb-2">Debate Transcript</h3>
-          {debateMessages.map((msg, idx) => {
-            if (msg.character === "user") return null
-
-            let speaker = ""
-            let speakerClass = ""
-
-            if (msg.character === "moderator") {
-              speaker = "Moderator"
-              speakerClass = "text-yellow-400"
-            } else if (msg.character === character1) {
-              speaker = `${char1.name}${msg.responseType ? ` (${msg.responseType})` : ""}`
-              speakerClass = "text-blue-400"
-            } else if (msg.character === character2) {
-              speaker = `${char2.name}${msg.responseType ? ` (${msg.responseType})` : ""}`
-              speakerClass = "text-red-400"
-            }
-
-            return (
-              <div key={idx} className="mb-4">
-                <p className={`font-bold ${speakerClass}`}>{speaker}:</p>
-                <p className="text-gray-300">{msg.content}</p>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Add a transcript toggle button */}
-      {isDebating && debateMessages.length > 0 && (
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => setShowTranscript(!showTranscript)}
-            className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded"
-          >
-            {showTranscript ? "Hide Transcript" : "Show Transcript"}
-          </button>
         </div>
       )}
 
