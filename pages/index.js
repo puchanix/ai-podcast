@@ -1,13 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/router"
 import Layout from "../components/layout"
+import DebateInterface from "../components/debate-interface"
 import { VoiceInput } from "../components/voice-input"
 import { personas } from "../lib/personas"
 
 export default function Home() {
-  const router = useRouter()
   const [mode, setMode] = useState(null) // null, 'debate', or 'qa'
   const [selectedHero, setSelectedHero] = useState(null)
   const [selectedHeroes, setSelectedHeroes] = useState([])
@@ -83,18 +82,11 @@ export default function Home() {
     }
   }
 
-  // Start debate with selected topic
+  // Start debate with selected topic - using original approach
   const startDebate = (topic) => {
     if (selectedHeroes.length !== 2) return
-
-    router.push({
-      pathname: "/debate",
-      query: {
-        character1: selectedHeroes[0].id,
-        character2: selectedHeroes[1].id,
-        topic: topic,
-      },
-    })
+    // Use the original DebateInterface component approach
+    setMode("debate")
   }
 
   const resetSelection = () => {
@@ -140,8 +132,11 @@ export default function Home() {
       const data = await response.json()
       setHeroResponse(data.response)
 
-      // Generate audio using the same approach as the original system
+      // Generate audio using the original approach with proper voice ID handling
       if (data.response) {
+        // Use the getVoiceId function from personas to get the correct ElevenLabs voice
+        const voiceId = selectedHero.getVoiceId ? selectedHero.getVoiceId() : selectedHero.voiceId || "echo"
+
         const audioResponse = await fetch("/api/speak", {
           method: "POST",
           headers: {
@@ -149,7 +144,7 @@ export default function Home() {
           },
           body: JSON.stringify({
             text: data.response,
-            voice: selectedHero.voiceId || "echo",
+            voice: voiceId,
           }),
         })
 
@@ -327,6 +322,15 @@ export default function Home() {
 
         {/* Hidden audio element */}
         <audio ref={audioRef} preload="auto" className="hidden" />
+      </Layout>
+    )
+  }
+
+  // If in debate mode - use original approach
+  if (mode === "debate" && selectedHeroes.length === 2) {
+    return (
+      <Layout title={`Debate: ${selectedHeroes[0].name} vs ${selectedHeroes[1].name}`}>
+        <DebateInterface character1={selectedHeroes[0].id} character2={selectedHeroes[1].id} onBack={resetSelection} />
       </Layout>
     )
   }
