@@ -2,125 +2,109 @@
 
 import { useState, useEffect } from "react"
 
-const EmbeddedTopicSelector = ({ onSelectTopic, character1, character2 }) => {
-  const [customTopic, setCustomTopic] = useState("")
-  const [characterSpecificTopics, setCharacterSpecificTopics] = useState([])
-  const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
+export default function EmbeddedTopicSelector({ onSelectTopic, character1, character2 }) {
+  const [topics, setTopics] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // Static fallback topics
-  const staticTopics = [
-    {
-      id: "art-vs-science",
-      title: "Art vs Science",
-      description: "The relationship between artistic expression and scientific discovery",
-    },
-    {
-      id: "creativity-innovation",
-      title: "Creativity & Innovation",
-      description: "The nature of creative thinking and innovation",
-    },
-  ]
+  console.log("🔍 [TOPIC SELECTOR DEBUG] Component mounted with:", { character1, character2 })
 
-  // Generate character-specific topics
   useEffect(() => {
+    async function fetchTopics() {
+      try {
+        console.log("🔍 [TOPIC SELECTOR DEBUG] Fetching topics for:", [character1, character2])
+        setIsLoading(true)
+        setError(null)
+
+        const response = await fetch("/api/generate-character-topics", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            characters: [character1, character2],
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch topics: ${response.status}`)
+        }
+
+        const data = await response.json()
+        console.log("🔍 [TOPIC SELECTOR DEBUG] Topics received:", data)
+
+        if (data.topics && Array.isArray(data.topics)) {
+          setTopics(data.topics)
+        } else {
+          throw new Error("Invalid topics format received")
+        }
+      } catch (error) {
+        console.error("🔍 [TOPIC SELECTOR DEBUG] Error fetching topics:", error)
+        setError(error.message)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
     if (character1 && character2) {
-      generateTopics()
+      fetchTopics()
     }
   }, [character1, character2])
 
-  const generateTopics = async () => {
-    setIsGeneratingTopics(true)
-    try {
-      const response = await fetch("/api/generate-character-topics", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          character1,
-          character2,
-        }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setCharacterSpecificTopics(data.topics.slice(0, 2))
-      } else {
-        setCharacterSpecificTopics(staticTopics)
-      }
-    } catch (error) {
-      console.error("Error generating topics:", error)
-      setCharacterSpecificTopics(staticTopics)
-    } finally {
-      setIsGeneratingTopics(false)
-    }
+  const handleTopicClick = (topic) => {
+    console.log("🔍 [TOPIC SELECTOR DEBUG] Topic selected:", topic)
+    onSelectTopic(topic)
   }
 
-  const handleTopicSelect = (topic) => {
-    console.log("Topic selected:", topic)
-    if (typeof onSelectTopic === "function") {
-      onSelectTopic(topic)
-    }
+  if (isLoading) {
+    return (
+      <div className="bg-gray-800 rounded-xl p-6 mb-8">
+        <h3 className="text-xl font-bold text-yellow-400 mb-4 text-center">Generating Debate Topics...</h3>
+        <div className="flex justify-center">
+          <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full"></div>
+        </div>
+      </div>
+    )
   }
 
-  const handleCustomSubmit = (e) => {
-    e.preventDefault()
-    if (customTopic.trim()) {
-      handleTopicSelect(customTopic.trim())
-      setCustomTopic("")
-    }
+  if (error) {
+    return (
+      <div className="bg-red-900 rounded-xl p-6 mb-8">
+        <h3 className="text-xl font-bold text-red-400 mb-4 text-center">Error Loading Topics</h3>
+        <p className="text-red-200 text-center">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 mx-auto block px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+        >
+          Retry
+        </button>
+      </div>
+    )
   }
-
-  const topicsToShow = characterSpecificTopics.length > 0 ? characterSpecificTopics : staticTopics
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <h3 className="text-xl font-semibold text-yellow-400 mb-4">Choose a Topic:</h3>
+    <div className="bg-gray-800 rounded-xl p-6 mb-8">
+      <h3 className="text-xl font-bold text-yellow-400 mb-4 text-center">Choose a Debate Topic</h3>
+      <p className="text-gray-300 text-center mb-6">
+        Select a topic for the debate between {character1} and {character2}
+      </p>
 
-      {/* Suggested Topics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {isGeneratingTopics ? (
-          <div className="col-span-2 text-center py-8">
-            <div className="inline-block animate-spin h-6 w-6 border-2 border-yellow-500 border-t-transparent rounded-full mb-2"></div>
-            <p className="text-yellow-400">Generating personalized topics...</p>
-          </div>
-        ) : (
-          topicsToShow.map((topic) => (
+      {topics.length === 0 ? (
+        <div className="text-center text-gray-400">No topics available. Please try again.</div>
+      ) : (
+        <div className="grid gap-3">
+          {topics.map((topic, index) => (
             <button
-              key={topic.id}
-              onClick={() => handleTopicSelect(topic.title)}
-              className="bg-gray-700 hover:bg-gray-600 text-white p-4 rounded-lg text-left transition-colors border-2 border-transparent hover:border-yellow-400"
+              key={index}
+              onClick={() => handleTopicClick(topic)}
+              className="p-4 bg-gray-700 hover:bg-gray-600 rounded-lg text-left transition-all duration-300 hover:scale-105 border-2 border-transparent hover:border-yellow-400"
             >
-              <h4 className="font-semibold text-yellow-400 mb-2">{topic.title}</h4>
-              <p className="text-sm text-gray-300">{topic.description}</p>
+              <div className="text-white font-medium">{topic.title}</div>
+              {topic.description && <div className="text-gray-400 text-sm mt-1">{topic.description}</div>}
             </button>
-          ))
-        )}
-      </div>
-
-      {/* Custom Topic Input */}
-      <div className="border-t border-gray-600 pt-4">
-        <h4 className="text-lg font-medium text-yellow-400 mb-3">Or ask your own question:</h4>
-        <form onSubmit={handleCustomSubmit} className="flex gap-3">
-          <input
-            type="text"
-            placeholder="Enter your custom debate topic..."
-            value={customTopic}
-            onChange={(e) => setCustomTopic(e.target.value)}
-            className="flex-1 bg-gray-700 text-white px-4 py-3 rounded-lg border border-gray-600 focus:border-yellow-400 focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={!customTopic.trim()}
-            className="bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-semibold px-6 py-3 rounded-lg transition-colors"
-          >
-            Start Debate
-          </button>
-        </form>
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
-
-export { EmbeddedTopicSelector }
-export default EmbeddedTopicSelector
