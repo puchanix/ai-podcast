@@ -35,7 +35,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [initialStateLoaded, setInitialStateLoaded] = useState(false)
   const [char1, setChar1] = useState("")
   const [char2, setChar2] = useState("")
-  const [isDebating, setIsDebating] = useState(false) // FIXED: removed circular reference
+  const [isDebating, setIsDebating] = useState(false)
   const [debateMessages, setDebateMessages] = useState([])
   const [currentTopic, setCurrentTopic] = useState("")
   const [exchangeCount, setExchangeCount] = useState(0)
@@ -46,11 +46,11 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [nextSpeaker, setNextSpeaker] = useState(null)
-  const [isPlaying, setIsPlaying] = useState(false) // FIXED: removed circular reference
+  const [isPlaying, setIsPlaying] = useState(false)
   const [isAudioLoaded, setIsAudioLoaded] = useState(false)
   const [volume, setVolume] = useState(1.0)
   const [audioError, setAudioError] = useState(null)
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false) // FIXED: removed circular reference
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false)
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
@@ -108,7 +108,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       lastUpdate: new Date().toISOString(),
     }))
     console.log("🔍 DebateInterface render #", debugInfo.renderCount + 1)
-  }, [dependenciesLoaded, isDebating, currentSpeaker]) // Only update on meaningful changes
+  }, [dependenciesLoaded, isDebating, currentSpeaker])
 
   // DEBUG: Log all state changes
   useEffect(() => {
@@ -190,18 +190,18 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         setPersonas(personasData)
         setDebateState(debateStateModule)
 
-        // For embedded mode, don't set default characters - let the topic selector handle it
+        // For embedded mode, use the props directly if provided
         let defaultState
         if (embedded) {
           defaultState = {
-            character1: "",
-            character2: "",
+            character1: character1 || "",
+            character2: character2 || "",
             isDebating: false,
             messages: [],
             topic: initialTopic || "",
             exchangeCount: 0,
           }
-          console.log("🔍 Embedded mode - waiting for character selection")
+          console.log("🔍 Embedded mode - using props:", { character1, character2 })
         } else {
           defaultState = {
             character1: character1 || Object.keys(personasData)[0] || "daVinci",
@@ -395,7 +395,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   // Generate character-specific topics
   async function generateCharacterSpecificTopics() {
-    if (isGeneratingTopics || !isBrowser) return
+    if (isGeneratingTopics || !isBrowser || !char1 || !char2) return
 
     const topicKey = `${char1}_${char2}_topics`
     let storedTopics
@@ -451,305 +451,23 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   // Generate topics when characters change
   useEffect(() => {
-    if (isBrowser && initialStateLoaded && !isDebating) {
+    if (isBrowser && initialStateLoaded && !isDebating && char1 && char2) {
       console.log("🔍 Characters changed, resetting and generating topics")
-      resetDebateState(true)
+      resetDebateState(false) // Don't call onDebateEnd when just changing characters
       generateCharacterSpecificTopics()
     }
   }, [char1, char2, initialStateLoaded, isDebating])
-
-  // Get voice for character
-  function getVoiceForCharacter(characterId) {
-    if (!personas[characterId]) {
-      console.log(`🔍 Character ${characterId} not found in personas`)
-      return "echo"
-    }
-
-    if (personas[characterId].voiceId) {
-      console.log(`🔍 Using direct voiceId property for ${characterId}: ${personas[characterId].voiceId}`)
-      return personas[characterId].voiceId
-    }
-
-    const voiceKey = characterId === "daVinci" ? "davinci" : characterId.toLowerCase()
-    if (voiceIds[voiceKey]) {
-      console.log(`🔍 Using voiceIds state for ${characterId}: ${voiceIds[voiceKey]}`)
-      return voiceIds[voiceKey]
-    }
-
-    console.log(`🔍 No voice ID found for ${characterId}, using default`)
-    return characterId === "frida" ? "nova" : "echo"
-  }
-
-  // Enhanced play debate audio with visuals and auto-continue
-  async function playDebateAudio(message, allMessages, currentIndex) {
-    if (currentAudioRef.current && !currentAudioRef.current.paused) {
-      console.log("🔍 Audio already playing, skipping duplicate play request")
-      return
-    }
-
-    const { character, content } = message
-    console.log(`🔍 Playing audio for ${character}...`)
-
-    setIsLoadingAudio(true)
-    setCurrentSpeaker(character)
-    setIsAudioLoaded(false)
-
-    if (message.responseType === "Opening Remarks") {
-      setStatusMessage(`${personas[character]?.name} - Opening Remarks`)
-    } else {
-      setStatusMessage(`${personas[character]?.name} - ${message.responseType || "Speaking"}`)
-    }
-
-    const nextIndex = currentIndex + 1
-    if (nextIndex < allMessages.length && allMessages[nextIndex].character !== "user") {
-      setNextSpeaker(allMessages[nextIndex].character)
-    } else {
-      setNextSpeaker(character === char1 ? char2 : char1)
-    }
-
-    try {
-      const audio = new Audio()
-      currentAudioRef.current = audio
-
-      const voice = getVoiceForCharacter(character)
-      console.log(`🔍 Using voice "${voice}" for ${character}`)
-
-      if (message.audioUrl) {
-        if (message.audioUrl.includes("stream-audio-realtime")) {
-          console.log("🔍 Converting stream-audio-realtime URL to /api/speak")
-          const response = await fetch("/api/speak", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              text: content,
-              voice,
-            }),
-          })
-
-          if (!response.ok) {
-            throw new Error(`Speak API returned ${response.status}: ${response.statusText}`)
-          }
-
-          const data = await response.json()
-          audio.src = data.audioUrl
-        } else {
-          audio.src = message.audioUrl
-        }
-      } else {
-        const response = await fetch("/api/speak", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            text: content,
-            voice,
-          }),
-        })
-
-        if (!response.ok) {
-          throw new Error(`Speak API returned ${response.status}: ${response.statusText}`)
-        }
-
-        const data = await response.json()
-        audio.src = data.audioUrl
-      }
-
-      audio.volume = volume
-
-      audio.oncanplaythrough = () => {
-        console.log(`🔍 ${character} audio loaded successfully`)
-        setIsAudioLoaded(true)
-        setIsLoadingAudio(false)
-      }
-
-      audio.onplay = () => {
-        console.log(`🔍 ${character} audio playing`)
-        setIsPlaying(true)
-        setStatusMessage(`${personas[character]?.name} is speaking...`)
-      }
-
-      audio.onended = () => {
-        console.log(`🔍 ${character} audio playback ended`)
-        setIsPlaying(false)
-        setIsAudioLoaded(false)
-        setStatusMessage("")
-
-        const nextIndex = currentIndex + 1
-        if (nextIndex < allMessages.length) {
-          const nextMessage = allMessages[nextIndex]
-          if (nextMessage.character !== "user") {
-            if (isAutoplaying) {
-              setTimeout(() => {
-                playDebateAudio(nextMessage, allMessages, nextIndex)
-              }, 1000)
-            } else {
-              setCurrentSpeaker(null)
-            }
-          }
-        } else {
-          setCurrentSpeaker(null)
-          setNextSpeaker(null)
-
-          if (currentIndex > 0 && currentIndex % 2 === 1) {
-            const newExchangeCount = Math.floor((currentIndex + 1) / 2)
-            const displayExchangeCount = Math.max(1, newExchangeCount)
-            updateExchangeCount(displayExchangeCount)
-            console.log(`🔍 Completed exchange ${displayExchangeCount} of ${maxExchanges}`)
-
-            if (displayExchangeCount >= maxExchanges) {
-              setIsAutoplaying(false)
-              console.log(`🔍 Reached ${maxExchanges} exchanges, ending debate`)
-              setTimeout(() => {
-                resetDebateState(true)
-              }, 2000)
-            } else {
-              console.log("🔍 Auto-continuing to next exchange...")
-              setTimeout(() => {
-                continueDebate()
-              }, 2000)
-            }
-          }
-        }
-      }
-
-      audio.onerror = (e) => {
-        const errorDetails = audio.error ? `${audio.error.code}: ${audio.error.message}` : "Unknown error"
-        console.error(`🔍 ${character} audio error:`, errorDetails)
-        setAudioError(`${character} audio error: ${errorDetails}`)
-        setIsLoadingAudio(false)
-        setIsPlaying(false)
-        setIsAudioLoaded(false)
-        setCurrentSpeaker(null)
-        setStatusMessage("")
-      }
-
-      audio.load()
-      await audio.play()
-    } catch (err) {
-      console.error(`🔍 Error playing ${character} audio:`, err)
-      setAudioError(`Error playing ${character} audio: ${err.message}`)
-      setIsLoadingAudio(false)
-      setIsPlaying(false)
-      setIsAudioLoaded(false)
-      setCurrentSpeaker(null)
-      setStatusMessage("")
-    }
-  }
-
-  // Continue debate function for auto-progression
-  async function continueDebate() {
-    console.log("🔍 === CONTINUE DEBATE CALLED ===")
-
-    if (isProcessing) {
-      console.log("🔍 Cannot continue debate: isProcessing =", isProcessing)
-      return
-    }
-
-    const topic = topicRef.current
-    if (!topic) {
-      console.error("🔍 Cannot continue debate: No topic specified")
-      setAudioError("Cannot continue debate: No topic specified. Please select a topic or ask a question.")
-      return
-    }
-
-    const messages = debateMessagesRef.current
-    if (!messages || messages.length === 0) {
-      console.error("🔍 Cannot continue debate: No previous messages")
-      setAudioError("Cannot continue debate: No previous messages. Please start a new debate.")
-      return
-    }
-
-    console.log("🔍 Starting next exchange with topic:", topic)
-    setIsProcessing(true)
-    setIsSettingUp(true)
-    setAudioError(null)
-
-    try {
-      const data = {
-        character1: char1,
-        character2: char2,
-        currentMessages: messages,
-        topic: topic,
-        format: debateFormat,
-        historicalContext,
-      }
-
-      const response = await fetch("/api/auto-continue", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error(`🔍 API returned ${response.status}: ${errorText}`)
-        throw new Error(`API returned ${response.status}: ${errorText}`)
-      }
-
-      const responseData = await response.json()
-      console.log("🔍 Received new debate responses:", responseData)
-
-      const currentExchangeCount = Math.floor(messages.length / 2) + 1
-
-      const newMessages = [
-        {
-          character: char1,
-          content: responseData.response1,
-          timestamp: Date.now() + 100,
-          audioUrl: responseData.audioUrl1,
-          responseType: `Response ${currentExchangeCount}`,
-        },
-        {
-          character: char2,
-          content: responseData.response2,
-          timestamp: Date.now() + 200,
-          audioUrl: responseData.audioUrl2,
-          responseType: `Response ${currentExchangeCount}`,
-        },
-      ]
-
-      const allMessages = [...messages, ...newMessages]
-      updateDebateMessages(allMessages)
-      setRetryCount(0)
-      setIsSettingUp(false)
-      setNextSpeaker(char2)
-
-      playDebateAudio(newMessages[0], allMessages, messages.length)
-    } catch (error) {
-      console.error("🔍 Error continuing debate:", error)
-      setLastError(error.message)
-      setIsSettingUp(false)
-
-      if (retryCount < 3) {
-        const newRetryCount = retryCount + 1
-        setRetryCount(newRetryCount)
-        setAudioError(
-          `Failed to continue debate (attempt ${newRetryCount}/3): ${error.message}. Retrying in 3 seconds...`,
-        )
-
-        setTimeout(() => {
-          if (isDebatingRef.current) {
-            console.log(`🔍 Retry attempt ${newRetryCount}/3...`)
-            continueDebate()
-          }
-        }, 3000)
-      } else {
-        setAudioError(`Failed to continue debate after 3 attempts: ${error.message}. Please try manually continuing.`)
-      }
-    } finally {
-      setIsProcessing(false)
-    }
-  }
 
   // Start debate main function
   async function startDebateMain(topic) {
     if (isStarting || isDebating) {
       console.log("🔍 Debate already starting or in progress, ignoring duplicate start")
+      return
+    }
+
+    if (!char1 || !char2) {
+      console.log("🔍 Cannot start debate: missing characters", { char1, char2 })
+      setAudioError("Cannot start debate: Please ensure both characters are selected")
       return
     }
 
@@ -825,7 +543,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       setIsSettingUp(false)
       setNextSpeaker(char2)
 
-      playDebateAudio(messages[0], messages, 0)
+      // For now, just set the debate as active without playing audio
+      console.log("🔍 Debate setup complete, visuals should now be active")
     } catch (error) {
       console.error("🔍 Error starting debate:", error)
       updateIsDebating(false)
@@ -854,117 +573,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }, 100)
   }
 
-  // Toggle autoplay
-  function toggleAutoplay() {
-    setIsAutoplaying(!isAutoplaying)
-
-    if (isAutoplaying && currentAudioRef.current) {
-      currentAudioRef.current.pause()
-      setIsPlaying(false)
-    } else if (!isAutoplaying && currentAudioRef.current) {
-      currentAudioRef.current.play()
-      setIsPlaying(true)
-    }
-  }
-
-  // Handle character changes
-  function handleCharacter1Change(newCharacter) {
-    if (!embedded && newCharacter !== char1) {
-      setChar1(newCharacter)
-      if (isDebating) {
-        resetDebateState(true)
-      }
-    }
-  }
-
-  function handleCharacter2Change(newCharacter) {
-    if (!embedded && newCharacter !== char2) {
-      setChar2(newCharacter)
-      if (isDebating) {
-        resetDebateState(true)
-      }
-    }
-  }
-
-  // Submit custom question
-  async function submitCustomQuestion(userQuestion) {
-    if (!userQuestion.trim() || isProcessing) return
-
-    setIsProcessing(true)
-    setIsSettingUp(true)
-
-    if (!isDebatingRef.current || !topicRef.current) {
-      updateCurrentTopic(userQuestion)
-      updateIsDebating(true)
-
-      try {
-        const response = await fetch("/api/start-debate", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            character1: char1,
-            character2: char2,
-            topic: userQuestion,
-            format: debateFormat,
-            historicalContext,
-          }),
-        })
-
-        if (!response.ok) throw new Error("Failed to start debate")
-
-        const data = await response.json()
-        console.log("🔍 Debate started with data:", data)
-
-        const messages = [
-          {
-            character: char1,
-            content: data.opening1,
-            timestamp: Date.now(),
-            audioUrl: data.audioUrl1,
-            responseType: "Opening Remarks",
-          },
-          {
-            character: char2,
-            content: data.opening2,
-            timestamp: Date.now() + 100,
-            audioUrl: data.audioUrl2,
-            responseType: "Opening Remarks",
-          },
-        ]
-
-        updateDebateMessages(messages)
-        setIsSettingUp(false)
-        setNextSpeaker(char2)
-
-        playDebateAudio(messages[0], messages, 0)
-      } catch (error) {
-        console.error("🔍 Error starting debate:", error)
-        updateIsDebating(false)
-        setIsSettingUp(false)
-        setAudioError(`Failed to start debate: ${error.message}`)
-      } finally {
-        setIsProcessing(false)
-      }
-      return
-    }
-
-    setIsProcessing(false)
-  }
-
-  // Function to update characters from embedded topic selector
-  const updateCharactersFromSelector = (char1Id, char2Id) => {
-    console.log("🔍 updateCharactersFromSelector called with:", char1Id, char2Id)
-    if (char1Id && char2Id && personas[char1Id] && personas[char2Id]) {
-      setChar1(char1Id)
-      setChar2(char2Id)
-      console.log("🔍 Characters updated successfully")
-    } else {
-      console.log("🔍 Invalid characters or personas not loaded yet")
-    }
-  }
-
   // Auto-start when dependencies loaded and topic available
   useEffect(() => {
     console.log("🔍 Auto-start effect triggered")
@@ -979,16 +587,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       embedded,
     })
 
-    if (dependenciesLoaded && initialStateLoaded && currentTopic && !isDebating && !isStarting) {
-      if (embedded) {
-        // For embedded mode, we need to wait for characters to be selected
-        // The characters should be set by the EmbeddedTopicSelector
-        if (!char1 || !char2) {
-          console.log("🔍 Embedded mode - waiting for character selection")
-          return
-        }
-      }
-
+    if (dependenciesLoaded && initialStateLoaded && currentTopic && !isDebating && !isStarting && char1 && char2) {
       console.log("🔍 Auto-starting debate with topic:", currentTopic)
       console.log("🔍 Using characters:", char1, "vs", char2)
       setTimeout(() => {
@@ -1116,32 +715,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         </div>
       </div>
 
-      {shouldShowDebateHeader && (
-        <div className="mb-4 p-2 bg-green-900 text-green-100 rounded">
-          <p>🔍 RENDERING: DebateHeader</p>
-        </div>
-      )}
-
-      {!embedded && (
-        <DebateHeader
-          character1={char1}
-          character2={char2}
-          currentSpeaker={displayedSpeaker}
-          isPlaying={isPlaying}
-          isLoadingAudio={isLoadingAudio}
-          isPreparing={isPreparing}
-          isIntroPlaying={isIntroPlaying}
-          debateMessages={debateMessages}
-          currentTopic={currentTopic}
-          speakerStatus={isLoadingAudio ? "thinking" : isPreparing ? "preparing" : isPlaying ? "speaking" : null}
-          isAutoplaying={isAutoplaying}
-          isDebating={isDebating}
-          onToggleAutoplay={toggleAutoplay}
-          onCharacter1Change={handleCharacter1Change}
-          onCharacter2Change={handleCharacter2Change}
-        />
-      )}
-
       <div style={mainContentStyle}>
         {isLoadingVoices && (
           <div className="mb-4 p-4 bg-yellow-800 text-yellow-100 rounded-lg text-center">
@@ -1155,6 +728,18 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
             <p className="font-bold">Error:</p>
             <p>{audioError}</p>
             {retryCount > 0 && retryCount < 3 && <p className="mt-2">Retrying automatically ({retryCount}/3)...</p>}
+          </div>
+        )}
+
+        {/* STATIC TEST VISUAL - ALWAYS SHOW */}
+        <div className="mb-6 p-8 bg-red-600 text-white text-center text-2xl font-bold border-4 border-yellow-400">
+          🚨 STATIC TEST VISUAL - THIS SHOULD ALWAYS BE VISIBLE 🚨
+        </div>
+
+        {/* CONDITIONAL TEST VISUAL - ONLY WHEN DEBATING */}
+        {isDebating && (
+          <div className="mb-6 p-8 bg-green-600 text-white text-center text-2xl font-bold border-4 border-yellow-400">
+            ✅ DEBATE ACTIVE TEST VISUAL - DEBATE IS RUNNING ✅
           </div>
         )}
 
@@ -1293,21 +878,16 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           </div>
         )}
 
-        {!isDebating && !isIntroPlaying && !embedded && dependenciesLoaded && (
+        {!isDebating && !isIntroPlaying && dependenciesLoaded && (
           <div className="mb-8">
             <div className="mb-4 p-2 bg-orange-900 text-orange-100 rounded">
               <p>🔍 RENDERING: EmbeddedTopicSelector</p>
             </div>
-            <EmbeddedTopicSelector
-              onSelectTopic={startDebate}
-              character1={char1}
-              character2={char2}
-              updateCharacters={updateCharactersFromSelector}
-            />
+            <EmbeddedTopicSelector onSelectTopic={startDebate} character1={char1} character2={char2} />
           </div>
         )}
 
-        {(isSettingUp || isPreparing) && !embedded && (
+        {(isSettingUp || isPreparing) && (
           <div className="flex justify-center items-center mb-8">
             <div className="text-center">
               <div className="inline-block animate-spin h-10 w-10 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
@@ -1320,12 +900,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
               </p>
               {statusMessage && <p className="text-yellow-300 text-sm mt-2">{statusMessage}</p>}
             </div>
-          </div>
-        )}
-
-        {embedded && isDebating && (
-          <div className="mb-8 flex justify-center">
-            <VoiceInput onSubmit={submitCustomQuestion} buttonText="Ask Custom Question" />
           </div>
         )}
 
