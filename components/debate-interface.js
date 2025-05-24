@@ -108,6 +108,15 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     loadVoiceIds()
   }, [])
 
+  // Auto-start debate when initialTopic is provided
+  useEffect(() => {
+    if (dependenciesLoaded && initialTopic && char1 && char2 && !isDebating && !isProcessing) {
+      console.log("🔍 [DEBATE DEBUG] Auto-starting debate with initial topic:", initialTopic)
+      console.log("🔍 [DEBATE DEBUG] Characters:", char1, "vs", char2)
+      startDebate(initialTopic)
+    }
+  }, [dependenciesLoaded, initialTopic, char1, char2, isDebating, isProcessing])
+
   // Helper functions
   const updateDebateState = (updates) => {
     if (updates.isDebating !== undefined) {
@@ -150,7 +159,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
   }
 
-  // Get voice for character - use the original working system
+  // Get voice for character - use the voice IDs from the API
   const getVoiceForCharacter = (characterId) => {
     if (!personas[characterId]) return "echo"
 
@@ -158,12 +167,12 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     const voiceKey = characterId === "daVinci" ? "davinci" : characterId.toLowerCase()
 
     if (voiceIds[voiceKey]) {
-      console.log(`🔍 Using voice ID for ${characterId}: ${voiceIds[voiceKey]}`)
-      return voiceKey // Return the key, not the ID - the speak API will map it
+      console.log(`🔍 [DEBATE VOICE DEBUG] Using voice ID for ${characterId}: ${voiceIds[voiceKey]}`)
+      return voiceIds[voiceKey] // Return the actual voice ID, not the key
     }
 
-    // Fallback to default voice names
-    console.log(`🔍 No voice ID found for ${characterId}, using fallback: echo`)
+    // Fallback to default voice
+    console.log(`🔍 [DEBATE VOICE DEBUG] No voice ID found for ${characterId}, using fallback: echo`)
     return "echo"
   }
 
