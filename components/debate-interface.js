@@ -40,6 +40,35 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [currentTopic, setCurrentTopic] = useState("")
   const [exchangeCount, setExchangeCount] = useState(0)
 
+  // Helper functions to update both state and refs
+  const updateCurrentTopic = (topic) => {
+    setCurrentTopic(topic)
+    topicRef.current = topic
+    console.log("Topic updated to:", topic)
+    if (!embedded && debateState) debateState.saveTopic(topic)
+  }
+
+  const updateIsDebating = (debating) => {
+    setIsDebating(debating)
+    isDebatingRef.current = debating
+    console.log("isDebating updated to:", debating)
+    if (!embedded && debateState) debateState.saveIsDebating(debating)
+  }
+
+  const updateDebateMessages = (messages) => {
+    setDebateMessages(messages)
+    debateMessagesRef.current = messages
+    console.log("debateMessages updated, length:", messages.length)
+    if (!embedded && debateState) debateState.saveMessages(messages)
+  }
+
+  const updateExchangeCount = (count) => {
+    setExchangeCount(count)
+    exchangeCountRef.current = count
+    console.log("exchangeCount updated to:", count)
+    if (!embedded && debateState) debateState.saveExchangeCount(count)
+  }
+
   // UI state
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
@@ -96,28 +125,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const character2Obj = personas[char2]
 
   // Update refs ONLY when state actually changes and we're not resetting
-  useEffect(() => {
-    topicRef.current = currentTopic
-    console.log("Topic ref updated to:", topicRef.current)
-    if (!embedded && debateState) debateState.saveTopic(currentTopic)
-  }, [currentTopic, embedded, debateState])
-
-  useEffect(() => {
-    isDebatingRef.current = isDebating
-    console.log("isDebating ref updated to:", isDebatingRef.current)
-    if (!embedded && debateState) debateState.saveIsDebating(isDebating)
-  }, [isDebating, embedded, debateState])
-
-  useEffect(() => {
-    debateMessagesRef.current = debateMessages
-    console.log("debateMessages ref updated, length:", debateMessagesRef.current.length)
-    if (!embedded && debateState) debateState.saveMessages(debateMessages)
-  }, [debateMessages, embedded, debateState])
-
-  useEffect(() => {
-    exchangeCountRef.current = exchangeCount
-    if (!embedded && debateState) debateState.saveExchangeCount(exchangeCount)
-  }, [exchangeCount, embedded, debateState])
 
   useEffect(() => {
     if (!embedded && debateState) {
@@ -161,10 +168,10 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
         setChar1(defaultState.character1)
         setChar2(defaultState.character2)
-        setIsDebating(defaultState.isDebating)
-        setDebateMessages(defaultState.messages)
-        setCurrentTopic(defaultState.topic)
-        setExchangeCount(defaultState.exchangeCount)
+        updateIsDebating(defaultState.isDebating)
+        updateDebateMessages(defaultState.messages)
+        updateCurrentTopic(defaultState.topic)
+        updateExchangeCount(defaultState.exchangeCount)
         setInitialStateLoaded(true)
         setDependenciesLoaded(true)
 
@@ -288,9 +295,9 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   function resetDebateState(shouldCallOnDebateEnd = true) {
     console.log("Resetting debate state, shouldCallOnDebateEnd:", shouldCallOnDebateEnd)
 
-    setIsDebating(false)
-    setDebateMessages([])
-    setCurrentTopic("")
+    updateIsDebating(false)
+    updateDebateMessages([])
+    updateCurrentTopic("")
     setCurrentSpeaker(null)
     setNextSpeaker(null)
     setIsPlaying(false)
@@ -298,7 +305,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     setAudioError(null)
     setCurrentAudioUrls({ char1: "", char2: "" })
     setNextAudioData(null)
-    setExchangeCount(0)
+    updateExchangeCount(0)
     setIsAutoplaying(true)
     setRetryCount(0)
     setLastError(null)
@@ -556,7 +563,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           if (currentIndex > 0 && currentIndex % 2 === 1) {
             const newExchangeCount = Math.floor((currentIndex + 1) / 2)
             const displayExchangeCount = Math.max(1, newExchangeCount)
-            setExchangeCount(displayExchangeCount)
+            updateExchangeCount(displayExchangeCount)
             console.log(`Completed exchange ${displayExchangeCount} of ${maxExchanges}`)
 
             if (displayExchangeCount >= maxExchanges) {
@@ -682,7 +689,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       ]
 
       const allMessages = [...messages, ...newMessages]
-      setDebateMessages(allMessages)
+      updateDebateMessages(allMessages)
       setRetryCount(0)
       setIsSettingUp(false)
       setNextSpeaker(char2)
@@ -732,8 +739,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     setAudioError(null)
     setStatusMessage("Preparing debate...")
 
-    setCurrentTopic(topic)
-    setIsDebating(true)
+    updateCurrentTopic(topic)
+    updateIsDebating(true)
     setIsProcessing(true)
     setIsSettingUp(true)
     setCurrentSpeaker(char1)
@@ -777,14 +784,14 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         },
       ]
 
-      setDebateMessages(messages)
+      updateDebateMessages(messages)
       setIsSettingUp(false)
       setNextSpeaker(char2)
 
       playDebateAudio(messages[0], messages, 0)
     } catch (error) {
       console.error("Error starting debate:", error)
-      setIsDebating(false)
+      updateIsDebating(false)
       setIsSettingUp(false)
       setAudioError(`Failed to start debate: ${error.message}`)
     } finally {
@@ -800,7 +807,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
     if (!dependenciesLoaded || !initialStateLoaded) {
       console.log("Dependencies not ready, waiting...")
-      setCurrentTopic(topic)
+      updateCurrentTopic(topic)
       return
     }
 
@@ -850,8 +857,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     setIsSettingUp(true)
 
     if (!isDebatingRef.current || !topicRef.current) {
-      setCurrentTopic(userQuestion)
-      setIsDebating(true)
+      updateCurrentTopic(userQuestion)
+      updateIsDebating(true)
 
       try {
         const response = await fetch("/api/start-debate", {
@@ -890,14 +897,14 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           },
         ]
 
-        setDebateMessages(messages)
+        updateDebateMessages(messages)
         setIsSettingUp(false)
         setNextSpeaker(char2)
 
         playDebateAudio(messages[0], messages, 0)
       } catch (error) {
         console.error("Error starting debate:", error)
-        setIsDebating(false)
+        updateIsDebating(false)
         setIsSettingUp(false)
         setAudioError(`Failed to start debate: ${error.message}`)
       } finally {
