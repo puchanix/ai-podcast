@@ -77,10 +77,8 @@ export default function Home() {
       }
     }
 
-    if (Object.keys(personas).length > 0) {
-      loadVoiceIds()
-    }
-  }, [personas])
+    loadVoiceIds()
+  }, [])
 
   // Load personas when component mounts
   useEffect(() => {
@@ -751,18 +749,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Debug Info */}
-          <div className="mb-8 p-4 bg-gray-800 text-gray-300 rounded-lg text-xs">
-            <h3 className="font-bold mb-2">Debug Info:</h3>
-            <p>Mode: {mode}</p>
-            <p>Selected Characters: {JSON.stringify(selectedCharacters)}</p>
-            <p>Is Debating: {isDebating.toString()}</p>
-            <p>Debate Topic: {debateTopic}</p>
-            <p>Show Topic Selector: {showTopicSelector.toString()}</p>
-            <p>Voice IDs Keys: {JSON.stringify(Object.keys(voiceIds))}</p>
-            <p>Voice IDs Values: {JSON.stringify(Object.values(voiceIds))}</p>
-          </div>
-
           {/* Debate Topic Display */}
           {isDebating && debateTopic && (
             <div className="mb-8 text-center">
@@ -788,7 +774,7 @@ export default function Home() {
             )}
           </div>
 
-          {/* Character Grid */}
+          {/* Character Grid - SINGLE UNIFIED INTERFACE */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-12">
             {Object.entries(personas).map(([key, persona]) => {
               const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
@@ -930,6 +916,8 @@ export default function Home() {
               </div>
             </div>
           )}
+
+          {/* NO MORE DUPLICATE DEBATE INTERFACE - Everything is integrated above! */}
         </div>
       </div>
     </Layout>
