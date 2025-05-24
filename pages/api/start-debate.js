@@ -39,20 +39,43 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" })
   }
 
+  console.log("🔍 start-debate API called with body:", req.body)
+
   try {
     const { character1, character2, topic, format, historicalContext } = req.body
 
+    console.log("🔍 Extracted parameters:", { character1, character2, topic, format, historicalContext })
+
     // Validate required fields
     if (!character1 || !character2 || !topic) {
-      return res.status(400).json({ error: "Missing required fields" })
+      console.error("🔍 Missing required fields:", { character1, character2, topic })
+      return res.status(400).json({
+        error: "Missing required fields",
+        received: { character1, character2, topic, format, historicalContext },
+      })
     }
 
     // Get the personas for each character
     const persona1 = personas[character1]
     const persona2 = personas[character2]
 
+    console.log("🔍 Looking up personas:", { character1, character2 })
+    console.log("🔍 Available personas:", Object.keys(personas))
+    console.log("🔍 Found persona1:", persona1?.name)
+    console.log("🔍 Found persona2:", persona2?.name)
+
     if (!persona1 || !persona2) {
-      return res.status(400).json({ error: "Invalid character selection" })
+      console.error("🔍 Invalid character selection:", {
+        character1,
+        character2,
+        persona1: !!persona1,
+        persona2: !!persona2,
+      })
+      return res.status(400).json({
+        error: "Invalid character selection",
+        available: Object.keys(personas),
+        requested: { character1, character2 },
+      })
     }
 
     console.log(`Using system prompt for ${persona1.name}: ${persona1.systemPrompt}`)
