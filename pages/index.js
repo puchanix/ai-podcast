@@ -633,8 +633,8 @@ export default function Home() {
           {mode === "debate" && isDebating && selectedCharacters.length === 2 && (
             <div className="mb-8">
               <DebateInterface
-                character1={selectedCharacters[0]}
-                character2={selectedCharacters[1]}
+                character1={personas[selectedCharacters[0]]}
+                character2={personas[selectedCharacters[1]]}
                 initialTopic={debateTopic}
                 onDebateEnd={handleDebateEnd}
                 embedded={true}
