@@ -57,7 +57,7 @@ export default async function handler(req, res) {
 
     let accumulatedText = ""
     let wordCount = 0
-    const CHUNK_SIZE = 15 // Send chunk after 15 words
+    const CHUNK_SIZE = 8 // Send chunk after 8 words (reduced from 15)
 
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || ""
@@ -66,7 +66,11 @@ export default async function handler(req, res) {
         wordCount += content.split(" ").length - 1
 
         // Send chunk when we have enough words or hit sentence boundary
-        if (wordCount >= CHUNK_SIZE || content.includes(".") || content.includes("!") || content.includes("?")) {
+        const hasEnoughWords = wordCount >= CHUNK_SIZE
+        const hasSentenceBoundary = content.includes(".") || content.includes("!") || content.includes("?")
+        const hasNaturalPause = content.includes(",") && wordCount >= 5 // Send on comma if we have at least 5 words
+
+        if (hasEnoughWords || hasSentenceBoundary || hasNaturalPause) {
           res.write(
             JSON.stringify({
               type: "chunk",
