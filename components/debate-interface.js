@@ -11,21 +11,6 @@ const DebateHeader = dynamic(() => import("./debate-header").then((mod) => ({ de
 
 const isBrowser = typeof window !== "undefined"
 
-const staticDebateTopics = [
-  {
-    id: "science-method",
-    title: "Scientific Method",
-    description: "Approaches to scientific discovery and experimentation",
-    category: "science",
-  },
-  {
-    id: "human-nature",
-    title: "Human Nature",
-    description: "The fundamental characteristics of humanity",
-    category: "philosophy",
-  },
-]
-
 export function DebateInterface({ character1, character2, initialTopic, onDebateEnd, embedded = false }) {
   // Core state
   const [personas, setPersonas] = useState({})
@@ -110,9 +95,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     "Weighing the evidence...",
     "Crafting a rebuttal...",
   ]
-
-  // FIXED: Only update render count, don't trigger re-renders
-  renderCountRef.current += 1
 
   // Get character objects
   const character1Obj = personas[char1]
@@ -389,80 +371,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
   }, [])
 
-  // Play audio function
-  const playAudio = useCallback(async (audioUrl, character) => {
-    console.log("🔍 Playing audio for:", character, "URL:", audioUrl)
-
-    if (!audioUrl) {
-      console.error("🔍 No audio URL provided")
-      setAudioError("No audio URL provided")
-      return
-    }
-
-    // Check if URL is valid
-    if (!audioUrl.startsWith("http") && !audioUrl.startsWith("/")) {
-      console.error("🔍 Invalid audio URL format:", audioUrl)
-      setAudioError("Invalid audio URL format")
-      return
-    }
-
-    try {
-      setIsLoadingAudio(true)
-      setCurrentSpeaker(character)
-      setAudioError(null)
-
-      // Test if the URL is accessible first
-      console.log("🔍 Testing audio URL accessibility...")
-      const testResponse = await fetch(audioUrl, { method: "HEAD" })
-      if (!testResponse.ok) {
-        throw new Error(`Audio URL not accessible: ${testResponse.status} ${testResponse.statusText}`)
-      }
-
-      // Create new audio element
-      const audio = new Audio()
-      currentAudioRef.current = audio
-
-      audio.onloadstart = () => {
-        console.log("🔍 Audio loading started")
-        setIsLoadingAudio(true)
-      }
-
-      audio.oncanplay = () => {
-        console.log("🔍 Audio can play")
-        setIsLoadingAudio(false)
-        setIsPlaying(true)
-        audio.play().catch((err) => {
-          console.error("🔍 Failed to play audio:", err)
-          setAudioError(`Failed to play audio: ${err.message}`)
-          setIsPlaying(false)
-        })
-      }
-
-      audio.onended = () => {
-        console.log("🔍 Audio ended")
-        setIsPlaying(false)
-        setCurrentSpeaker(null)
-        // TODO: Continue to next speaker or end debate
-      }
-
-      audio.onerror = (error) => {
-        console.error("🔍 Audio error:", error)
-        setAudioError("Failed to load audio file")
-        setIsLoadingAudio(false)
-        setIsPlaying(false)
-      }
-
-      // Set the source and start loading
-      audio.src = audioUrl
-      audio.load()
-    } catch (error) {
-      console.error("🔍 Error playing audio:", error)
-      setAudioError(`Failed to play audio: ${error.message}`)
-      setIsLoadingAudio(false)
-      setIsPlaying(false)
-    }
-  }, [])
-
   // Reset debate state
   const resetDebateState = useCallback(
     (shouldCallOnDebateEnd = true) => {
@@ -540,7 +448,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     ],
   )
 
-  // Start debate function - FIXED to ensure it actually starts
+  // Start debate function - FIXED to prevent infinite loops
   const startDebate = useCallback(
     async (topic) => {
       console.log("🔍 === START DEBATE CALLED ===")
@@ -558,14 +466,15 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         return
       }
 
-      if (isStarting || isDebating || isProcessing) {
-        console.log("🔍 Debate already starting, in progress, or processing - ignoring duplicate start")
+      if (isStarting || isProcessing) {
+        console.log("🔍 Debate already starting or processing - ignoring duplicate start")
         return
       }
 
       console.log("🔍 Starting debate with topic:", topic)
       console.log("🔍 Using characters:", { char1, char2 })
 
+      setIsStarting(true)
       updateCurrentTopic(topic)
       updateIsDebating(true)
       setIsProcessing(true)
@@ -573,56 +482,14 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       await unlockAudio()
 
       try {
-        // First, generate and play the introduction while preparing the debate
-        const character1Obj = personas[char1]
-        const character2Obj = personas[char2]
-
-        if (character1Obj && character2Obj) {
-          setHasIntroduction(true)
-          setIsIntroPlaying(true)
-
-          // Generate introduction
-          const introResponse = await fetch("/api/generate-topic-introduction", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              topic,
-              character1: char1, // Use character key, not name
-              character2: char2, // Use character key, not name
-            }),
-          })
-
-          if (introResponse.ok) {
-            const introData = await introResponse.json()
-
-            // Play introduction audio while preparing the debate
-            if (introData.audioUrl && introAudioRef.current) {
-              introAudioRef.current.src = introData.audioUrl
-              introAudioRef.current.onended = () => {
-                setIsIntroPlaying(false)
-                // Introduction finished, start the actual debate
-                startActualDebate(topic)
-              }
-              introAudioRef.current.play()
-            } else {
-              // No intro audio, start debate immediately
-              setIsIntroPlaying(false)
-              startActualDebate(topic)
-            }
-          } else {
-            // Failed to generate intro, start debate immediately
-            setIsIntroPlaying(false)
-            startActualDebate(topic)
-          }
-        } else {
-          // No character objects, start debate immediately
-          startActualDebate(topic)
-        }
+        // Skip introduction for now to avoid timeout issues
+        startActualDebate(topic)
       } catch (error) {
         console.error("🔍 Error starting debate:", error)
         updateIsDebating(false)
         setAudioError(`Failed to start debate: ${error.message}`)
         setIsProcessing(false)
+        setIsStarting(false)
       }
     },
     [
@@ -631,9 +498,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       char1,
       char2,
       isStarting,
-      isDebating,
       isProcessing,
-      personas,
       updateCurrentTopic,
       updateIsDebating,
       unlockAudio,
@@ -712,12 +577,13 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         setAudioError(`Failed to start debate: ${error.message}`)
       } finally {
         setIsProcessing(false)
+        setIsStarting(false)
       }
     },
     [char1, char2, debateFormat, historicalContext, updateDebateMessages],
   )
 
-  // Auto-start when dependencies loaded and topic available - FIXED dependencies
+  // Auto-start when dependencies loaded and topic available - FIXED to prevent infinite loops
   useEffect(() => {
     console.log("🔍 Auto-start effect triggered")
     console.log("🔍 Conditions:", {
@@ -729,7 +595,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       isProcessing,
       char1,
       char2,
-      embedded,
     })
 
     if (
@@ -760,11 +625,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     char2,
     startDebate,
   ])
-
-  // DEBUG: Check visual rendering conditions - MEMOIZED
-  const shouldShowVisuals = isDebating
-  const shouldShowCharacterGrid = isDebating && Object.keys(personas).length > 0
-  const shouldShowDebateHeader = !embedded
 
   // Show loading state
   if (!dependenciesLoaded) {
@@ -830,228 +690,69 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           </div>
         )}
 
-        {/* Show debate visuals when debate is active */}
-        {isDebating && character1Obj && character2Obj && (
-          <div className="mb-6">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-yellow-400 mb-4">DEBATE: {currentTopic}</h2>
-
-              {/* Audio controls */}
-              <div className="flex justify-center space-x-4 mb-4">
-                {isPlaying ? (
-                  <>
-                    <button
-                      onClick={pauseAudio}
-                      className="px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
-                      title="Pause"
-                    >
-                      ⏸ Pause
-                    </button>
-                    <button
-                      onClick={stopAudio}
-                      className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                      title="Stop"
-                    >
-                      ⏹ Stop
-                    </button>
-                  </>
-                ) : (
-                  currentAudioRef.current &&
-                  currentAudioRef.current.currentTime > 0 &&
-                  !currentAudioRef.current.ended && (
-                    <button
-                      onClick={resumeAudio}
-                      className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                      title="Resume"
-                    >
-                      ▶ Resume
-                    </button>
-                  )
-                )}
-
-                <button
-                  onClick={() => resetDebateState(true)}
-                  className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  End Debate
-                </button>
-              </div>
-            </div>
-
-            {/* Two-character debate interface */}
-            <div className="bg-gray-800 rounded-lg p-6">
-              <div className="grid grid-cols-2 gap-8">
-                {/* Character 1 */}
-                <div className="text-center">
-                  <div className="relative mb-4">
-                    <div
-                      className={`w-32 h-32 mx-auto rounded-full overflow-hidden transition-all duration-300 ${
-                        currentSpeaker === char1 && isPlaying
-                          ? "ring-4 ring-yellow-400 ring-opacity-75 shadow-lg shadow-yellow-400/50"
-                          : currentSpeaker === char1 && isLoadingAudio
-                            ? "ring-4 ring-blue-400 ring-opacity-75"
-                            : "ring-2 ring-gray-600"
-                      }`}
-                    >
-                      <img
-                        src={character1Obj.image || "/placeholder.svg"}
-                        alt={character1Obj.name}
-                        className={`w-full h-full object-cover transition-all duration-300 ${
-                          currentSpeaker === char1 && isPlaying
-                            ? "scale-110"
-                            : currentSpeaker === char1 && isLoadingAudio
-                              ? "opacity-75"
-                              : ""
-                        }`}
-                      />
-                      {currentSpeaker === char1 && isLoadingAudio && (
-                        <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
-                          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                      )}
-                      {currentSpeaker === char1 && isPlaying && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500 to-orange-400 opacity-10 animate-pulse"></div>
-                      )}
-                    </div>
-
-                    {/* Pulsing ring animation when speaking */}
-                    {currentSpeaker === char1 && isPlaying && (
-                      <div className="absolute inset-0 rounded-full border-4 border-yellow-400 animate-ping opacity-75"></div>
-                    )}
-                  </div>
-
-                  <h3
-                    className={`text-lg font-semibold mb-2 transition-colors duration-300 ${
-                      currentSpeaker === char1 && isPlaying
-                        ? "text-yellow-300"
-                        : currentSpeaker === char1
-                          ? "text-yellow-400"
-                          : "text-gray-300"
-                    }`}
-                  >
-                    {character1Obj.name}
-                  </h3>
-
-                  <p
-                    className={`text-sm mb-4 transition-colors duration-300 ${
-                      currentSpeaker === char1 && isLoadingAudio
-                        ? "text-blue-300"
-                        : currentSpeaker === char1 && isPlaying
-                          ? "text-yellow-200"
-                          : "text-gray-400"
-                    }`}
-                  >
-                    {char1Status}
-                  </p>
-
-                  {/* Enhanced sound wave animation */}
-                  <div className="h-6 flex items-center justify-center mb-4">
-                    {currentSpeaker === char1 && isPlaying && (
-                      <div className="flex space-x-1">
-                        {[...Array(7)].map((_, i) => (
-                          <div
-                            key={i}
-                            className="w-1 bg-gradient-to-t from-yellow-500 to-orange-400 rounded-full animate-pulse"
-                            style={{
-                              height: `${8 + (i % 4) * 4}px`,
-                              animationDelay: `${i * 0.1}s`,
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Character 2 */}
-                <div className="text-center">
-                  <div className="relative mb-4">
-                    <div
-                      className={`w-32 h-32 mx-auto rounded-full overflow-hidden transition-all duration-300 ${
-                        currentSpeaker === char2 && isPlaying
-                          ? "ring-4 ring-yellow-400 ring-opacity-75 shadow-lg shadow-yellow-400/50"
-                          : currentSpeaker === char2 && isLoadingAudio
-                            ? "ring-4 ring-blue-400 ring-opacity-75"
-                            : "ring-2 ring-gray-600"
-                      }`}
-                    >
-                      <img
-                        src={character2Obj.image || "/placeholder.svg"}
-                        alt={character2Obj.name}
-                        className={`w-full h-full object-cover transition-all duration-300 ${
-                          currentSpeaker === char2 && isPlaying
-                            ? "scale-110"
-                            : currentSpeaker === char2 && isLoadingAudio
-                              ? "opacity-75"
-                              : ""
-                        }`}
-                      />
-                      {currentSpeaker === char2 && isLoadingAudio && (
-                        <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
-                          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                      )}
-                      {currentSpeaker === char2 && isPlaying && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500 to-orange-400 opacity-10 animate-pulse"></div>
-                      )}
-                    </div>
-
-                    {/* Pulsing ring animation when speaking */}
-                    {currentSpeaker === char2 && isPlaying && (
-                      <div className="absolute inset-0 rounded-full border-4 border-yellow-400 animate-ping opacity-75"></div>
-                    )}
-                  </div>
-
-                  <h3
-                    className={`text-lg font-semibold mb-2 transition-colors duration-300 ${
-                      currentSpeaker === char2 && isPlaying
-                        ? "text-yellow-300"
-                        : currentSpeaker === char2
-                          ? "text-yellow-400"
-                          : "text-gray-300"
-                    }`}
-                  >
-                    {character2Obj.name}
-                  </h3>
-
-                  <p
-                    className={`text-sm mb-4 transition-colors duration-300 ${
-                      currentSpeaker === char2 && isLoadingAudio
-                        ? "text-blue-300"
-                        : currentSpeaker === char2 && isPlaying
-                          ? "text-yellow-200"
-                          : "text-gray-400"
-                    }`}
-                  >
-                    {char2Status}
-                  </p>
-
-                  {/* Enhanced sound wave animation */}
-                  <div className="h-6 flex items-center justify-center mb-4">
-                    {currentSpeaker === char2 && isPlaying && (
-                      <div className="flex space-x-1">
-                        {[...Array(7)].map((_, i) => (
-                          <div
-                            key={i}
-                            className="w-1 bg-gradient-to-t from-yellow-500 to-orange-400 rounded-full animate-pulse"
-                            style={{
-                              height: `${8 + (i % 4) * 4}px`,
-                              animationDelay: `${i * 0.1}s`,
-                            }}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+        {/* Always show the topic selector, but with debate status when active */}
+        {dependenciesLoaded && (
+          <div className="mb-8">
+            <EmbeddedTopicSelector
+              onSelectTopic={startDebate}
+              character1={char1}
+              character2={char2}
+              isDebating={isDebating}
+              currentSpeaker={currentSpeaker}
+              isPlaying={isPlaying}
+              isLoadingAudio={isLoadingAudio}
+              thinkingMessage={thinkingMessage}
+              char1Status={char1Status}
+              char2Status={char2Status}
+            />
           </div>
         )}
 
-        {!isDebating && !isIntroPlaying && dependenciesLoaded && (
-          <div className="mb-8">
-            <EmbeddedTopicSelector onSelectTopic={startDebate} character1={char1} character2={char2} />
+        {/* Show debate title and controls when debate is active */}
+        {isDebating && currentTopic && (
+          <div className="mb-6 text-center">
+            <h2 className="text-2xl font-bold text-yellow-400 mb-4">DEBATE: {currentTopic}</h2>
+
+            {/* Audio controls */}
+            <div className="flex justify-center space-x-4 mb-4">
+              {isPlaying ? (
+                <>
+                  <button
+                    onClick={pauseAudio}
+                    className="px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+                    title="Pause"
+                  >
+                    ⏸ Pause
+                  </button>
+                  <button
+                    onClick={stopAudio}
+                    className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    title="Stop"
+                  >
+                    ⏹ Stop
+                  </button>
+                </>
+              ) : (
+                currentAudioRef.current &&
+                currentAudioRef.current.currentTime > 0 &&
+                !currentAudioRef.current.ended && (
+                  <button
+                    onClick={resumeAudio}
+                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                    title="Resume"
+                  >
+                    ▶ Resume
+                  </button>
+                )
+              )}
+
+              <button
+                onClick={() => resetDebateState(true)}
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                End Debate
+              </button>
+            </div>
           </div>
         )}
 

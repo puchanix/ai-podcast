@@ -2,126 +2,224 @@
 
 import { useState, useEffect } from "react"
 
-const EmbeddedTopicSelector = ({ onSelectTopic, character1, character2 }) => {
-  const [customTopic, setCustomTopic] = useState("")
-  const [characterSpecificTopics, setCharacterSpecificTopics] = useState([])
-  const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
-
-  // Static fallback topics
-  const staticTopics = [
-    {
-      id: "art-vs-science",
-      title: "Art vs Science",
-      description: "The relationship between artistic expression and scientific discovery",
+export default function EmbeddedTopicSelector({
+  onSelectTopic,
+  character1,
+  character2,
+  isDebating = false,
+  currentSpeaker = null,
+  isPlaying = false,
+  isLoadingAudio = false,
+  thinkingMessage = "",
+}) {
+  const [topic, setTopic] = useState("")
+  const [selectedCharacters, setSelectedCharacters] = useState([])
+  const [personas, setPersonas] = useState({
+    character1: {
+      name: "Character 1",
+      image: "https://placehold.co/100",
+      description: "Description 1",
     },
-    {
-      id: "creativity-innovation",
-      title: "Creativity & Innovation",
-      description: "The nature of creative thinking and innovation",
+    character2: {
+      name: "Character 2",
+      image: "https://placehold.co/100",
+      description: "Description 2",
     },
-  ]
+  })
 
-  // Generate character-specific topics
   useEffect(() => {
     if (character1 && character2) {
-      generateTopics()
+      setPersonas({
+        character1: {
+          name: character1.name,
+          image: character1.image,
+          description: character1.description,
+        },
+        character2: {
+          name: character2.name,
+          image: character2.image,
+          description: character2.description,
+        },
+      })
     }
   }, [character1, character2])
 
-  const generateTopics = async () => {
-    setIsGeneratingTopics(true)
-    try {
-      const response = await fetch("/api/generate-character-topics", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          character1,
-          character2,
-        }),
-      })
+  const handleTopicChange = (event) => {
+    setTopic(event.target.value)
+  }
 
-      if (response.ok) {
-        const data = await response.json()
-        setCharacterSpecificTopics(data.topics.slice(0, 2))
+  const handleCharacterSelect = (characterKey) => {
+    setSelectedCharacters((prevSelected) => {
+      if (prevSelected.includes(characterKey)) {
+        return prevSelected.filter((key) => key !== characterKey)
       } else {
-        setCharacterSpecificTopics(staticTopics)
+        return [...prevSelected, characterKey]
       }
-    } catch (error) {
-      console.error("Error generating topics:", error)
-      setCharacterSpecificTopics(staticTopics)
-    } finally {
-      setIsGeneratingTopics(false)
-    }
+    })
   }
 
-  const handleTopicSelect = (topic) => {
-    console.log("Topic selected:", topic)
-    if (typeof onSelectTopic === "function") {
-      onSelectTopic(topic)
+  const handleSubmit = () => {
+    if (topic && selectedCharacters.length > 0) {
+      onSelectTopic({ topic, characters: selectedCharacters })
+    } else {
+      alert("Please enter a topic and select at least one character.")
     }
   }
-
-  const handleCustomSubmit = (e) => {
-    e.preventDefault()
-    if (customTopic.trim()) {
-      handleTopicSelect(customTopic.trim())
-      setCustomTopic("")
-    }
-  }
-
-  const topicsToShow = characterSpecificTopics.length > 0 ? characterSpecificTopics : staticTopics
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <h3 className="text-xl font-semibold text-yellow-400 mb-4">Choose a Topic:</h3>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Topic Selector</h1>
 
-      {/* Suggested Topics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        {isGeneratingTopics ? (
-          <div className="col-span-2 text-center py-8">
-            <div className="inline-block animate-spin h-6 w-6 border-2 border-yellow-500 border-t-transparent rounded-full mb-2"></div>
-            <p className="text-yellow-400">Generating personalized topics...</p>
-          </div>
-        ) : (
-          topicsToShow.map((topic) => (
-            <button
-              key={topic.id}
-              onClick={() => handleTopicSelect(topic.title)}
-              className="bg-gray-700 hover:bg-gray-600 text-white p-4 rounded-lg text-left transition-colors border-2 border-transparent hover:border-yellow-400"
+      {/* Topic Input */}
+      <div className="mb-4">
+        <label htmlFor="topic" className="block text-gray-700 text-sm font-bold mb-2">
+          Topic:
+        </label>
+        <input
+          type="text"
+          id="topic"
+          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Enter topic here"
+          value={topic}
+          onChange={handleTopicChange}
+        />
+      </div>
+
+      {/* Character Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
+        {Object.entries(personas).map(([key, persona]) => {
+          const isSelected = selectedCharacters.includes(key)
+          const isCurrentSpeaker = currentSpeaker === key
+          const isLoadingForThisChar = isLoadingAudio && currentSpeaker === key
+          const isPlayingForThisChar = isPlaying && currentSpeaker === key
+
+          // Determine status text
+          let statusText = ""
+          let statusColor = "text-gray-400"
+
+          if (isDebating) {
+            if (isCurrentSpeaker) {
+              if (isLoadingForThisChar) {
+                statusText = thinkingMessage || "Thinking..."
+                statusColor = "text-blue-300"
+              } else if (isPlayingForThisChar) {
+                statusText = "Speaking..."
+                statusColor = "text-yellow-200"
+              } else {
+                statusText = "Ready"
+                statusColor = "text-gray-400"
+              }
+            } else if (isSelected) {
+              statusText = "Waiting turn..."
+              statusColor = "text-gray-400"
+            }
+          } else if (isSelected) {
+            statusText = "Selected"
+            statusColor = "text-yellow-400"
+          }
+
+          return (
+            <div
+              key={key}
+              className={`relative cursor-pointer transition-all duration-300 ${
+                isSelected ? "transform scale-105" : "hover:scale-105"
+              }`}
+              onClick={() => !isDebating && handleCharacterSelect(key)}
             >
-              <h4 className="font-semibold text-yellow-400 mb-2">{topic.title}</h4>
-              <p className="text-sm text-gray-300">{topic.description}</p>
-            </button>
-          ))
-        )}
+              <div
+                className={`relative w-24 h-24 mx-auto rounded-full overflow-hidden transition-all duration-300 ${
+                  isCurrentSpeaker && isPlayingForThisChar
+                    ? "ring-4 ring-yellow-400 ring-opacity-75 shadow-lg shadow-yellow-400/50"
+                    : isCurrentSpeaker && isLoadingForThisChar
+                      ? "ring-4 ring-blue-400 ring-opacity-75"
+                      : isSelected
+                        ? "ring-4 ring-yellow-500"
+                        : "ring-2 ring-gray-600 hover:ring-gray-500"
+                }`}
+              >
+                <img
+                  src={persona.image || "/placeholder.svg"}
+                  alt={persona.name}
+                  className={`w-full h-full object-cover transition-all duration-300 ${
+                    isCurrentSpeaker && isPlayingForThisChar
+                      ? "scale-110"
+                      : isCurrentSpeaker && isLoadingForThisChar
+                        ? "opacity-75"
+                        : ""
+                  }`}
+                />
+
+                {/* Loading overlay */}
+                {isCurrentSpeaker && isLoadingForThisChar && (
+                  <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                )}
+
+                {/* Speaking overlay */}
+                {isCurrentSpeaker && isPlayingForThisChar && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-yellow-500 to-orange-400 opacity-10 animate-pulse"></div>
+                )}
+
+                {/* Selected indicator */}
+                {isSelected && !isDebating && <div className="absolute inset-0 bg-yellow-500 bg-opacity-20"></div>}
+              </div>
+
+              {/* Pulsing ring animation when speaking */}
+              {isCurrentSpeaker && isPlayingForThisChar && (
+                <div className="absolute inset-0 w-24 h-24 mx-auto rounded-full border-4 border-yellow-400 animate-ping opacity-75"></div>
+              )}
+
+              {/* Character name */}
+              <p
+                className={`text-center text-sm font-medium mt-2 transition-colors duration-300 ${
+                  isCurrentSpeaker && isPlayingForThisChar
+                    ? "text-yellow-300"
+                    : isCurrentSpeaker
+                      ? "text-yellow-400"
+                      : isSelected
+                        ? "text-yellow-400"
+                        : "text-gray-300"
+                }`}
+              >
+                {persona.name}
+              </p>
+
+              {/* Status text */}
+              {statusText && (
+                <p className={`text-center text-xs mt-1 transition-colors duration-300 ${statusColor}`}>{statusText}</p>
+              )}
+
+              {/* Sound wave animation */}
+              {isCurrentSpeaker && isPlayingForThisChar && (
+                <div className="flex justify-center mt-2">
+                  <div className="flex space-x-1">
+                    {[...Array(5)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="w-1 bg-gradient-to-t from-yellow-500 to-orange-400 rounded-full animate-pulse"
+                        style={{
+                          height: `${6 + (i % 3) * 3}px`,
+                          animationDelay: `${i * 0.1}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
-      {/* Custom Topic Input */}
-      <div className="border-t border-gray-600 pt-4">
-        <h4 className="text-lg font-medium text-yellow-400 mb-3">Or ask your own question:</h4>
-        <form onSubmit={handleCustomSubmit} className="flex gap-3">
-          <input
-            type="text"
-            placeholder="Enter your custom debate topic..."
-            value={customTopic}
-            onChange={(e) => setCustomTopic(e.target.value)}
-            className="flex-1 bg-gray-700 text-white px-4 py-3 rounded-lg border border-gray-600 focus:border-yellow-400 focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={!customTopic.trim()}
-            className="bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-semibold px-6 py-3 rounded-lg transition-colors"
-          >
-            Start Debate
-          </button>
-        </form>
-      </div>
+      {/* Submit Button */}
+      <button
+        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+        type="button"
+        onClick={handleSubmit}
+      >
+        Start Debate
+      </button>
     </div>
   )
 }
-
-// Export both named and default
-export { EmbeddedTopicSelector }
-export default EmbeddedTopicSelector
