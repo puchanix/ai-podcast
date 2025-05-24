@@ -1111,3 +1111,5 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     </div>
   )
 }
+
+export default DebateInterface
