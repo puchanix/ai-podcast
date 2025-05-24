@@ -630,14 +630,13 @@ export default function Home() {
         }
       }
 
-      // Function to generate streaming audio in parallel
+      // Function to generate audio in parallel (back to regular generation)
       const generateAudioParallel = async (text, index) => {
         const chunkStartTime = Date.now()
-        console.log(`⏱️ [STREAMING] Starting streaming audio for chunk ${index}:`, text.substring(0, 30) + "...")
+        console.log(`⏱️ [PARALLEL] Starting audio generation for chunk ${index}:`, text.substring(0, 30) + "...")
 
         try {
-          // Try streaming first, fallback to regular if it fails
-          const streamingResponse = await fetch("/api/speak-stream", {
+          const audioResponse = await fetch("/api/speak-fast", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -648,127 +647,29 @@ export default function Home() {
             }),
           })
 
-          if (streamingResponse.ok && streamingResponse.body) {
-            console.log(`⏱️ [STREAMING] Got streaming response for chunk ${index}`)
+          if (audioResponse.ok) {
+            const { audioUrl } = await audioResponse.json()
+            const chunkTime = Date.now() - chunkStartTime
+            console.log(`⏱️ [PARALLEL] Chunk ${index} audio generated in: ${chunkTime}ms`)
 
-            // Create audio context for streaming playback
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-            const audioChunks = []
-            let isFirstChunk = true
-
-            const reader = streamingResponse.body.getReader()
-
-            // Create a promise that resolves when we have enough audio to start playing
-            const audioReadyPromise = new Promise(async (resolve, reject) => {
-              try {
-                while (true) {
-                  const { done, value } = await reader.read()
-
-                  if (done) {
-                    console.log(`⏱️ [STREAMING] Streaming complete for chunk ${index}`)
-                    break
-                  }
-
-                  audioChunks.push(value)
-
-                  // Start playing after first few chunks
-                  if (isFirstChunk && audioChunks.length >= 3) {
-                    isFirstChunk = false
-                    const firstChunkTime = Date.now() - chunkStartTime
-                    console.log(`⏱️ [STREAMING] FIRST AUDIO CHUNK READY IN: ${firstChunkTime}ms for chunk ${index}`)
-
-                    // Convert chunks to blob and create URL
-                    const audioBlob = new Blob(audioChunks, { type: "audio/mpeg" })
-                    const audioUrl = URL.createObjectURL(audioBlob)
-                    resolve(audioUrl)
-                  }
-                }
-
-                // If we didn't resolve yet (very short audio), resolve with all chunks
-                if (isFirstChunk) {
-                  const audioBlob = new Blob(audioChunks, { type: "audio/mpeg" })
-                  const audioUrl = URL.createObjectURL(audioBlob)
-                  resolve(audioUrl)
-                }
-              } catch (error) {
-                reject(error)
-              }
-            })
-
-            const audioUrl = await audioReadyPromise
+            // Insert audio at correct position in queue
             audioQueue[index] = audioUrl
 
-            // Start playing if this is the first chunk
+            // Start playing if this is the first chunk and it's ready
             if (index === 0 && isFirstChunk) {
               isFirstChunk = false
               const firstAudioTime = Date.now() - chunkStartTime
-              console.log("⏱️ [STREAMING] FIRST AUDIO READY IN:", firstAudioTime + "ms")
+              console.log("⏱️ [PARALLEL] FIRST AUDIO READY IN:", firstAudioTime + "ms")
               playNextAudio()
             }
 
             return audioUrl
           } else {
-            // Fallback to regular audio generation
-            console.log(`⏱️ [STREAMING] Streaming failed for chunk ${index}, falling back to regular generation`)
-
-            const audioResponse = await fetch("/api/speak-fast", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                text: text,
-                voice: getVoiceForPersona(persona),
-              }),
-            })
-
-            if (audioResponse.ok) {
-              const { audioUrl } = await audioResponse.json()
-              const chunkTime = Date.now() - chunkStartTime
-              console.log(`⏱️ [STREAMING] Fallback chunk ${index} audio generated in: ${chunkTime}ms`)
-
-              audioQueue[index] = audioUrl
-
-              if (index === 0 && isFirstChunk) {
-                isFirstChunk = false
-                const firstAudioTime = Date.now() - chunkStartTime
-                console.log("⏱️ [STREAMING] FIRST AUDIO READY IN:", firstAudioTime + "ms")
-                playNextAudio()
-              }
-
-              return audioUrl
-            } else {
-              console.error(`Audio generation failed for chunk ${index}`)
-              return null
-            }
+            console.error(`Audio generation failed for chunk ${index}`)
+            return null
           }
         } catch (audioError) {
           console.error(`Audio generation error for chunk ${index}:`, audioError)
-
-          // Fallback to regular generation on any error
-          try {
-            console.log(`⏱️ [STREAMING] Error fallback for chunk ${index}, trying regular generation`)
-
-            const audioResponse = await fetch("/api/speak-fast", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                text: text,
-                voice: getVoiceForPersona(persona),
-              }),
-            })
-
-            if (audioResponse.ok) {
-              const { audioUrl } = await audioResponse.json()
-              audioQueue[index] = audioUrl
-              return audioUrl
-            }
-          } catch (fallbackError) {
-            console.error(`Fallback also failed for chunk ${index}:`, fallbackError)
-          }
-
           return null
         } finally {
           // Remove this promise from tracking
