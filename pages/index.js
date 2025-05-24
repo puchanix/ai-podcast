@@ -19,13 +19,13 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
   const [isDebatePaused, setIsDebatePaused] = useState(false)
+  const [isDebating, setIsDebating] = useState(false)
 
   // Custom topic recording state
   const [isRecordingCustomTopic, setIsRecordingCustomTopic] = useState(false)
   const [isProcessingCustomTopic, setIsProcessingCustomTopic] = useState(false)
 
   // Debate state
-  const [isDebating, setIsDebating] = useState(false)
   const [debateTopic, setDebateTopic] = useState("")
   const [topics, setTopics] = useState([])
   const [loadingTopics, setLoadingTopics] = useState(false)
@@ -505,7 +505,7 @@ export default function Home() {
       console.log("⏱️ [STREAMING] Starting real-time streaming at:", Date.now())
       setIsPlaying(true)
 
-      const response = await fetch("/api/chat-stream", {
+      const response = await fetch("/api/chat-streaming", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1256,7 +1256,7 @@ export default function Home() {
                       {/* Character Name - Always at top */}
                       <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
 
-                      {/* Pause/Resume/Stop buttons when playing - MOVED HERE */}
+                      {/* Pause/Resume/Stop buttons when playing */}
                       {mode === "question" && selectedPersona === key && isPlaying && (
                         <div className="flex space-x-1 mb-2">
                           {!isPaused ? (
