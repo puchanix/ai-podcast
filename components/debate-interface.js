@@ -656,6 +656,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       setIsDebating(true)
       setIsProcessing(true)
       setIsSettingUp(true)
+      setStatusMessage("Preparing debate...")
 
       // Set the current speaker to character1 immediately to show the correct image
       setCurrentSpeaker(char1)
@@ -1236,6 +1237,13 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       setCurrentSpeaker(character)
       setIsAudioLoaded(false)
 
+      // Set status message based on what's happening
+      if (message.responseType === "Opening Remarks") {
+        setStatusMessage(`${personas[character]?.name} - Opening Remarks`)
+      } else {
+        setStatusMessage(`${personas[character]?.name} - ${message.responseType || "Speaking"}`)
+      }
+
       // Set the next speaker for the thinking UI
       const nextIndex = currentIndex + 1
       if (nextIndex < allMessages.length && allMessages[nextIndex].character !== "user") {
@@ -1256,7 +1264,30 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
         // Use the provided audioUrl if available, otherwise generate new audio
         if (message.audioUrl) {
-          audio.src = message.audioUrl
+          // Fix the audio URL - use /api/speak instead of stream-audio-realtime
+          if (message.audioUrl.includes("stream-audio-realtime")) {
+            console.log("Converting stream-audio-realtime URL to /api/speak")
+            // Generate new audio using the correct endpoint
+            const response = await fetch("/api/speak", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                text: content,
+                voice,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`Speak API returned ${response.status}: ${response.statusText}`)
+            }
+
+            const data = await response.json()
+            audio.src = data.audioUrl
+          } else {
+            audio.src = message.audioUrl
+          }
         } else {
           // Generate audio for the current speaker
           const response = await fetch("/api/speak", {
@@ -1284,18 +1315,20 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         audio.oncanplaythrough = () => {
           console.log(`${character} audio loaded successfully`)
           setIsAudioLoaded(true)
-          setIsLoadingAudio(false) // Set to false when audio is loaded, not when it starts playing
+          setIsLoadingAudio(false)
         }
 
         audio.onplay = () => {
           console.log(`${character} audio playing`)
           setIsPlaying(true)
+          setStatusMessage(`${personas[character]?.name} is speaking...`)
         }
 
         audio.onended = () => {
           console.log(`${character} audio playback ended`)
           setIsPlaying(false)
           setIsAudioLoaded(false)
+          setStatusMessage("")
 
           // Play the next message if it exists and is not a user message
           const nextIndex = currentIndex + 1
@@ -1330,6 +1363,12 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
                 setTimeout(() => {
                   resetDebateState()
                 }, 2000) // Give a moment before resetting
+              } else if (isAutoplaying) {
+                // Continue to next exchange
+                setStatusMessage("Preparing next exchange...")
+                setTimeout(() => {
+                  continueDebate()
+                }, 1000)
               }
             }
           }
@@ -1343,6 +1382,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           setIsPlaying(false)
           setIsAudioLoaded(false)
           setCurrentSpeaker(null)
+          setStatusMessage("")
         }
 
         // Load the audio
@@ -1357,9 +1397,10 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         setIsPlaying(false)
         setIsAudioLoaded(false)
         setCurrentSpeaker(null)
+        setStatusMessage("")
       }
     },
-    [getVoiceForCharacter, isAutoplaying, maxExchanges, volume, char1, char2, resetDebateState],
+    [getVoiceForCharacter, isAutoplaying, maxExchanges, volume, char1, char2, resetDebateState, continueDebate],
   )
 
   // Add this function to toggle auto-play
@@ -1510,28 +1551,46 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
                 {currentTopic && <p className="text-gray-300 mb-4">Topic: {currentTopic}</p>}
 
-                <div className="flex items-center space-x-4">
+                {/* Enhanced Status Display */}
+                <div className="flex items-center justify-between">
                   {/* Current Speaker Display */}
-                  {currentSpeaker && (
-                    <div className="flex items-center space-x-2">
-                      <div className="w-12 h-12 rounded-full overflow-hidden">
-                        <img
-                          src={personas[currentSpeaker]?.image || "/placeholder.svg"}
-                          alt={personas[currentSpeaker]?.name}
-                          className="w-full h-full object-cover"
-                        />
+                  <div className="flex items-center space-x-4">
+                    {currentSpeaker && (
+                      <div className="flex items-center space-x-3">
+                        <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-yellow-400">
+                          <img
+                            src={personas[currentSpeaker]?.image || "/placeholder.svg"}
+                            alt={personas[currentSpeaker]?.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-yellow-400">{personas[currentSpeaker]?.name}</p>
+                          <p className="text-xs text-gray-400">
+                            {statusMessage || (isLoadingAudio ? "Thinking..." : isPlaying ? "Speaking..." : "Ready")}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-yellow-400">{personas[currentSpeaker]?.name}</p>
-                        <p className="text-xs text-gray-400">
-                          {isLoadingAudio ? "Thinking..." : isPlaying ? "Speaking..." : "Ready"}
-                        </p>
+                    )}
+
+                    {/* Next Speaker Preview */}
+                    {nextSpeaker && nextSpeaker !== currentSpeaker && (
+                      <div className="flex items-center space-x-2 opacity-60">
+                        <span className="text-xs text-gray-500">Next:</span>
+                        <div className="w-8 h-8 rounded-full overflow-hidden">
+                          <img
+                            src={personas[nextSpeaker]?.image || "/placeholder.svg"}
+                            alt={personas[nextSpeaker]?.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500">{personas[nextSpeaker]?.name}</span>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   {/* Audio Controls */}
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-3">
                     <button
                       onClick={toggleAutoplay}
                       className={`px-3 py-1 rounded text-sm ${
@@ -1545,6 +1604,15 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
                       <span className="text-sm text-gray-400">
                         Exchange {exchangeCount}/{maxExchanges}
                       </span>
+                    )}
+
+                    {(isSettingUp || isPreparing) && (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-xs text-yellow-400">
+                          {isSettingUp ? "Setting up..." : "Preparing..."}
+                        </span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1560,7 +1628,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           )}
 
           {/* Setup animation with dynamic status */}
-          {(isSettingUp || isPreparing) && (
+          {(isSettingUp || isPreparing) && !embedded && (
             <div className="flex justify-center items-center mb-8">
               <div className="text-center">
                 <div className="inline-block animate-spin h-10 w-10 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>

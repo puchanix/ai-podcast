@@ -384,21 +384,21 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
   function getCategoryColor(category) {
     switch (category) {
       case "science":
-        return "bg-blue-900 text-blue-300"
+        return "bg-blue-600/20 border-blue-500/30"
       case "philosophy":
-        return "bg-purple-900 text-purple-300"
+        return "bg-purple-600/20 border-purple-500/30"
       case "politics":
-        return "bg-red-900 text-red-300"
+        return "bg-red-600/20 border-red-500/30"
       case "arts":
-        return "bg-yellow-900 text-yellow-300"
+        return "bg-yellow-600/20 border-yellow-500/30"
       case "technology":
-        return "bg-green-900 text-green-300"
+        return "bg-green-600/20 border-green-500/30"
       case "history":
-        return "bg-orange-900 text-orange-300"
+        return "bg-orange-600/20 border-orange-500/30"
       case "education":
-        return "bg-teal-900 text-teal-300"
+        return "bg-teal-600/20 border-teal-500/30"
       default:
-        return "bg-gray-700 text-gray-300"
+        return "bg-gray-600/20 border-gray-500/30"
     }
   }
 
@@ -410,14 +410,15 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
         return (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
+            width="20"
+            height="20"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="text-blue-400"
           >
             <path d="M10 2v8L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45L14 10V2"></path>
             <path d="M8.5 2h7"></path>
@@ -428,14 +429,15 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
         return (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
+            width="20"
+            height="20"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="text-purple-400"
           >
             <circle cx="12" cy="12" r="10"></circle>
             <path d="M12 16v-4"></path>
@@ -446,14 +448,15 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
         return (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
+            width="20"
+            height="20"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="text-yellow-400"
           >
             <circle cx="12" cy="12" r="10"></circle>
             <circle cx="12" cy="12" r="6"></circle>
@@ -464,14 +467,15 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
         return (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
+            width="20"
+            height="20"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="text-red-400"
           >
             <path d="M3 22v-6h6"></path>
             <path d="M3 16l6-6-6-6"></path>
@@ -483,14 +487,15 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
         return (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
+            width="20"
+            height="20"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="text-gray-400"
           >
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="16" x2="12" y2="12"></line>
@@ -501,34 +506,33 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 w-full">
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-yellow-400 mb-2">Select a Debate Topic</h2>
+    <div className="bg-gray-800 rounded-xl p-8 w-full">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-yellow-400 mb-2">Select a Debate Topic</h2>
+        <p className="text-gray-300">Choose from these curated topics or speak your own</p>
       </div>
 
       {isLoading ? (
-        <div className="text-center py-8">
+        <div className="text-center py-12">
           <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
-          <p>Loading topics...</p>
+          <p className="text-gray-300">Loading topics...</p>
         </div>
       ) : (
         <>
-          {error && <div className="mb-4 p-3 bg-red-900/50 text-red-200 rounded-md text-sm">{error}</div>}
+          {error && <div className="mb-6 p-4 bg-red-900/50 text-red-200 rounded-lg text-sm">{error}</div>}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {topics.map((topic, index) => (
               <div
                 key={topic.id || index}
-                className="border border-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-700 transition-colors"
+                className={`border-2 rounded-xl p-6 cursor-pointer hover:bg-gray-700/50 transition-all duration-300 hover:scale-105 ${getCategoryColor(topic.category)}`}
                 onClick={() => onSelectTopic(topic.title)}
               >
-                <div className="flex items-start">
-                  <div className={`p-2 rounded-full mr-3 ${getCategoryColor(topic.category)}`}>
-                    {getCategoryIcon(topic.category)}
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-white">{topic.title}</h3>
-                    <p className="text-sm text-gray-300">{topic.description}</p>
+                <div className="flex items-start space-x-4">
+                  <div className="flex-shrink-0 mt-1">{getCategoryIcon(topic.category)}</div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-white text-lg mb-2">{topic.title}</h3>
+                    <p className="text-gray-300 text-sm leading-relaxed">{topic.description}</p>
                   </div>
                 </div>
               </div>
@@ -537,28 +541,28 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
         </>
       )}
 
-      <div className="mt-4 border-t border-gray-700 pt-4 flex justify-center">
+      <div className="border-t border-gray-700 pt-6 flex justify-center">
         <div className="flex flex-col items-center">
           <button
             onClick={isListening ? stopListening : startListening}
-            className={`px-6 py-3 rounded-full font-bold ${
+            className={`px-8 py-4 rounded-full font-bold text-lg transition-all duration-300 ${
               isListening
-                ? "bg-red-600 hover:bg-red-700 text-white animate-pulse"
-                : "bg-blue-600 hover:bg-blue-700 text-white"
+                ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
+                : "bg-yellow-500 hover:bg-yellow-600 text-black"
             }`}
           >
             {isListening ? "Stop Recording" : "Speak Your Own Topic"}
           </button>
 
           {isListening && (
-            <div className="mt-2 text-center text-gray-300">
+            <div className="mt-4 text-center text-gray-300">
               <div className="flex justify-center mt-2 mb-2">
                 <div className="flex space-x-1">
-                  <div className="w-1 h-4 bg-blue-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
-                  <div className="w-1 h-6 bg-yellow-500 rounded-full animate-[soundwave_0.7s_ease-in-out_infinite_0.1s]"></div>
-                  <div className="w-1 h-3 bg-green-500 rounded-full animate-[soundwave_0.4s_ease-in-out_infinite_0.2s]"></div>
-                  <div className="w-1 h-5 bg-red-500 rounded-full animate-[soundwave_0.6s_ease-in-out_infinite_0.3s]"></div>
-                  <div className="w-1 h-2 bg-purple-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite_0.4s]"></div>
+                  <div className="w-1 h-4 bg-yellow-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
+                  <div className="w-1 h-6 bg-yellow-400 rounded-full animate-[soundwave_0.7s_ease-in-out_infinite_0.1s]"></div>
+                  <div className="w-1 h-3 bg-yellow-500 rounded-full animate-[soundwave_0.4s_ease-in-out_infinite_0.2s]"></div>
+                  <div className="w-1 h-5 bg-yellow-400 rounded-full animate-[soundwave_0.6s_ease-in-out_infinite_0.3s]"></div>
+                  <div className="w-1 h-2 bg-yellow-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite_0.4s]"></div>
                 </div>
               </div>
               <p>Listening...</p>
@@ -566,8 +570,8 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
           )}
 
           {transcript && !isListening && (
-            <div className="mt-2 text-center">
-              <p className="text-gray-400">"{transcript}"</p>
+            <div className="mt-4 text-center">
+              <p className="text-gray-400 italic">"{transcript}"</p>
             </div>
           )}
         </div>
