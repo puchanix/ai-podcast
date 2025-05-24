@@ -17,6 +17,7 @@ export default function Home() {
   const [personas, setPersonas] = useState({})
   const [showTopicSelector, setShowTopicSelector] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [isPaused, setIsPaused] = useState(false)
 
   // Debate state
   const [isDebating, setIsDebating] = useState(false)
@@ -285,14 +286,15 @@ export default function Home() {
   const pauseAudio = useCallback(() => {
     if (audioRef.current && !audioRef.current.paused) {
       audioRef.current.pause()
-      setIsPlaying(false)
+      setIsPaused(true)
+      // Don't set setIsPlaying(false) here!
     }
   }, [])
 
   const resumeAudio = useCallback(() => {
     if (audioRef.current && audioRef.current.paused) {
       audioRef.current.play()
-      setIsPlaying(true)
+      setIsPaused(false)
     }
   }, [])
 
@@ -301,6 +303,7 @@ export default function Home() {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
       setIsPlaying(false)
+      setIsPaused(false)
     }
   }, [])
 
@@ -412,12 +415,14 @@ export default function Home() {
 
       audio.onended = () => {
         setIsPlaying(false)
+        setIsPaused(false)
       }
 
       audio.onerror = (e) => {
         console.error("Audio playback error:", e)
         setAudioError("Audio playback failed")
         setIsPlaying(false)
+        setIsPaused(false)
       }
 
       await audio.play()
@@ -679,6 +684,7 @@ export default function Home() {
     setCurrentSpeaker(null)
     setSpeakerStatus(null)
     setDebateRound(0)
+    setIsPaused(false)
     // DON'T reset voiceIds - keep them loaded!
   }
 
@@ -877,26 +883,29 @@ export default function Home() {
                       {/* Pause/Resume/Stop buttons when playing - MOVED HERE */}
                       {mode === "question" && selectedPersona === key && isPlaying && (
                         <div className="flex space-x-1 mb-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              pauseAudio()
-                            }}
-                            className="flex-1 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
-                            title="Pause"
-                          >
-                            ⏸ Pause
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              resumeAudio()
-                            }}
-                            className="flex-1 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                            title="Resume"
-                          >
-                            ▶ Resume
-                          </button>
+                          {!isPaused ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                pauseAudio()
+                              }}
+                              className="flex-1 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
+                              title="Pause"
+                            >
+                              ⏸ Pause
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                resumeAudio()
+                              }}
+                              className="flex-1 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                              title="Resume"
+                            >
+                              ▶ Resume
+                            </button>
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
