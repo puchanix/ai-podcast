@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { personas } from "../lib/personas"
 import Layout from "../components/layout"
+import { EmbeddedTopicSelector } from "../components/embedded-topic-selector"
+import { DebateInterface } from "../components/debate-interface"
 
 export default function Home() {
   const [selectedPersona, setSelectedPersona] = useState("")
@@ -15,6 +17,10 @@ export default function Home() {
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
   const [thinkingMessage, setThinkingMessage] = useState("")
+
+  // Debate state
+  const [isDebating, setIsDebating] = useState(false)
+  const [debateTopic, setDebateTopic] = useState("")
 
   // Audio refs
   const audioRef = useRef(null)
@@ -106,9 +112,23 @@ export default function Home() {
         await startListening()
       } else if (mode === "debate") {
         if (selectedCharacters.includes(characterId)) {
-          setSelectedCharacters(selectedCharacters.filter((id) => id !== characterId))
+          // Deselect character
+          const newSelection = selectedCharacters.filter((id) => id !== characterId)
+          setSelectedCharacters(newSelection)
+
+          // If we go back to less than 2 characters, reset debate state
+          if (newSelection.length < 2) {
+            setIsDebating(false)
+            setDebateTopic("")
+          }
         } else if (selectedCharacters.length < 2) {
-          setSelectedCharacters([...selectedCharacters, characterId])
+          const newSelection = [...selectedCharacters, characterId]
+          setSelectedCharacters(newSelection)
+
+          // Auto-trigger topic selection when 2nd character is selected
+          if (newSelection.length === 2) {
+            console.log("Two characters selected, showing topic selector")
+          }
         }
       }
     },
@@ -328,13 +348,6 @@ export default function Home() {
     }
   }
 
-  const handleDebateStart = () => {
-    if (selectedCharacters.length === 2) {
-      const [char1, char2] = selectedCharacters
-      window.location.href = `/debate?char1=${char1}&char2=${char2}`
-    }
-  }
-
   const toggleMode = () => {
     setMode(mode === "question" ? "debate" : "question")
     setSelectedPersona("")
@@ -345,6 +358,8 @@ export default function Home() {
     setIsPlaying(false)
     setAudioError(null)
     setThinkingMessage("")
+    setIsDebating(false)
+    setDebateTopic("")
   }
 
   const handleRecordingButtonClick = useCallback(
@@ -375,6 +390,21 @@ export default function Home() {
     },
     [mode, selectedPersona, isListening, isProcessing, isPlaying, startListening, stopListening],
   )
+
+  // Handle debate topic selection
+  const handleTopicSelect = useCallback((topic) => {
+    console.log("Topic selected:", topic)
+    setDebateTopic(topic)
+    setIsDebating(true)
+  }, [])
+
+  // Handle debate end/reset
+  const handleDebateEnd = useCallback(() => {
+    console.log("Debate ended, returning to home")
+    setIsDebating(false)
+    setDebateTopic("")
+    setSelectedCharacters([])
+  }, [])
 
   // Small microphone icon component - Fixed SVG path
   const SmallMicIcon = ({ isActive }) => (
@@ -408,11 +438,23 @@ export default function Home() {
     return "bg-yellow-500 text-black"
   }
 
+  // Determine if character should be grayed out
+  const shouldGrayOutCharacter = (characterId) => {
+    if (mode === "question") {
+      const isInteracting = isListening || isProcessing || isPlaying
+      return isInteracting && selectedPersona !== characterId
+    } else if (mode === "debate") {
+      // In debate mode, gray out if 2 characters are selected and this isn't one of them
+      return selectedCharacters.length === 2 && !selectedCharacters.includes(characterId)
+    }
+    return false
+  }
+
   return (
     <Layout>
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white">
         <div className="container mx-auto px-4 py-8">
-          {/* Header - No floating bar, just content */}
+          {/* Header */}
           <div className="text-center mb-12">
             <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
               Heroes of History
@@ -453,7 +495,7 @@ export default function Home() {
 
           {/* Instructions */}
           <div className="text-center mb-8">
-            {mode === "debate" && (
+            {mode === "debate" && selectedCharacters.length < 2 && (
               <p className="text-lg text-gray-300">
                 Select two historical figures to watch them debate fascinating topics
               </p>
@@ -464,8 +506,7 @@ export default function Home() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-12">
             {Object.entries(personas).map(([key, persona]) => {
               const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
-              const isInteracting = mode === "question" && (isListening || isProcessing || isPlaying)
-              const shouldGrayOut = isInteracting && selectedPersona !== key
+              const shouldGrayOut = shouldGrayOutCharacter(key)
 
               return (
                 <div
@@ -577,28 +618,27 @@ export default function Home() {
           {/* Audio Error Display */}
           {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
 
-          {mode === "debate" && (
-            <div className="text-center">
-              <div className="bg-gray-800 rounded-xl p-8 max-w-md mx-auto">
-                <h3 className="text-2xl font-bold mb-4 text-yellow-400">Start Debate</h3>
-                <p className="text-gray-300 mb-4">Selected: {selectedCharacters.length}/2 characters</p>
-                {selectedCharacters.length === 2 && (
-                  <p className="text-sm text-gray-400 mb-4">
-                    {personas[selectedCharacters[0]]?.name} vs {personas[selectedCharacters[1]]?.name}
-                  </p>
-                )}
-                <button
-                  onClick={handleDebateStart}
-                  disabled={selectedCharacters.length !== 2}
-                  className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 ${
-                    selectedCharacters.length === 2
-                      ? "bg-yellow-500 hover:bg-yellow-600 text-black"
-                      : "bg-gray-600 text-gray-400 cursor-not-allowed"
-                  }`}
-                >
-                  {selectedCharacters.length === 2 ? "Start Debate" : "Select 2 Characters"}
-                </button>
-              </div>
+          {/* Dynamic Content Area */}
+          {mode === "debate" && selectedCharacters.length === 2 && !isDebating && (
+            <div className="mb-8">
+              <EmbeddedTopicSelector
+                onSelectTopic={handleTopicSelect}
+                character1={selectedCharacters[0]}
+                character2={selectedCharacters[1]}
+              />
+            </div>
+          )}
+
+          {/* Debate Interface */}
+          {mode === "debate" && isDebating && selectedCharacters.length === 2 && (
+            <div className="mb-8">
+              <DebateInterface
+                character1={selectedCharacters[0]}
+                character2={selectedCharacters[1]}
+                initialTopic={debateTopic}
+                onDebateEnd={handleDebateEnd}
+                embedded={true}
+              />
             </div>
           )}
         </div>
