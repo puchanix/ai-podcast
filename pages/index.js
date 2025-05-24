@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { personas } from "../lib/personas"
 import Layout from "../components/layout"
 
@@ -25,6 +25,7 @@ export default function Home() {
   const audioContextRef = useRef(null)
   const analyserRef = useRef(null)
   const animationFrameRef = useRef(null)
+  const currentPersonaRef = useRef("") // Use ref to track current persona
 
   // Thinking messages for dynamic display
   const thinkingMessages = [
@@ -71,6 +72,12 @@ export default function Home() {
     loadVoiceIds()
   }, [])
 
+  // Update ref when selectedPersona changes
+  useEffect(() => {
+    currentPersonaRef.current = selectedPersona
+    console.log("Selected persona updated to:", selectedPersona)
+  }, [selectedPersona])
+
   // Thinking message rotation effect
   useEffect(() => {
     let interval
@@ -89,77 +96,92 @@ export default function Home() {
     }
   }, [isProcessing])
 
-  // Audio level monitoring
-  const startAudioLevelMonitoring = (stream) => {
-    try {
-      console.log("Starting audio level monitoring...")
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-      const analyser = audioContext.createAnalyser()
-      const microphone = audioContext.createMediaStreamSource(stream)
+  // Audio level monitoring with useCallback to prevent recreation
+  const startAudioLevelMonitoring = useCallback(
+    (stream) => {
+      try {
+        console.log("Starting audio level monitoring...")
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+        const analyser = audioContext.createAnalyser()
+        const microphone = audioContext.createMediaStreamSource(stream)
 
-      analyser.fftSize = 512
-      analyser.smoothingTimeConstant = 0.8
-      microphone.connect(analyser)
+        analyser.fftSize = 256
+        analyser.smoothingTimeConstant = 0.3
+        microphone.connect(analyser)
 
-      audioContextRef.current = audioContext
-      analyserRef.current = analyser
+        audioContextRef.current = audioContext
+        analyserRef.current = analyser
 
-      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+        const dataArray = new Uint8Array(analyser.frequencyBinCount)
 
-      const updateAudioLevel = () => {
-        if (analyserRef.current && isListening) {
-          analyserRef.current.getByteFrequencyData(dataArray)
+        const updateAudioLevel = () => {
+          if (analyserRef.current && audioContextRef.current && audioContextRef.current.state === "running") {
+            analyserRef.current.getByteTimeDomainData(dataArray)
 
-          // Calculate RMS (Root Mean Square) for better volume detection
-          let sum = 0
-          for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i] * dataArray[i]
+            // Calculate volume using time domain data
+            let sum = 0
+            for (let i = 0; i < dataArray.length; i++) {
+              const sample = (dataArray[i] - 128) / 128
+              sum += sample * sample
+            }
+            const rms = Math.sqrt(sum / dataArray.length)
+            const volume = Math.min(rms * 10, 1) // Amplify and normalize
+
+            setAudioLevel(volume)
+            console.log("Audio level:", volume) // Debug log
+
+            if (isListening) {
+              animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
+            }
           }
-          const rms = Math.sqrt(sum / dataArray.length)
-          const normalizedLevel = Math.min(rms / 50, 1) // Normalize and amplify
-
-          setAudioLevel(normalizedLevel)
-          console.log("Audio level:", normalizedLevel) // Debug log
-
-          animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
         }
+
+        updateAudioLevel()
+      } catch (error) {
+        console.error("Error setting up audio level monitoring:", error)
       }
+    },
+    [isListening],
+  )
 
-      updateAudioLevel()
-    } catch (error) {
-      console.error("Error setting up audio level monitoring:", error)
-    }
-  }
-
-  const stopAudioLevelMonitoring = () => {
+  const stopAudioLevelMonitoring = useCallback(() => {
     console.log("Stopping audio level monitoring...")
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
     }
     if (audioContextRef.current && audioContextRef.current.state !== "closed") {
       audioContextRef.current.close()
+      audioContextRef.current = null
     }
+    analyserRef.current = null
     setAudioLevel(0)
-  }
+  }, [])
 
-  const handleCharacterSelect = async (characterId) => {
-    console.log("Character selected:", characterId)
-    if (mode === "question") {
-      setSelectedPersona(characterId)
-      setSelectedCharacters([characterId])
-      // Start recording immediately after state update
-      await new Promise((resolve) => setTimeout(resolve, 50)) // Small delay for state update
-      await startListening()
-    } else if (mode === "debate") {
-      if (selectedCharacters.includes(characterId)) {
-        setSelectedCharacters(selectedCharacters.filter((id) => id !== characterId))
-      } else if (selectedCharacters.length < 2) {
-        setSelectedCharacters([...selectedCharacters, characterId])
+  const handleCharacterSelect = useCallback(
+    async (characterId) => {
+      console.log("Character selected:", characterId)
+      if (mode === "question") {
+        // Update both state and ref immediately
+        setSelectedPersona(characterId)
+        currentPersonaRef.current = characterId
+        setSelectedCharacters([characterId])
+
+        console.log("About to start listening for:", characterId)
+        // Start recording immediately
+        await startListening()
+      } else if (mode === "debate") {
+        if (selectedCharacters.includes(characterId)) {
+          setSelectedCharacters(selectedCharacters.filter((id) => id !== characterId))
+        } else if (selectedCharacters.length < 2) {
+          setSelectedCharacters([...selectedCharacters, characterId])
+        }
       }
-    }
-  }
+    },
+    [mode, selectedCharacters],
+  )
 
-  const startListening = async () => {
+  const startListening = useCallback(async () => {
     try {
       console.log("Starting to listen...")
       setAudioError(null)
@@ -197,9 +219,9 @@ export default function Home() {
       console.error("Error accessing microphone:", error)
       setAudioError("Could not access microphone. Please check permissions.")
     }
-  }
+  }, [startAudioLevelMonitoring, stopAudioLevelMonitoring])
 
-  const stopListening = () => {
+  const stopListening = useCallback(() => {
     console.log("Stop listening called")
     if (mediaRecorderRef.current && isListening) {
       mediaRecorderRef.current.stop()
@@ -208,15 +230,18 @@ export default function Home() {
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
     }
 
     stopAudioLevelMonitoring()
-  }
+  }, [isListening, stopAudioLevelMonitoring])
 
-  const processAudioQuestion = async (audioBlob) => {
-    console.log("Processing audio question, selectedPersona:", selectedPersona)
+  const processAudioQuestion = useCallback(async (audioBlob) => {
+    // Use the ref value instead of state
+    const currentPersona = currentPersonaRef.current
+    console.log("Processing audio question, selectedPersona from ref:", currentPersona)
 
-    if (!selectedPersona) {
+    if (!currentPersona) {
       console.error("No persona selected!")
       setAudioError("Please select a character first")
       return
@@ -247,7 +272,7 @@ export default function Home() {
       }
 
       // Start parallel processing: text generation and audio preparation
-      await processQuestionWithStreaming(text, selectedPersona)
+      await processQuestionWithStreaming(text, currentPersona)
     } catch (error) {
       console.error("Error processing audio question:", error)
       setAudioError(`Error: ${error.message}`)
@@ -255,7 +280,7 @@ export default function Home() {
       setIsProcessing(false)
       setThinkingMessage("")
     }
-  }
+  }, [])
 
   // New function for parallel processing with streaming
   const processQuestionWithStreaming = async (question, persona) => {
@@ -353,6 +378,7 @@ export default function Home() {
   const toggleMode = () => {
     setMode(mode === "question" ? "debate" : "question")
     setSelectedPersona("")
+    currentPersonaRef.current = ""
     setSelectedCharacters([])
     setIsListening(false)
     setIsProcessing(false)
@@ -362,26 +388,29 @@ export default function Home() {
     stopAudioLevelMonitoring()
   }
 
-  const handleButtonClick = async (characterId) => {
-    console.log("Button clicked for character:", characterId)
-    if (mode === "question") {
-      if (selectedPersona === characterId) {
-        // If this character is selected and we're listening, stop recording
-        if (isListening) {
-          stopListening()
-        } else if (!isProcessing && !isPlaying) {
-          // If not currently doing anything, start recording again
+  const handleButtonClick = useCallback(
+    async (characterId) => {
+      console.log("Button clicked for character:", characterId)
+      if (mode === "question") {
+        if (selectedPersona === characterId) {
+          // If this character is selected and we're listening, stop recording
+          if (isListening) {
+            stopListening()
+          } else if (!isProcessing && !isPlaying) {
+            // If not currently doing anything, start recording again
+            await startListening()
+          }
+        } else {
+          // Select new character and start recording
+          setSelectedPersona(characterId)
+          currentPersonaRef.current = characterId
+          setSelectedCharacters([characterId])
           await startListening()
         }
-      } else {
-        // Select new character and start recording
-        setSelectedPersona(characterId)
-        setSelectedCharacters([characterId])
-        await new Promise((resolve) => setTimeout(resolve, 50))
-        await startListening()
       }
-    }
-  }
+    },
+    [mode, selectedPersona, isListening, isProcessing, isPlaying, startListening, stopListening],
+  )
 
   // Voice visualizer component
   const VoiceVisualizer = () => {
@@ -389,17 +418,16 @@ export default function Home() {
       // Create more dynamic height based on audio level
       const baseHeight = 4
       const maxHeight = 40
-      const randomVariation = Math.sin(Date.now() * 0.01 + i) * 5 // Smooth sine wave variation
+      const randomVariation = Math.sin(Date.now() * 0.005 + i) * 3 // Slower sine wave variation
       const height = baseHeight + audioLevel * maxHeight + randomVariation
 
       return (
         <div
           key={i}
-          className="bg-yellow-400 rounded-full transition-all duration-100"
+          className="bg-yellow-400 rounded-full transition-all duration-150"
           style={{
             width: "4px",
             height: `${Math.max(baseHeight, height)}px`,
-            animationDelay: `${i * 0.1}s`,
           }}
         />
       )
@@ -458,8 +486,8 @@ export default function Home() {
 
           {/* Debug Info */}
           <div className="mb-4 text-center text-sm text-gray-400">
-            Debug: Selected Persona = "{selectedPersona}", Is Listening = {isListening.toString()}, Audio Level ={" "}
-            {audioLevel.toFixed(2)}
+            Debug: Selected Persona = "{selectedPersona}", Ref = "{currentPersonaRef.current}", Is Listening ={" "}
+            {isListening.toString()}, Audio Level = {audioLevel.toFixed(2)}
           </div>
 
           {/* Instructions */}
