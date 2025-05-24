@@ -354,47 +354,58 @@ export default function Home() {
     }
   }, [])
 
-  const processCustomTopicAudio = useCallback(async (audioBlob) => {
-    console.log("🎤 [CUSTOM TOPIC] Processing custom topic audio...")
-    setIsProcessingCustomTopic(true)
-    setAudioError(null)
+  const processCustomTopicAudio = useCallback(
+    async (audioBlob) => {
+      console.log("🎤 [CUSTOM TOPIC] Processing custom topic audio...")
+      console.log("🎤 [CUSTOM TOPIC] Current selectedCharacters:", selectedCharacters)
+      setIsProcessingCustomTopic(true)
+      setAudioError(null)
 
-    try {
-      const formData = new FormData()
-      formData.append("audio", audioBlob, "custom-topic.webm")
-      console.log("🎤 [CUSTOM TOPIC] Sending to transcription API...")
+      try {
+        const formData = new FormData()
+        formData.append("audio", audioBlob, "custom-topic.webm")
+        console.log("🎤 [CUSTOM TOPIC] Sending to transcription API...")
 
-      const transcriptionResponse = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      })
+        const transcriptionResponse = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        })
 
-      console.log("🎤 [CUSTOM TOPIC] Transcription response status:", transcriptionResponse.status)
+        console.log("🎤 [CUSTOM TOPIC] Transcription response status:", transcriptionResponse.status)
 
-      if (!transcriptionResponse.ok) {
-        const errorText = await transcriptionResponse.text()
-        console.error("🎤 [CUSTOM TOPIC] Transcription error:", errorText)
-        throw new Error("Failed to transcribe audio: " + errorText)
+        if (!transcriptionResponse.ok) {
+          const errorText = await transcriptionResponse.text()
+          console.error("🎤 [CUSTOM TOPIC] Transcription error:", errorText)
+          throw new Error("Failed to transcribe audio: " + errorText)
+        }
+
+        const { text } = await transcriptionResponse.json()
+        console.log("🎤 [CUSTOM TOPIC] Transcribed text:", text)
+
+        if (!text || text.trim().length === 0) {
+          throw new Error("No speech detected. Please try again.")
+        }
+
+        // Validate we have characters before proceeding
+        if (!selectedCharacters || selectedCharacters.length !== 2) {
+          console.error("🎤 [CUSTOM TOPIC] No characters selected, cannot start debate")
+          throw new Error("Please select two characters first")
+        }
+
+        // Start debate with the custom topic
+        console.log("🎤 [CUSTOM TOPIC] Starting debate with custom topic:", text.trim())
+        console.log("🎤 [CUSTOM TOPIC] Using characters:", selectedCharacters)
+        setShowTopicSelector(false)
+        startDebate(text.trim())
+      } catch (error) {
+        console.error("🎤 [CUSTOM TOPIC] Error processing custom topic audio:", error)
+        setAudioError(`Error: ${error.message}`)
+      } finally {
+        setIsProcessingCustomTopic(false)
       }
-
-      const { text } = await transcriptionResponse.json()
-      console.log("🎤 [CUSTOM TOPIC] Transcribed text:", text)
-
-      if (!text || text.trim().length === 0) {
-        throw new Error("No speech detected. Please try again.")
-      }
-
-      // Start debate with the custom topic
-      console.log("🎤 [CUSTOM TOPIC] Starting debate with custom topic:", text.trim())
-      setShowTopicSelector(false)
-      startDebate(text.trim())
-    } catch (error) {
-      console.error("🎤 [CUSTOM TOPIC] Error processing custom topic audio:", error)
-      setAudioError(`Error: ${error.message}`)
-    } finally {
-      setIsProcessingCustomTopic(false)
-    }
-  }, [])
+    },
+    [selectedCharacters],
+  ) // Add selectedCharacters as dependency
 
   const pauseAudio = useCallback(() => {
     if (audioRef.current && !audioRef.current.paused) {
@@ -551,9 +562,13 @@ export default function Home() {
     console.log("🎯 [START DEBATE] Function called with topic:", topic)
     console.log("🎯 [START DEBATE] Selected characters:", selectedCharacters)
     console.log("🎯 [START DEBATE] Selected characters length:", selectedCharacters?.length)
+    console.log("🎯 [START DEBATE] Current mode:", mode)
+    console.log("🎯 [START DEBATE] Show topic selector:", showTopicSelector)
 
     if (!selectedCharacters || selectedCharacters.length !== 2) {
       console.error("🎯 [START DEBATE] Invalid characters - returning early")
+      console.error("🎯 [START DEBATE] Characters state:", selectedCharacters)
+      setAudioError("Please select exactly two characters to start a debate")
       return
     }
 
