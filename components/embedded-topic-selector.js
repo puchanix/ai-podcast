@@ -1,6 +1,6 @@
 "use client"
 
-export default function EmbeddedTopicSelector({
+function EmbeddedTopicSelector({
   onSelectTopic,
   character1,
   character2,
@@ -18,9 +18,21 @@ export default function EmbeddedTopicSelector({
     }
   }
 
-  // Ensure we have character objects, not just strings
-  const char1 = character1 || { name: "Character 1" }
-  const char2 = character2 || { name: "Character 2" }
+  // Convert character IDs to persona objects if needed
+  const getPersonaObject = (character) => {
+    if (typeof character === "string") {
+      // If it's a string ID, we need to get it from personas
+      // For now, return a default object
+      return {
+        name: character,
+        image: "/placeholder.svg",
+      }
+    }
+    return character || { name: "Unknown", image: "/placeholder.svg" }
+  }
+
+  const char1 = getPersonaObject(character1)
+  const char2 = getPersonaObject(character2)
 
   return (
     <div className="bg-gray-800 rounded-xl p-6 mb-8">
@@ -103,18 +115,9 @@ export default function EmbeddedTopicSelector({
           <p className="text-sm text-gray-300">How should societies be governed and by whom?</p>
         </button>
       </div>
-
-      {/* Debug info (can be removed later) */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="mt-4 p-2 bg-gray-700 rounded text-xs text-gray-300">
-          <p>
-            Debug: isDebating={isDebating ? "true" : "false"}, currentSpeaker={currentSpeaker || "none"}
-          </p>
-          <p>
-            isPlaying={isPlaying ? "true" : "false"}, thinkingMessage="{thinkingMessage}"
-          </p>
-        </div>
-      )}
     </div>
   )
 }
+
+export default EmbeddedTopicSelector
+export { EmbeddedTopicSelector }

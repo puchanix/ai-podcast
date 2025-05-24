@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { personas } from "../lib/personas"
 import Layout from "../components/layout"
-import { EmbeddedTopicSelector } from "../components/embedded-topic-selector"
+import EmbeddedTopicSelector from "../components/embedded-topic-selector"
 import { DebateInterface } from "../components/debate-interface"
 
 export default function Home() {
@@ -623,8 +623,8 @@ export default function Home() {
             <div className="mb-8">
               <EmbeddedTopicSelector
                 onSelectTopic={handleTopicSelect}
-                character1={selectedCharacters[0]}
-                character2={selectedCharacters[1]}
+                character1={personas[selectedCharacters[0]]}
+                character2={personas[selectedCharacters[1]]}
               />
             </div>
           )}
