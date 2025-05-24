@@ -517,26 +517,37 @@ export default function Home() {
   // Continue debate with next round
   const continueDebate = async () => {
     console.log("🔍 [DEBATE DEBUG] Continuing debate, current round:", debateRoundRef.current)
+    console.log("🔍 [DEBATE DEBUG] Selected characters:", selectedCharacters)
+    console.log("🔍 [DEBATE DEBUG] Debate topic:", debateTopic)
+    console.log("🔍 [DEBATE DEBUG] Current messages:", debateMessagesRef.current)
+    console.log("🔍 [DEBATE DEBUG] Messages length:", debateMessagesRef.current.length)
 
     try {
       setSpeakerStatus("thinking")
       setCurrentSpeaker(selectedCharacters[0]) // Reset to first character for new round
 
+      const requestBody = {
+        character1: selectedCharacters[0],
+        character2: selectedCharacters[1],
+        currentMessages: debateMessagesRef.current,
+        topic: debateTopic,
+      }
+
+      console.log("🔍 [DEBATE DEBUG] Request body being sent:", JSON.stringify(requestBody, null, 2))
+
       const response = await fetch("/api/auto-continue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          character1: selectedCharacters[0],
-          character2: selectedCharacters[1],
-          currentMessages: debateMessagesRef.current,
-          topic: debateTopic,
-          format: "pointCounterpoint",
-          historicalContext: true,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
+      console.log("🔍 [DEBATE DEBUG] Response status:", response.status)
+      console.log("🔍 [DEBATE DEBUG] Response headers:", response.headers)
+
       if (!response.ok) {
-        throw new Error(`Failed to continue debate: ${response.status}`)
+        const errorText = await response.text()
+        console.error("🔍 [DEBATE DEBUG] Error response body:", errorText)
+        throw new Error(`Failed to continue debate: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
