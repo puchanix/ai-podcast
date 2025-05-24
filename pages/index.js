@@ -26,6 +26,7 @@ export default function Home() {
   const [debateMessages, setDebateMessages] = useState([])
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [speakerStatus, setSpeakerStatus] = useState(null) // 'thinking', 'speaking', 'waiting'
+  const [debateRound, setDebateRound] = useState(0) // Track debate rounds
 
   // Audio refs
   const audioRef = useRef(null)
@@ -34,6 +35,8 @@ export default function Home() {
   const streamRef = useRef(null)
   const currentPersonaRef = useRef("") // Use ref to track current persona
   const currentAudioRef = useRef(null)
+  const debateMessagesRef = useRef([])
+  const debateRoundRef = useRef(0)
 
   // Thinking messages for dynamic display
   const thinkingMessages = [
@@ -49,7 +52,7 @@ export default function Home() {
     "Formulating thoughts...",
   ]
 
-  // Load voice IDs when component mounts
+  // Load voice IDs when component mounts - PERSIST ACROSS MODE CHANGES
   useEffect(() => {
     async function loadVoiceIds() {
       try {
@@ -78,7 +81,7 @@ export default function Home() {
     }
 
     loadVoiceIds()
-  }, [])
+  }, []) // Only run once on mount, don't depend on mode
 
   // Load personas when component mounts
   useEffect(() => {
@@ -162,6 +165,15 @@ export default function Home() {
     console.log("🔍 [PERSONA DEBUG] Selected persona updated to:", selectedPersona)
   }, [selectedPersona])
 
+  // Update refs for debate state
+  useEffect(() => {
+    debateMessagesRef.current = debateMessages
+  }, [debateMessages])
+
+  useEffect(() => {
+    debateRoundRef.current = debateRound
+  }, [debateRound])
+
   // Thinking message rotation effect
   useEffect(() => {
     let interval
@@ -213,6 +225,7 @@ export default function Home() {
             setDebateMessages([])
             setCurrentSpeaker(null)
             setSpeakerStatus(null)
+            setDebateRound(0)
           }
 
           return newSelection
@@ -455,6 +468,7 @@ export default function Home() {
     setCurrentSpeaker(selectedCharacters[0])
     setSpeakerStatus("thinking")
     setDebateMessages([])
+    setDebateRound(0)
 
     try {
       const response = await fetch("/api/start-debate", {
@@ -497,6 +511,59 @@ export default function Home() {
       setIsDebating(false)
       setSpeakerStatus(null)
       setCurrentSpeaker(null)
+    }
+  }
+
+  // Continue debate with next round
+  const continueDebate = async () => {
+    console.log("🔍 [DEBATE DEBUG] Continuing debate, current round:", debateRoundRef.current)
+
+    try {
+      setSpeakerStatus("thinking")
+      setCurrentSpeaker(selectedCharacters[0]) // Reset to first character for new round
+
+      const response = await fetch("/api/auto-continue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          character1: selectedCharacters[0],
+          character2: selectedCharacters[1],
+          currentMessages: debateMessagesRef.current,
+          topic: debateTopic,
+          format: "pointCounterpoint",
+          historicalContext: true,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to continue debate: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("🔍 [DEBATE DEBUG] Debate continued successfully:", data)
+
+      const newMessages = [
+        {
+          character: selectedCharacters[0],
+          content: data.response1,
+          timestamp: Date.now(),
+        },
+        {
+          character: selectedCharacters[1],
+          content: data.response2,
+          timestamp: Date.now() + 100,
+        },
+      ]
+
+      const allMessages = [...debateMessagesRef.current, ...newMessages]
+      setDebateMessages(allMessages)
+      setDebateRound((prev) => prev + 1)
+
+      // Start playing the new messages
+      playDebateAudio(newMessages[0], allMessages, debateMessagesRef.current.length)
+    } catch (error) {
+      console.error("🔍 [DEBATE DEBUG] Error continuing debate:", error)
+      setAudioError(`Failed to continue debate: ${error.message}`)
     }
   }
 
@@ -544,10 +611,22 @@ export default function Home() {
             playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
           }, 1000)
         } else {
-          // Debate finished for now
-          setTimeout(() => {
-            endDebate()
-          }, 2000)
+          // Check if we should continue with more rounds
+          const currentRound = debateRoundRef.current
+          console.log(`🔍 [DEBATE DEBUG] Finished round ${currentRound}, checking if should continue...`)
+
+          if (currentRound < 3) {
+            // Allow up to 3 additional rounds after opening
+            setTimeout(() => {
+              continueDebate()
+            }, 2000)
+          } else {
+            // Debate finished
+            console.log("🔍 [DEBATE DEBUG] Debate completed after all rounds")
+            setTimeout(() => {
+              endDebate()
+            }, 3000)
+          }
         }
       }
 
@@ -596,6 +675,7 @@ export default function Home() {
     setDebateMessages([])
     setCurrentSpeaker(null)
     setSpeakerStatus(null)
+    setDebateRound(0)
 
     if (currentAudioRef.current) {
       currentAudioRef.current.pause()
@@ -621,6 +701,8 @@ export default function Home() {
     setDebateMessages([])
     setCurrentSpeaker(null)
     setSpeakerStatus(null)
+    setDebateRound(0)
+    // DON'T reset voiceIds - keep them loaded!
   }
 
   const handleRecordingButtonClick = useCallback(
@@ -725,12 +807,6 @@ export default function Home() {
     return false
   }
 
-  // Get the latest message for a character
-  const getLatestMessage = (characterId) => {
-    const characterMessages = debateMessages.filter((msg) => msg.character === characterId)
-    return characterMessages.length > 0 ? characterMessages[characterMessages.length - 1].content : null
-  }
-
   if (isLoading) {
     return (
       <Layout>
@@ -793,7 +869,6 @@ export default function Home() {
             {Object.entries(personas).map(([key, persona]) => {
               const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
               const shouldGrayOut = shouldGrayOutCharacter(key)
-              const latestMessage = getLatestMessage(key)
               const isCurrentDebateSpeaker = currentSpeaker === key
 
               return (
@@ -825,14 +900,7 @@ export default function Home() {
                       {/* Character Name - Always at top */}
                       <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
 
-                      {/* Latest Message - Only show if available and not too long */}
-                      {latestMessage && mode === "debate" && isDebating && (
-                        <div className="mb-2 p-2 bg-gray-700 rounded text-xs text-gray-300 flex-1 overflow-hidden">
-                          <div className="line-clamp-3">
-                            {latestMessage.length > 80 ? latestMessage.substring(0, 80) + "..." : latestMessage}
-                          </div>
-                        </div>
-                      )}
+                      {/* NO MORE DEBATE MESSAGE DISPLAY - REMOVED */}
 
                       {/* Button Section - Always at bottom */}
                       <div className="mt-auto flex space-x-1">
@@ -905,6 +973,7 @@ export default function Home() {
               <div className="bg-gray-800 rounded-lg p-4 inline-block">
                 <h2 className="text-xl font-bold text-yellow-400 mb-2">Current Debate Topic</h2>
                 <p className="text-gray-300">{debateTopic}</p>
+                <p className="text-sm text-gray-400 mt-1">Round {debateRound + 1} of 4</p>
                 <button
                   onClick={endDebate}
                   className="mt-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm"
