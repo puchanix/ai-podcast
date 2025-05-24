@@ -18,6 +18,7 @@ export default function Home() {
   const [showTopicSelector, setShowTopicSelector] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
+  const [isDebatePaused, setIsDebatePaused] = useState(false)
 
   // Custom topic recording state
   const [isRecordingCustomTopic, setIsRecordingCustomTopic] = useState(false)
@@ -443,6 +444,20 @@ export default function Home() {
       setIsPaused(false)
     }
   }, [])
+
+  const pauseDebateAudio = useCallback(() => {
+    if (currentAudioRef.current && !currentAudioRef.current.paused) {
+      currentAudioRef.current.pause()
+      setIsDebatePaused(true)
+    }
+  }, [])
+
+  const resumeDebateAudio = useCallback(() => {
+    if (currentAudioRef.current && currentAudioRef.current.paused && isDebatePaused) {
+      currentAudioRef.current.play()
+      setIsDebatePaused(false)
+    }
+  }, [isDebatePaused])
 
   const processAudioQuestion = useCallback(async (audioBlob) => {
     const currentPersona = currentPersonaRef.current
@@ -889,6 +904,7 @@ export default function Home() {
     setCurrentSpeaker(null)
     setSpeakerStatus(null)
     setDebateRound(0)
+    setIsDebatePaused(false)
 
     if (currentAudioRef.current) {
       currentAudioRef.current.pause()
@@ -916,6 +932,7 @@ export default function Home() {
     setSpeakerStatus(null)
     setDebateRound(0)
     setIsPaused(false)
+    setIsDebatePaused(false)
     setIsRecordingCustomTopic(false)
     setIsProcessingCustomTopic(false)
     // DON'T reset voiceIds - keep them loaded!
@@ -1210,12 +1227,31 @@ export default function Home() {
                 <h2 className="text-xl font-bold text-yellow-400 mb-2">Current Debate Topic</h2>
                 <p className="text-gray-300">{debateTopic}</p>
                 <p className="text-sm text-gray-400 mt-1">Round {debateRound + 1} of 4</p>
-                <button
-                  onClick={endDebate}
-                  className="mt-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm"
-                >
-                  End Debate
-                </button>
+                <div className="mt-4 flex justify-center space-x-3">
+                  {!isDebatePaused ? (
+                    <button
+                      onClick={pauseDebateAudio}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded text-sm flex items-center space-x-2"
+                    >
+                      <span>⏸</span>
+                      <span>Pause Debate</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={resumeDebateAudio}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm flex items-center space-x-2"
+                    >
+                      <span>▶</span>
+                      <span>Resume Debate</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={endDebate}
+                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm"
+                  >
+                    End Debate
+                  </button>
+                </div>
               </div>
             </div>
           )}
