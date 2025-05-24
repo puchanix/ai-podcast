@@ -548,13 +548,20 @@ export default function Home() {
 
   // Start debate function
   const startDebate = async (topic) => {
+    console.log("🎯 [START DEBATE] Function called with topic:", topic)
+    console.log("🎯 [START DEBATE] Selected characters:", selectedCharacters)
+    console.log("🎯 [START DEBATE] Selected characters length:", selectedCharacters?.length)
+
     if (!selectedCharacters || selectedCharacters.length !== 2) {
+      console.error("🎯 [START DEBATE] Invalid characters - returning early")
       return
     }
 
     // Extract topic string if it's an object
     const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
+    console.log("🎯 [START DEBATE] Topic string extracted:", topicString)
 
+    console.log("🎯 [START DEBATE] Setting debate state...")
     setIsDebating(true)
     setDebateTopic(topicString) // Set state
     debateTopicRef.current = topicString // Set ref immediately - THIS IS THE KEY FIX!
@@ -562,6 +569,7 @@ export default function Home() {
     setSpeakerStatus("thinking")
     setDebateMessages([])
     setDebateRound(0)
+    console.log("🎯 [START DEBATE] Debate state set, making API call...")
 
     try {
       const response = await fetch("/api/start-debate", {
@@ -574,11 +582,16 @@ export default function Home() {
         }),
       })
 
+      console.log("🎯 [START DEBATE] API response status:", response.status)
+
       if (!response.ok) {
+        const errorText = await response.text()
+        console.error("🎯 [START DEBATE] API error:", errorText)
         throw new Error(`Failed to start debate: ${response.status}`)
       }
 
       const data = await response.json()
+      console.log("🎯 [START DEBATE] API response data:", data)
 
       const messages = [
         {
@@ -593,12 +606,14 @@ export default function Home() {
         },
       ]
 
+      console.log("🎯 [START DEBATE] Messages created:", messages)
       setDebateMessages(messages)
 
       // Start playing first message
+      console.log("🎯 [START DEBATE] Starting audio playback...")
       playDebateAudio(messages[0], messages, 0)
     } catch (error) {
-      console.error("Error starting debate:", error)
+      console.error("🎯 [START DEBATE] Error starting debate:", error)
       setAudioError(`Failed to start debate: ${error.message}`)
       setIsDebating(false)
       setSpeakerStatus(null)
