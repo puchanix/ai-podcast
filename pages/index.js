@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import Layout from "../components/layout"
-import DebateInterface from "../components/debate-interface"
 
 export default function Home() {
   const [selectedPersona, setSelectedPersona] = useState("")
@@ -24,6 +23,9 @@ export default function Home() {
   const [debateTopic, setDebateTopic] = useState("")
   const [topics, setTopics] = useState([])
   const [loadingTopics, setLoadingTopics] = useState(false)
+  const [debateMessages, setDebateMessages] = useState([])
+  const [currentSpeaker, setCurrentSpeaker] = useState(null)
+  const [speakerStatus, setSpeakerStatus] = useState(null) // 'thinking', 'speaking', 'waiting'
 
   // Audio refs
   const audioRef = useRef(null)
@@ -31,6 +33,7 @@ export default function Home() {
   const audioChunksRef = useRef([])
   const streamRef = useRef(null)
   const currentPersonaRef = useRef("") // Use ref to track current persona
+  const currentAudioRef = useRef(null)
 
   // Thinking messages for dynamic display
   const thinkingMessages = [
@@ -55,21 +58,15 @@ export default function Home() {
         if (response.ok) {
           const data = await response.json()
           console.log("🔍 [VOICE DEBUG] Raw voice IDs from API:", data)
-          setVoiceIds(data)
+          console.log("🔍 [VOICE DEBUG] Voice IDs keys:", Object.keys(data))
+          console.log("🔍 [VOICE DEBUG] Voice IDs values:", Object.values(data))
 
-          // Update personas with voice IDs
-          Object.keys(personas).forEach((key) => {
-            const voiceKey = key === "daVinci" ? "davinci" : key.toLowerCase()
-            if (data[voiceKey]) {
-              personas[key].voiceId = data[voiceKey]
-              console.log(`🔍 [VOICE DEBUG] Updated voice ID for ${key}: ${data[voiceKey]}`)
-            } else {
-              console.log(`🔍 [VOICE DEBUG] No voice ID found for ${key} (looking for key: ${voiceKey})`)
-            }
+          // Log each individual voice ID
+          Object.entries(data).forEach(([key, value]) => {
+            console.log(`🔍 [VOICE DEBUG] ${key}: ${value} (type: ${typeof value})`)
           })
 
-          console.log("🔍 [VOICE DEBUG] Final voiceIds state:", data)
-          console.log("🔍 [VOICE DEBUG] Updated personas:", personas)
+          setVoiceIds(data)
         } else {
           console.error("🔍 [VOICE DEBUG] Failed to load voice IDs, status:", response.status)
         }
@@ -93,7 +90,6 @@ export default function Home() {
         const personasModule = await import("../lib/personas")
         setPersonas(personasModule.personas)
         console.log("🔍 [PERSONA DEBUG] Personas loaded:", Object.keys(personasModule.personas))
-        console.log("🔍 [PERSONA DEBUG] Full personas object:", personasModule.personas)
       } catch (error) {
         console.error("🔍 [PERSONA DEBUG] Error loading personas:", error)
       } finally {
@@ -122,16 +118,12 @@ export default function Home() {
             }),
           })
 
-          console.log("🔍 [TOPIC DEBUG] API response status:", response.status)
-
           if (response.ok) {
             const data = await response.json()
             console.log("🔍 [TOPIC DEBUG] Topics received:", data)
             setTopics(data.topics || [])
           } else {
-            const errorText = await response.text()
-            console.error("🔍 [TOPIC DEBUG] Failed to fetch topics:", response.status, errorText)
-            // Fallback topics
+            console.error("🔍 [TOPIC DEBUG] Failed to fetch topics:", response.status)
             setTopics([
               {
                 id: "fallback-1",
@@ -145,35 +137,16 @@ export default function Home() {
                 description: "The role of creativity in human experience",
                 category: "arts",
               },
-              {
-                id: "fallback-3",
-                title: "Science and Discovery",
-                description: "The pursuit of knowledge and innovation",
-                category: "science",
-              },
             ])
           }
         } catch (error) {
           console.error("🔍 [TOPIC DEBUG] Error fetching topics:", error)
-          // Fallback topics on error
           setTopics([
             {
               id: "fallback-1",
               title: "Philosophy and Wisdom",
               description: "The nature of knowledge and understanding",
               category: "philosophy",
-            },
-            {
-              id: "fallback-2",
-              title: "Art and Expression",
-              description: "The role of creativity in human experience",
-              category: "arts",
-            },
-            {
-              id: "fallback-3",
-              title: "Science and Discovery",
-              description: "The pursuit of knowledge and innovation",
-              category: "science",
             },
           ])
         } finally {
@@ -201,7 +174,7 @@ export default function Home() {
       interval = setInterval(() => {
         messageIndex = (messageIndex + 1) % thinkingMessages.length
         setThinkingMessage(thinkingMessages[messageIndex])
-      }, 2000) // Change message every 2 seconds
+      }, 2000)
     }
 
     return () => {
@@ -213,13 +186,9 @@ export default function Home() {
     async (characterId) => {
       console.log("🔍 [CHARACTER DEBUG] Character selected:", characterId)
       if (mode === "question") {
-        // Update both state and ref immediately
         setSelectedPersona(characterId)
         currentPersonaRef.current = characterId
         setSelectedCharacters([characterId])
-
-        console.log("🔍 [CHARACTER DEBUG] About to start listening for:", characterId)
-        // Start recording immediately
         await startListening()
       } else if (mode === "debate") {
         setSelectedCharacters((prev) => {
@@ -243,6 +212,9 @@ export default function Home() {
             setShowTopicSelector(false)
             setIsDebating(false)
             setDebateTopic("")
+            setDebateMessages([])
+            setCurrentSpeaker(null)
+            setSpeakerStatus(null)
           }
 
           return newSelection
@@ -334,7 +306,6 @@ export default function Home() {
   }, [])
 
   const processAudioQuestion = useCallback(async (audioBlob) => {
-    // Use the ref value instead of state
     const currentPersona = currentPersonaRef.current
     console.log("🔍 [AUDIO DEBUG] Processing audio question, selectedPersona from ref:", currentPersona)
 
@@ -348,7 +319,6 @@ export default function Home() {
     setAudioError(null)
 
     try {
-      // Convert audio to text
       const formData = new FormData()
       formData.append("audio", audioBlob, "question.wav")
 
@@ -368,7 +338,6 @@ export default function Home() {
         throw new Error("No speech detected. Please try again.")
       }
 
-      // Start parallel processing: text generation and audio preparation
       await processQuestionWithStreaming(text, currentPersona)
     } catch (error) {
       console.error("🔍 [AUDIO DEBUG] Error processing audio question:", error)
@@ -379,13 +348,11 @@ export default function Home() {
     }
   }, [])
 
-  // New function for parallel processing with streaming
   const processQuestionWithStreaming = async (question, persona) => {
     try {
       setIsPlaying(true)
 
-      // Start text generation
-      const textPromise = fetch("/api/chat", {
+      const textResponse = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -396,8 +363,6 @@ export default function Home() {
         }),
       })
 
-      // Wait for text response
-      const textResponse = await textPromise
       if (!textResponse.ok) {
         throw new Error("Failed to generate response")
       }
@@ -405,7 +370,6 @@ export default function Home() {
       const { response: responseText } = await textResponse.json()
       console.log("🔍 [AUDIO DEBUG] Generated response:", responseText)
 
-      // Use regular audio generation instead of streaming to avoid 504 errors
       await generateAudioResponse(responseText, persona)
     } catch (error) {
       console.error("🔍 [AUDIO DEBUG] Error in parallel processing:", error)
@@ -414,20 +378,20 @@ export default function Home() {
     }
   }
 
-  // Fixed audio generation to properly use voice IDs
   const generateAudioResponse = async (text, persona) => {
     try {
-      // Get voice for character - FIXED to use voiceIds state properly
       const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
-      let voice = voiceIds[voiceKey]
 
       console.log("🔍 [VOICE DEBUG] generateAudioResponse called with:")
       console.log("🔍 [VOICE DEBUG] - persona:", persona)
       console.log("🔍 [VOICE DEBUG] - voiceKey:", voiceKey)
       console.log("🔍 [VOICE DEBUG] - voiceIds state:", voiceIds)
-      console.log("🔍 [VOICE DEBUG] - voice found:", voice)
+      console.log("🔍 [VOICE DEBUG] - voiceIds keys:", Object.keys(voiceIds))
+      console.log("🔍 [VOICE DEBUG] - voiceIds[voiceKey]:", voiceIds[voiceKey])
+      console.log("🔍 [VOICE DEBUG] - typeof voiceIds[voiceKey]:", typeof voiceIds[voiceKey])
 
-      // If we found a voice ID, use it directly (it's already the ElevenLabs voice ID)
+      let voice = voiceIds[voiceKey]
+
       if (voice && voice.length > 10) {
         console.log(`🔍 [VOICE DEBUG] Using custom voice ID for ${persona}: ${voice}`)
       } else {
@@ -437,7 +401,6 @@ export default function Home() {
 
       console.log(`🔍 [VOICE DEBUG] Final voice for ${persona}: ${voice}`)
 
-      // Use regular speak API
       const response = await fetch("/api/speak", {
         method: "POST",
         headers: {
@@ -445,17 +408,18 @@ export default function Home() {
         },
         body: JSON.stringify({
           text: text,
-          voice: voice, // Pass the actual voice ID, not the key
+          voice: voice,
         }),
       })
 
       if (!response.ok) {
-        throw new Error(`Audio generation failed: ${response.status}`)
+        const errorText = await response.text()
+        console.error("🔍 [VOICE DEBUG] Speak API error response:", errorText)
+        throw new Error(`Audio generation failed: ${response.status} - ${errorText}`)
       }
 
       const { audioUrl } = await response.json()
 
-      // Create audio element and play
       const audio = new Audio(audioUrl)
       audioRef.current = audio
 
@@ -479,6 +443,138 @@ export default function Home() {
     }
   }
 
+  // Start debate function
+  const startDebate = async (topic) => {
+    console.log("🔍 [DEBATE DEBUG] Starting debate with topic:", topic)
+
+    if (!selectedCharacters || selectedCharacters.length !== 2) {
+      console.error("🔍 [DEBATE DEBUG] Invalid characters:", selectedCharacters)
+      return
+    }
+
+    setIsDebating(true)
+    setDebateTopic(topic)
+    setCurrentSpeaker(selectedCharacters[0])
+    setSpeakerStatus("thinking")
+    setDebateMessages([])
+
+    try {
+      const response = await fetch("/api/start-debate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          character1: selectedCharacters[0],
+          character2: selectedCharacters[1],
+          topic,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to start debate: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("🔍 [DEBATE DEBUG] Debate started successfully:", data)
+
+      const messages = [
+        {
+          character: selectedCharacters[0],
+          content: data.opening1,
+          timestamp: Date.now(),
+        },
+        {
+          character: selectedCharacters[1],
+          content: data.opening2,
+          timestamp: Date.now() + 100,
+        },
+      ]
+
+      setDebateMessages(messages)
+
+      // Start playing first message
+      playDebateAudio(messages[0], messages, 0)
+    } catch (error) {
+      console.error("🔍 [DEBATE DEBUG] Error starting debate:", error)
+      setAudioError(`Failed to start debate: ${error.message}`)
+      setIsDebating(false)
+      setSpeakerStatus(null)
+      setCurrentSpeaker(null)
+    }
+  }
+
+  // Play debate audio
+  const playDebateAudio = async (message, allMessages, currentIndex) => {
+    const { character, content } = message
+    console.log(`🔍 [DEBATE DEBUG] Playing audio for ${character}`)
+
+    setCurrentSpeaker(character)
+    setSpeakerStatus("speaking")
+
+    try {
+      const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
+      const voice = voiceIds[voiceKey] || "echo"
+
+      const response = await fetch("/api/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: content, voice }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Audio API returned ${response.status}`)
+      }
+
+      const data = await response.json()
+      const audio = new Audio(data.audioUrl)
+      currentAudioRef.current = audio
+
+      audio.onended = () => {
+        console.log(`🔍 [DEBATE DEBUG] ${character} finished speaking`)
+        setSpeakerStatus("waiting")
+
+        // Auto-continue to next message
+        const nextIndex = currentIndex + 1
+        if (nextIndex < allMessages.length) {
+          setTimeout(() => {
+            playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
+          }, 1000)
+        } else {
+          // Debate finished for now
+          setTimeout(() => {
+            endDebate()
+          }, 2000)
+        }
+      }
+
+      audio.onerror = (e) => {
+        throw new Error(`Audio playback failed: ${e.message}`)
+      }
+
+      await audio.play()
+    } catch (error) {
+      console.error(`🔍 [DEBATE DEBUG] Error playing audio for ${character}:`, error)
+      setAudioError(`Audio failed for ${character}: ${error.message}`)
+      setSpeakerStatus(null)
+    }
+  }
+
+  const endDebate = () => {
+    console.log("🔍 [DEBATE DEBUG] Ending debate")
+    setIsDebating(false)
+    setDebateTopic("")
+    setSelectedCharacters([])
+    setShowTopicSelector(false)
+    setTopics([])
+    setDebateMessages([])
+    setCurrentSpeaker(null)
+    setSpeakerStatus(null)
+
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current = null
+    }
+  }
+
   const toggleMode = () => {
     console.log("🔍 [MODE DEBUG] Toggling mode from", mode, "to", mode === "question" ? "debate" : "question")
     setMode(mode === "question" ? "debate" : "question")
@@ -494,6 +590,9 @@ export default function Home() {
     setDebateTopic("")
     setShowTopicSelector(false)
     setTopics([])
+    setDebateMessages([])
+    setCurrentSpeaker(null)
+    setSpeakerStatus(null)
   }
 
   const handleRecordingButtonClick = useCallback(
@@ -503,17 +602,14 @@ export default function Home() {
 
       if (mode === "question") {
         if (selectedPersona === characterId) {
-          // If this character is selected and we're listening, stop recording
           if (isListening) {
             console.log("🔍 [BUTTON DEBUG] Stopping recording...")
             stopListening()
           } else if (!isProcessing && !isPlaying) {
-            // If not currently doing anything, start recording again
             console.log("🔍 [BUTTON DEBUG] Starting new recording...")
             await startListening()
           }
         } else {
-          // Select new character and start recording
           console.log("🔍 [BUTTON DEBUG] Selecting new character and starting recording...")
           setSelectedPersona(characterId)
           currentPersonaRef.current = characterId
@@ -525,30 +621,17 @@ export default function Home() {
     [mode, selectedPersona, isListening, isProcessing, isPlaying, startListening, stopListening],
   )
 
-  // Handle debate topic selection
   const handleTopicSelect = useCallback(
     (topic) => {
       console.log("🔍 [DEBATE DEBUG] Topic selected:", topic)
       console.log("🔍 [DEBATE DEBUG] Selected characters:", selectedCharacters)
-      setDebateTopic(topic.title || topic)
-      setIsDebating(true)
       setShowTopicSelector(false)
-      console.log("🔍 [DEBATE DEBUG] Set isDebating to true, debateTopic to:", topic.title || topic)
+      startDebate(topic.title || topic)
     },
     [selectedCharacters],
   )
 
-  // Handle debate end/reset
-  const handleDebateEnd = useCallback(() => {
-    console.log("🔍 [DEBATE DEBUG] Debate manually ended, returning to home")
-    setIsDebating(false)
-    setDebateTopic("")
-    setSelectedCharacters([])
-    setShowTopicSelector(false)
-    setTopics([])
-  }, [])
-
-  // Small microphone icon component - Fixed SVG path
+  // Small microphone icon component
   const SmallMicIcon = ({ isActive }) => (
     <svg
       className={`w-4 h-4 ${isActive ? "text-orange-400 animate-pulse" : "text-gray-400"}`}
@@ -562,8 +645,18 @@ export default function Home() {
 
   // Get status text for button display
   const getStatusText = (characterId) => {
-    if (selectedPersona !== characterId) return "Ask Question"
+    if (mode === "debate" && isDebating) {
+      if (characterId === currentSpeaker) {
+        return speakerStatus === "thinking"
+          ? "Thinking..."
+          : speakerStatus === "speaking"
+            ? "Speaking..."
+            : "Waiting..."
+      }
+      return selectedCharacters.includes(characterId) ? "Waiting turn" : "Watching"
+    }
 
+    if (selectedPersona !== characterId) return "Ask Question"
     if (isListening) return "Stop Recording"
     if (isProcessing) return thinkingMessage || "Processing..."
     if (isPlaying) return "Speaking..."
@@ -572,8 +665,18 @@ export default function Home() {
 
   // Get button color based on status
   const getButtonColor = (characterId) => {
-    if (selectedPersona !== characterId) return "bg-gray-700 text-white hover:bg-gray-600"
+    if (mode === "debate" && isDebating) {
+      if (characterId === currentSpeaker) {
+        return speakerStatus === "thinking"
+          ? "bg-blue-500 text-white"
+          : speakerStatus === "speaking"
+            ? "bg-green-500 text-white"
+            : "bg-yellow-500 text-black"
+      }
+      return selectedCharacters.includes(characterId) ? "bg-purple-600 text-white" : "bg-gray-600 text-gray-400"
+    }
 
+    if (selectedPersona !== characterId) return "bg-gray-700 text-white hover:bg-gray-600"
     if (isListening) return "bg-red-500 text-white"
     if (isProcessing) return "bg-blue-500 text-white"
     if (isPlaying) return "bg-green-500 text-white"
@@ -586,10 +689,18 @@ export default function Home() {
       const isInteracting = isListening || isProcessing || isPlaying
       return isInteracting && selectedPersona !== characterId
     } else if (mode === "debate") {
-      // In debate mode, gray out if 2 characters are selected and this isn't one of them
+      if (isDebating) {
+        return !selectedCharacters.includes(characterId)
+      }
       return selectedCharacters.length === 2 && !selectedCharacters.includes(characterId)
     }
     return false
+  }
+
+  // Get the latest message for a character
+  const getLatestMessage = (characterId) => {
+    const characterMessages = debateMessages.filter((msg) => msg.character === characterId)
+    return characterMessages.length > 0 ? characterMessages[characterMessages.length - 1].content : null
   }
 
   if (isLoading) {
@@ -604,13 +715,6 @@ export default function Home() {
       </Layout>
     )
   }
-
-  console.log("🔍 [RENDER DEBUG] Current state:")
-  console.log("🔍 [RENDER DEBUG] - mode:", mode)
-  console.log("🔍 [RENDER DEBUG] - isDebating:", isDebating)
-  console.log("🔍 [RENDER DEBUG] - selectedCharacters:", selectedCharacters)
-  console.log("🔍 [RENDER DEBUG] - debateTopic:", debateTopic)
-  console.log("🔍 [RENDER DEBUG] - showTopicSelector:", showTopicSelector)
 
   return (
     <Layout>
@@ -647,13 +751,6 @@ export default function Home() {
             </div>
           </div>
 
-          {isLoadingVoices && (
-            <div className="mb-8 p-4 bg-yellow-800 text-yellow-100 rounded-lg text-center">
-              <div className="inline-block animate-spin h-5 w-5 border-2 border-yellow-500 border-t-transparent rounded-full mr-2"></div>
-              Loading voice data... Please wait.
-            </div>
-          )}
-
           {/* Debug Info */}
           <div className="mb-8 p-4 bg-gray-800 text-gray-300 rounded-lg text-xs">
             <h3 className="font-bold mb-2">Debug Info:</h3>
@@ -662,12 +759,29 @@ export default function Home() {
             <p>Is Debating: {isDebating.toString()}</p>
             <p>Debate Topic: {debateTopic}</p>
             <p>Show Topic Selector: {showTopicSelector.toString()}</p>
-            <p>Voice IDs: {JSON.stringify(voiceIds)}</p>
+            <p>Voice IDs Keys: {JSON.stringify(Object.keys(voiceIds))}</p>
+            <p>Voice IDs Values: {JSON.stringify(Object.values(voiceIds))}</p>
           </div>
+
+          {/* Debate Topic Display */}
+          {isDebating && debateTopic && (
+            <div className="mb-8 text-center">
+              <div className="bg-gray-800 rounded-lg p-4 inline-block">
+                <h2 className="text-xl font-bold text-yellow-400 mb-2">Current Debate Topic</h2>
+                <p className="text-gray-300">{debateTopic}</p>
+                <button
+                  onClick={endDebate}
+                  className="mt-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm"
+                >
+                  End Debate
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Instructions */}
           <div className="text-center mb-8">
-            {mode === "debate" && selectedCharacters.length < 2 && (
+            {mode === "debate" && selectedCharacters.length < 2 && !isDebating && (
               <p className="text-lg text-gray-300">
                 Select two historical figures to watch them debate fascinating topics
               </p>
@@ -679,13 +793,15 @@ export default function Home() {
             {Object.entries(personas).map(([key, persona]) => {
               const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
               const shouldGrayOut = shouldGrayOutCharacter(key)
+              const latestMessage = getLatestMessage(key)
+              const isCurrentDebateSpeaker = currentSpeaker === key
 
               return (
                 <div
                   key={key}
                   className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
                     isSelected ? "ring-4 ring-yellow-400" : ""
-                  } ${shouldGrayOut ? "opacity-30" : ""}`}
+                  } ${shouldGrayOut ? "opacity-30" : ""} ${isCurrentDebateSpeaker ? "ring-4 ring-green-400" : ""}`}
                 >
                   <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl aspect-square relative">
                     <div className="h-2/3">
@@ -694,9 +810,24 @@ export default function Home() {
                         alt={persona.name}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       />
+
+                      {/* Speaking animation overlay */}
+                      {isCurrentDebateSpeaker && speakerStatus === "speaking" && (
+                        <div className="absolute inset-0 bg-green-500 bg-opacity-20 flex items-center justify-center">
+                          <div className="w-8 h-8 border-4 border-green-400 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      )}
                     </div>
+
                     <div className="p-3 h-1/3 flex flex-col justify-between">
                       <h3 className="text-sm font-bold text-yellow-400 truncate">{persona.name}</h3>
+
+                      {/* Show latest debate message if available */}
+                      {latestMessage && mode === "debate" && isDebating && (
+                        <div className="mt-1 mb-2 p-2 bg-gray-700 rounded text-xs text-gray-300 max-h-16 overflow-hidden">
+                          {latestMessage.length > 60 ? latestMessage.substring(0, 60) + "..." : latestMessage}
+                        </div>
+                      )}
 
                       {/* Dynamic Button */}
                       <div className="mt-2 flex space-x-1">
@@ -738,45 +869,21 @@ export default function Home() {
                                 </button>
                               </>
                             )}
-
-                            {/* Resume button when paused */}
-                            {selectedPersona === key &&
-                              !isPlaying &&
-                              audioRef.current &&
-                              audioRef.current.currentTime > 0 &&
-                              !audioRef.current.ended && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    resumeAudio()
-                                  }}
-                                  className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
-                                  title="Resume"
-                                >
-                                  ▶
-                                </button>
-                              )}
                           </>
                         ) : (
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              handleCharacterSelect(key)
+                              if (!isDebating) {
+                                handleCharacterSelect(key)
+                              }
                             }}
-                            className={`w-full py-1 px-2 rounded text-xs font-semibold transition-all duration-300 ${
-                              selectedCharacters.includes(key)
-                                ? "bg-yellow-500 text-black"
-                                : selectedCharacters.length >= 2
-                                  ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                                  : "bg-gray-700 text-white hover:bg-gray-600"
-                            }`}
-                            disabled={selectedCharacters.length >= 2 && !selectedCharacters.includes(key)}
+                            className={`w-full py-1 px-2 rounded text-xs font-semibold transition-all duration-300 ${getButtonColor(key)}`}
+                            disabled={
+                              isDebating || (selectedCharacters.length >= 2 && !selectedCharacters.includes(key))
+                            }
                           >
-                            {selectedCharacters.includes(key)
-                              ? "Selected"
-                              : selectedCharacters.length >= 2
-                                ? "Max 2"
-                                : "Select"}
+                            <span className="truncate">{getStatusText(key)}</span>
                           </button>
                         )}
                       </div>
@@ -821,25 +928,6 @@ export default function Home() {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {/* Debate Interface */}
-          {mode === "debate" && isDebating && selectedCharacters.length === 2 && (
-            <div className="mb-8">
-              <div className="bg-red-800 p-4 rounded-lg mb-4">
-                <p className="text-white font-bold">🔍 DEBATE DEBUG: About to render DebateInterface</p>
-                <p className="text-gray-200">Character1: {selectedCharacters[0]}</p>
-                <p className="text-gray-200">Character2: {selectedCharacters[1]}</p>
-                <p className="text-gray-200">Topic: {debateTopic}</p>
-              </div>
-              <DebateInterface
-                character1={selectedCharacters[0]}
-                character2={selectedCharacters[1]}
-                initialTopic={debateTopic}
-                onDebateEnd={handleDebateEnd}
-                embedded={true}
-              />
             </div>
           )}
         </div>
