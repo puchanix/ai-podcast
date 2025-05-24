@@ -35,7 +35,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [initialStateLoaded, setInitialStateLoaded] = useState(false)
   const [char1, setChar1] = useState("")
   const [char2, setChar2] = useState("")
-  const [isDebating, setIsDebating] = useState(isDebating) // FIXED: removed circular reference
+  const [isDebating, setIsDebating] = useState(false) // FIXED: removed circular reference
   const [debateMessages, setDebateMessages] = useState([])
   const [currentTopic, setCurrentTopic] = useState("")
   const [exchangeCount, setExchangeCount] = useState(0)
@@ -43,14 +43,14 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // UI state - FIXED circular references
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
-  const [isProcessing, setIsProcessing] = useState(isProcessing)
+  const [isProcessing, setIsProcessing] = useState(false)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [nextSpeaker, setNextSpeaker] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false) // FIXED: removed circular reference
   const [isAudioLoaded, setIsAudioLoaded] = useState(false)
   const [volume, setVolume] = useState(1.0)
   const [audioError, setAudioError] = useState(null)
-  const [isLoadingAudio, setIsLoadingAudio] = useState(isLoadingAudio) // FIXED: removed circular reference
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false) // FIXED: removed circular reference
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
@@ -1302,7 +1302,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
               onSelectTopic={startDebate}
               character1={char1}
               character2={char2}
-              onCharactersUpdate={updateCharactersFromSelector}
+              updateCharacters={updateCharactersFromSelector}
             />
           </div>
         )}
