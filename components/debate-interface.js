@@ -118,6 +118,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [isPreparing, setIsPreparing] = useState(isDebating ? true : false)
   const [statusMessage, setStatusMessage] = useState("")
   const [isSettingUp, setIsSettingUp] = useState(false)
+  const [isStarting, setIsStarting] = useState(false)
 
   // Refs
   const audioRef = useRef(null)
@@ -471,7 +472,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         }, 1000)
       }
     }
-  }, [initialStateLoaded, currentTopic])
+  }, [initialStateLoaded, currentTopic, startDebateMain])
 
   // Get the appropriate voice for a character
   const getVoiceForCharacter = useCallback(
@@ -644,13 +645,23 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   )
 
   // Start debate after introduction
-  const startDebateAfterIntro = useCallback((topic) => {
-    startDebateMain(topic)
-  }, [])
+  const startDebateAfterIntro = useCallback(
+    (topic) => {
+      startDebateMain(topic)
+    },
+    [startDebateMain],
+  )
 
   // Main debate starting function (without introduction)
   const startDebateMain = useCallback(
     async (topic) => {
+      // Prevent multiple simultaneous starts
+      if (isStarting || isDebating) {
+        console.log("Debate already starting or in progress, ignoring duplicate start")
+        return
+      }
+
+      setIsStarting(true)
       resetDebateState()
       setCurrentTopic(topic)
       setIsDebating(true)
@@ -717,9 +728,10 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         setAudioError(`Failed to start debate: ${error.message}`)
       } finally {
         setIsProcessing(false)
+        setIsStarting(false)
       }
     },
-    [char1, char2, debateFormat, historicalContext, resetDebateState, unlockAudio],
+    [char1, char2, debateFormat, historicalContext, resetDebateState, unlockAudio, isStarting, isDebating],
   )
 
   // Start a debate on a specific topic
@@ -1225,6 +1237,12 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // Function to play debate audio
   const playDebateAudio = useCallback(
     async (message, allMessages, currentIndex) => {
+      // Prevent multiple simultaneous audio plays for the same message
+      if (currentAudioRef.current && !currentAudioRef.current.paused) {
+        console.log("Audio already playing, skipping duplicate play request")
+        return
+      }
+
       // Ensure isDebating is true when playing audio
       if (!isDebatingRef.current) {
         console.log("Setting isDebating to true in playDebateAudio")
@@ -1533,8 +1551,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
             </div>
           )}
 
-          {/* Embedded Debate Status */}
-          {embedded && isDebating && (
+          {/* Embedded Debate Status - Show for both embedded and non-embedded when debating */}
+          {isDebating && (
             <div className="mb-6">
               <div className="bg-gray-800 rounded-lg p-6">
                 <div className="flex items-center justify-between mb-4">
