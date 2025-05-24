@@ -52,10 +52,12 @@ export default function Home() {
     loadVoiceIds()
   }, [])
 
-  const handleCharacterSelect = (characterId) => {
+  const handleCharacterSelect = async (characterId) => {
     if (mode === "question") {
       setSelectedPersona(characterId)
       setSelectedCharacters([characterId])
+      // Immediately start recording when character is selected
+      await startListening()
     } else if (mode === "debate") {
       if (selectedCharacters.includes(characterId)) {
         setSelectedCharacters(selectedCharacters.filter((id) => id !== characterId))
@@ -169,8 +171,8 @@ export default function Home() {
       const { response: responseText } = await textResponse.json()
       console.log("Generated response:", responseText)
 
-      // Start streaming audio generation immediately
-      await streamAudioResponse(responseText, persona)
+      // Use regular audio generation instead of streaming to avoid 504 errors
+      await generateAudioResponse(responseText, persona)
     } catch (error) {
       console.error("Error in parallel processing:", error)
       setAudioError(`Error: ${error.message}`)
@@ -178,17 +180,17 @@ export default function Home() {
     }
   }
 
-  // New streaming audio function
-  const streamAudioResponse = async (text, persona) => {
+  // Fallback to regular audio generation to avoid 504 timeouts
+  const generateAudioResponse = async (text, persona) => {
     try {
       // Get voice for character
       const character = personas[persona]
       const voice = character?.voiceId || (character?.getVoiceId ? character.getVoiceId() : "echo")
 
-      console.log(`Streaming audio for ${persona} with voice: ${voice}`)
+      console.log(`Generating audio for ${persona} with voice: ${voice}`)
 
-      // Start audio generation with streaming
-      const response = await fetch("/api/stream-audio-realtime", {
+      // Use regular speak API instead of streaming
+      const response = await fetch("/api/speak", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -203,14 +205,10 @@ export default function Home() {
         throw new Error(`Audio generation failed: ${response.status}`)
       }
 
-      // Handle streaming response
-      const reader = response.body.getReader()
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
-      const audioBuffer = new ArrayBuffer(0)
-      let completeBuffer = new Uint8Array(0) // Accumulate all received data
+      const { audioUrl } = await response.json()
 
-      // Create audio element for playback
-      const audio = new Audio()
+      // Create audio element and play
+      const audio = new Audio(audioUrl)
       audioRef.current = audio
 
       audio.onended = () => {
@@ -224,47 +222,10 @@ export default function Home() {
         setIsPlaying(false)
       }
 
-      // Read streaming chunks
-      const processStream = async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read()
-
-            if (done) {
-              console.log("Stream completed")
-
-              // Play the complete buffer
-              const blob = new Blob([completeBuffer], { type: "audio/mpeg" })
-              const audioUrl = URL.createObjectURL(blob)
-              audio.src = audioUrl
-
-              try {
-                await audio.play()
-                console.log("Started audio playback from complete buffer")
-              } catch (playError) {
-                console.error("Error starting audio playback:", playError)
-                setAudioError("Failed to start audio playback")
-                setIsPlaying(false)
-              }
-              break
-            }
-
-            // Append new chunk to the complete buffer
-            const newCompleteBuffer = new Uint8Array(completeBuffer.length + value.length)
-            newCompleteBuffer.set(completeBuffer, 0)
-            newCompleteBuffer.set(value, completeBuffer.length)
-            completeBuffer = newCompleteBuffer
-          }
-        } catch (streamError) {
-          console.error("Stream processing error:", streamError)
-          setAudioError("Audio streaming failed")
-          setIsPlaying(false)
-        }
-      }
-
-      await processStream()
+      await audio.play()
+      console.log("Started audio playback")
     } catch (error) {
-      console.error("Error in streaming audio:", error)
+      console.error("Error in audio generation:", error)
       setAudioError(`Audio error: ${error.message}`)
       setIsPlaying(false)
     }
@@ -281,13 +242,28 @@ export default function Home() {
     setMode(mode === "question" ? "debate" : "question")
     setSelectedPersona("")
     setSelectedCharacters([])
+    setIsListening(false)
+    setIsProcessing(false)
+    setIsPlaying(false)
+    setAudioError(null)
   }
 
-  const handleAskQuestionClick = async () => {
-    if (!isListening) {
-      await startListening()
-    } else {
-      stopListening()
+  const handleButtonClick = async (characterId) => {
+    if (mode === "question") {
+      if (selectedPersona === characterId) {
+        // If this character is selected and we're listening, stop recording
+        if (isListening) {
+          stopListening()
+        } else if (!isProcessing && !isPlaying) {
+          // If not currently doing anything, start recording again
+          await startListening()
+        }
+      } else {
+        // Select new character and start recording
+        setSelectedPersona(characterId)
+        setSelectedCharacters([characterId])
+        await startListening()
+      }
     }
   }
 
@@ -344,130 +320,112 @@ export default function Home() {
           </div>
 
           {/* Character Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-            {Object.entries(personas).map(([key, persona]) => (
-              <div
-                key={key}
-                onClick={() => handleCharacterSelect(key)}
-                className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
-                  mode === "question"
-                    ? selectedPersona === key
-                      ? "ring-4 ring-yellow-400"
-                      : ""
-                    : selectedCharacters.includes(key)
-                      ? "ring-4 ring-yellow-400"
-                      : ""
-                }`}
-              >
-                <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl">
-                  <div className="aspect-w-3 aspect-h-4">
-                    <img
-                      src={persona.image || "/placeholder.svg"}
-                      alt={persona.name}
-                      className="w-full h-24 object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                  </div>
-                  <div className="p-6">
-                    <h3 className="text-2xl font-bold mb-2 text-yellow-400">{persona.name}</h3>
-                    <p className="text-gray-300 mb-4">{persona.period}</p>
-                    <p className="text-sm text-gray-400 leading-relaxed">{persona.description}</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-12">
+            {Object.entries(personas).map(([key, persona]) => {
+              const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
+              const isInteracting = mode === "question" && (isListening || isProcessing || isPlaying)
+              const shouldGrayOut = isInteracting && selectedPersona !== key
 
-                    {/* Dynamic Button */}
-                    <div className="mt-4">
-                      {mode === "question" ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCharacterSelect(key)
-                          }}
-                          className={`w-full py-2 px-4 rounded-lg font-semibold transition-all duration-300 ${
-                            selectedPersona === key
-                              ? "bg-yellow-500 text-black"
-                              : "bg-gray-700 text-white hover:bg-gray-600"
-                          }`}
-                        >
-                          {selectedPersona === key ? "Selected" : "Ask a Question"}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleCharacterSelect(key)
-                          }}
-                          className={`w-full py-2 px-4 rounded-lg font-semibold transition-all duration-300 ${
-                            selectedCharacters.includes(key)
-                              ? "bg-yellow-500 text-black"
+              return (
+                <div
+                  key={key}
+                  className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
+                    isSelected ? "ring-4 ring-yellow-400" : ""
+                  } ${shouldGrayOut ? "opacity-30" : ""}`}
+                >
+                  <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl aspect-square">
+                    <div className="h-2/3">
+                      <img
+                        src={persona.image || "/placeholder.svg"}
+                        alt={persona.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
+                    </div>
+                    <div className="p-3 h-1/3 flex flex-col justify-between">
+                      <h3 className="text-sm font-bold text-yellow-400 truncate">{persona.name}</h3>
+
+                      {/* Dynamic Button */}
+                      <div className="mt-2">
+                        {mode === "question" ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleButtonClick(key)
+                            }}
+                            disabled={shouldGrayOut}
+                            className={`w-full py-1 px-2 rounded text-xs font-semibold transition-all duration-300 ${
+                              selectedPersona === key && isListening
+                                ? "bg-red-500 text-white animate-pulse"
+                                : selectedPersona === key && isProcessing
+                                  ? "bg-gray-600 text-gray-300"
+                                  : selectedPersona === key && isPlaying
+                                    ? "bg-green-500 text-white"
+                                    : selectedPersona === key
+                                      ? "bg-yellow-500 text-black"
+                                      : shouldGrayOut
+                                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                                        : "bg-gray-700 text-white hover:bg-gray-600"
+                            }`}
+                          >
+                            {selectedPersona === key && isListening
+                              ? "Recording (click to finish)"
+                              : selectedPersona === key && isProcessing
+                                ? "Processing..."
+                                : selectedPersona === key && isPlaying
+                                  ? "Playing..."
+                                  : "Ask Question"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCharacterSelect(key)
+                            }}
+                            className={`w-full py-1 px-2 rounded text-xs font-semibold transition-all duration-300 ${
+                              selectedCharacters.includes(key)
+                                ? "bg-yellow-500 text-black"
+                                : selectedCharacters.length >= 2
+                                  ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                                  : "bg-gray-700 text-white hover:bg-gray-600"
+                            }`}
+                            disabled={selectedCharacters.length >= 2 && !selectedCharacters.includes(key)}
+                          >
+                            {selectedCharacters.includes(key)
+                              ? "Selected"
                               : selectedCharacters.length >= 2
-                                ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                                : "bg-gray-700 text-white hover:bg-gray-600"
-                          }`}
-                          disabled={selectedCharacters.length >= 2 && !selectedCharacters.includes(key)}
-                        >
-                          {selectedCharacters.includes(key)
-                            ? "Selected for Debate"
-                            : selectedCharacters.length >= 2
-                              ? "Max 2 Characters"
-                              : "Select for Debate"}
-                        </button>
-                      )}
+                                ? "Max 2"
+                                : "Select"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
-          {/* Action Section */}
-          {mode === "question" && selectedPersona && (
-            <div className="text-center">
-              <div className="bg-gray-800 rounded-xl p-8 max-w-md mx-auto">
-                <h3 className="text-2xl font-bold mb-4 text-yellow-400">Ask {personas[selectedPersona]?.name}</h3>
+          {/* Audio Error Display */}
+          {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
 
-                {audioError && <div className="mb-4 p-3 bg-red-900 text-red-100 rounded-lg text-sm">{audioError}</div>}
-
-                <button
-                  onClick={handleAskQuestionClick}
-                  disabled={isProcessing || isPlaying}
-                  className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 ${
-                    isListening
-                      ? "bg-red-500 hover:bg-red-600 text-white animate-pulse"
-                      : isProcessing
-                        ? "bg-gray-600 text-gray-300 cursor-not-allowed"
-                        : isPlaying
-                          ? "bg-green-500 text-white cursor-not-allowed"
-                          : "bg-yellow-500 hover:bg-yellow-600 text-black"
-                  }`}
-                >
-                  {isListening
-                    ? "🎤 Recording (Click to finish)"
-                    : isProcessing
-                      ? "🤔 Processing..."
-                      : isPlaying
-                        ? "🔊 Playing Response..."
-                        : "🎤 Ask Question"}
-                </button>
-
-                {isPlaying && (
-                  <div className="mt-4 flex justify-center">
-                    <div className="flex space-x-1">
-                      {[...Array(5)].map((_, i) => (
-                        <div
-                          key={i}
-                          className="w-1 bg-yellow-400 rounded-full animate-pulse"
-                          style={{
-                            height: "20px",
-                            animationDelay: `${i * 0.1}s`,
-                            animationDuration: "0.6s",
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <p className="text-sm text-gray-400 mt-4">
-                  Click the microphone button to ask your question, then click again to stop recording.
-                </p>
+          {/* Audio Playing Indicator */}
+          {isPlaying && (
+            <div className="mb-8 text-center">
+              <div className="inline-flex items-center space-x-2">
+                <div className="flex space-x-1">
+                  {[...Array(5)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="w-1 bg-yellow-400 rounded-full animate-pulse"
+                      style={{
+                        height: "20px",
+                        animationDelay: `${i * 0.1}s`,
+                        animationDuration: "0.6s",
+                      }}
+                    />
+                  ))}
+                </div>
+                <span className="text-yellow-400">Playing response...</span>
               </div>
             </div>
           )}
