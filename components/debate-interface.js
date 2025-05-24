@@ -514,6 +514,14 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
   }, [initialStateLoaded, currentTopic])
 
+  // Auto-start debate when dependencies are loaded and we have a topic
+  useEffect(() => {
+    if (dependenciesLoaded && initialStateLoaded && currentTopic && !isDebating && !isStarting) {
+      console.log("Auto-starting debate with topic:", currentTopic)
+      startDebateMain(currentTopic)
+    }
+  }, [dependenciesLoaded, initialStateLoaded, currentTopic, isDebating, isStarting, startDebateMain])
+
   // Get the appropriate voice for a character
   const getVoiceForCharacter = useCallback(
     (characterId) => {
@@ -830,13 +838,27 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // Start a debate on a specific topic
   const startDebate = useCallback(
     async (topic) => {
+      console.log("=== START DEBATE CALLED ===")
       console.log("startDebate called with topic:", topic)
       console.log("Characters:", char1, char2)
       console.log("Dependencies loaded:", dependenciesLoaded)
+      console.log("Initial state loaded:", initialStateLoaded)
+      console.log("Is debating:", isDebating)
+      console.log("Is starting:", isStarting)
+
+      // Wait for dependencies to load if they haven't yet
+      if (!dependenciesLoaded || !initialStateLoaded) {
+        console.log("Dependencies not ready, waiting...")
+        // Set the topic to start the debate once dependencies are loaded
+        setCurrentTopic(topic)
+        return
+      }
+
+      console.log("Starting debate immediately...")
       // Skip introduction for faster start
       startDebateMain(topic)
     },
-    [startDebateMain],
+    [startDebateMain, dependenciesLoaded, initialStateLoaded, char1, char2, isDebating, isStarting],
   )
 
   // Add this function to toggle auto-play
