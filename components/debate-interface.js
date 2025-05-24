@@ -1,19 +1,23 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { personas } from "../lib/personas"
-import {
-  initializeDebateState,
-  saveTopic,
-  saveMessages,
-  saveIsDebating,
-  saveCharacters,
-  saveExchangeCount,
-  clearDebateState,
-} from "../lib/debate-state"
-import { DebateHeader } from "./debate-header"
-import { EmbeddedTopicSelector } from "./embedded-topic-selector"
-import { VoiceInput } from "./voice-input"
+import dynamic from "next/dynamic"
+
+// Dynamically import components that use browser APIs
+const EmbeddedTopicSelector = dynamic(
+  () => import("./embedded-topic-selector").then((mod) => ({ default: mod.EmbeddedTopicSelector })),
+  {
+    ssr: false,
+  },
+)
+
+const VoiceInput = dynamic(() => import("./voice-input").then((mod) => ({ default: mod.VoiceInput })), {
+  ssr: false,
+})
+
+const DebateHeader = dynamic(() => import("./debate-header").then((mod) => ({ default: mod.DebateHeader })), {
+  ssr: false,
+})
 
 // Check if we're running in the browser
 const isBrowser = typeof window !== "undefined"
@@ -35,24 +39,18 @@ const staticDebateTopics = [
 ]
 
 export function DebateInterface({ character1, character2, initialTopic, onDebateEnd, embedded = false }) {
-  // Initialize state with default values first
-  const defaultState = {
-    character1: character1 || Object.keys(personas)[0],
-    character2: character2 || Object.keys(personas)[1],
-    isDebating: false,
-    messages: [],
-    topic: initialTopic || "",
-    exchangeCount: 0,
-  }
+  // Lazy load personas and debate state only on client side
+  const [personas, setPersonas] = useState({})
+  const [debateState, setDebateState] = useState(null)
 
   // Initialize state from localStorage or defaults
   const [initialStateLoaded, setInitialStateLoaded] = useState(false)
-  const [char1, setChar1] = useState(defaultState.character1)
-  const [char2, setChar2] = useState(defaultState.character2)
-  const [isDebating, setIsDebating] = useState(defaultState.isDebating)
-  const [debateMessages, setDebateMessages] = useState(defaultState.messages)
-  const [currentTopic, setCurrentTopic] = useState(defaultState.topic)
-  const [exchangeCount, setExchangeCount] = useState(defaultState.exchangeCount)
+  const [char1, setChar1] = useState("")
+  const [char2, setChar2] = useState("")
+  const [isDebating, setIsDebating] = useState(false)
+  const [debateMessages, setDebateMessages] = useState([])
+  const [currentTopic, setCurrentTopic] = useState("")
+  const [exchangeCount, setExchangeCount] = useState(0)
 
   // Add at the top of the component, right after all the state declarations
   const [hasError, setHasError] = useState(false)
@@ -61,32 +59,46 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
 
-  // Load initial state from localStorage on client-side only (only if not embedded)
+  // Load dependencies on client side
   useEffect(() => {
-    if (embedded) {
-      // For embedded mode, use props directly
-      setChar1(character1)
-      setChar2(character2)
-      setCurrentTopic(initialTopic || "")
-      setInitialStateLoaded(true)
+    if (isBrowser) {
+      Promise.all([import("../lib/personas").then((mod) => mod.personas), import("../lib/debate-state")]).then(
+        ([personasData, debateStateModule]) => {
+          setPersonas(personasData)
+          setDebateState(debateStateModule)
 
-      // Auto-start debate if topic is provided
-      if (initialTopic) {
-        setTimeout(() => {
-          startDebateMain(initialTopic)
-        }, 500)
-      }
-    } else if (isBrowser && !initialStateLoaded) {
-      const savedState = initializeDebateState()
-      if (savedState.character1) setChar1(savedState.character1)
-      if (savedState.character2) setChar2(savedState.character2)
-      setIsDebating(savedState.isDebating)
-      setDebateMessages(savedState.messages)
-      setCurrentTopic(savedState.topic)
-      setExchangeCount(savedState.exchangeCount)
-      setInitialStateLoaded(true)
+          // Initialize state with default values after personas are loaded
+          const defaultState = {
+            character1: character1 || Object.keys(personasData)[0] || "daVinci",
+            character2: character2 || Object.keys(personasData)[1] || "socrates",
+            isDebating: false,
+            messages: [],
+            topic: initialTopic || "",
+            exchangeCount: 0,
+          }
+
+          setChar1(defaultState.character1)
+          setChar2(defaultState.character2)
+          setIsDebating(defaultState.isDebating)
+          setDebateMessages(defaultState.messages)
+          setCurrentTopic(defaultState.topic)
+          setExchangeCount(defaultState.exchangeCount)
+        },
+      )
     }
-  }, [embedded, character1, character2, initialTopic, initialStateLoaded])
+  }, [character1, character2, initialTopic])
+
+  // Early return for SSR
+  if (!isBrowser) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
+          <p className="text-yellow-400">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   // UI state
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
@@ -147,6 +159,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   // Load voice IDs when component mounts
   useEffect(() => {
+    if (!personas || Object.keys(personas).length === 0) return
+
     async function loadVoiceIds() {
       try {
         const response = await fetch("/api/get-voice-ids")
@@ -187,48 +201,50 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
 
     loadVoiceIds()
-  }, [])
+  }, [personas])
 
   // Update refs when state changes
   useEffect(() => {
     topicRef.current = currentTopic
     console.log("Topic updated in ref:", topicRef.current)
-    if (!embedded) saveTopic(currentTopic)
-  }, [currentTopic, embedded])
+    if (!embedded && debateState) debateState.saveTopic(currentTopic)
+  }, [currentTopic, embedded, debateState])
 
   useEffect(() => {
     isDebatingRef.current = isDebating
     console.log("isDebating updated in ref:", isDebatingRef.current)
-    if (!embedded) saveIsDebating(isDebating)
-  }, [isDebating, embedded])
+    if (!embedded && debateState) debateState.saveIsDebating(isDebating)
+  }, [isDebating, embedded, debateState])
 
   useEffect(() => {
     debateMessagesRef.current = debateMessages
     console.log("debateMessages updated in ref, length:", debateMessagesRef.current.length)
-    if (!embedded) saveMessages(debateMessages)
-  }, [debateMessages, embedded])
+    if (!embedded && debateState) debateState.saveMessages(debateMessages)
+  }, [debateMessages, embedded, debateState])
 
   useEffect(() => {
     exchangeCountRef.current = exchangeCount
     console.log("exchangeCount updated in ref:", exchangeCountRef.current)
-    if (!embedded) saveExchangeCount(exchangeCount)
-  }, [exchangeCount, embedded])
+    if (!embedded && debateState) debateState.saveExchangeCount(exchangeCount)
+  }, [exchangeCount, embedded, debateState])
 
   // Save characters when they change (only if not embedded)
   useEffect(() => {
-    if (!embedded) {
-      saveCharacters(char1, char2)
+    if (!embedded && debateState) {
+      debateState.saveCharacters(char1, char2)
     }
-  }, [char1, char2, embedded])
+  }, [char1, char2, embedded, debateState])
 
   // Log the personas object and voice IDs for debugging
   useEffect(() => {
-    console.log("PERSONAS OBJECT:", personas)
-    console.log("Character 1:", char1, personas[char1])
-    console.log("Character 1 Voice ID:", personas[char1]?.voiceId)
-    console.log("Character 2:", char2, personas[char2])
-    console.log("Character 2 Voice ID:", personas[char2]?.voiceId)
-  }, [char1, char2, voiceIds])
+    if (personas && Object.keys(personas).length > 0) {
+      console.log("PERSONAS OBJECT:", personas)
+      console.log("Character 1:", char1, personas[char1])
+      console.log("Character 1 Voice ID:", personas[char1]?.voiceId)
+      console.log("Character 2:", char2, personas[char2])
+      console.log("Character 2 Voice ID:", personas[char2]?.voiceId)
+    }
+  }, [char1, char2, voiceIds, personas])
 
   // Initialize audio elements with silent.mp3
   useEffect(() => {
@@ -336,8 +352,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     exchangeCountRef.current = 0
 
     // Clear localStorage only if not embedded
-    if (!embedded) {
-      clearDebateState()
+    if (!embedded && debateState) {
+      debateState.clearDebateState()
     }
 
     // Stop any playing audio
@@ -371,7 +387,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     if (embedded && onDebateEnd && !audioError) {
       onDebateEnd()
     }
-  }, [embedded, onDebateEnd, audioError])
+  }, [embedded, onDebateEnd, audioError, debateState])
 
   // Generate character-specific debate topics
   const generateCharacterSpecificTopics = useCallback(async () => {
@@ -472,7 +488,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         }, 1000)
       }
     }
-  }, [initialStateLoaded, currentTopic, startDebateMain])
+  }, [initialStateLoaded, currentTopic])
 
   // Get the appropriate voice for a character
   const getVoiceForCharacter = useCallback(
@@ -510,7 +526,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       console.log(`No voice ID found for ${characterId}, using default`)
       return characterId === "frida" ? "nova" : "echo"
     },
-    [voiceIds],
+    [voiceIds, personas],
   )
 
   // Function to play topic introduction
@@ -645,12 +661,9 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   )
 
   // Start debate after introduction
-  const startDebateAfterIntro = useCallback(
-    (topic) => {
-      startDebateMain(topic)
-    },
-    [startDebateMain],
-  )
+  const startDebateAfterIntro = useCallback((topic) => {
+    startDebateMain(topic)
+  }, [])
 
   // Main debate starting function (without introduction)
   const startDebateMain = useCallback(
@@ -1418,7 +1431,17 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         setStatusMessage("")
       }
     },
-    [getVoiceForCharacter, isAutoplaying, maxExchanges, volume, char1, char2, resetDebateState, continueDebate],
+    [
+      getVoiceForCharacter,
+      isAutoplaying,
+      maxExchanges,
+      volume,
+      char1,
+      char2,
+      resetDebateState,
+      continueDebate,
+      personas,
+    ],
   )
 
   // Add this function to toggle auto-play
@@ -1506,6 +1529,18 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       recoverFromError()
     }
   }, [hasError])
+
+  // Show loading state while dependencies are loading
+  if (!personas || !debateState || Object.keys(personas).length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
+          <p className="text-yellow-400">Loading debate interface...</p>
+        </div>
+      </div>
+    )
+  }
 
   // Add a try-catch block around the return statement
   try {
@@ -1628,7 +1663,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
                       <div className="flex items-center space-x-2">
                         <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
                         <span className="text-xs text-yellow-400">
-                          {isSettingUp ? "Setting up..." : "Preparing..."}
+                          {isSettingUp ? "Setting up..." : isPreparing ? "Preparing..." : "Processing..."}
                         </span>
                       </div>
                     )}
