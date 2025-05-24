@@ -72,6 +72,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [isStarting, setIsStarting] = useState(false)
   const [voiceIds, setVoiceIds] = useState({})
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
+  const [displayedSpeaker, setDisplayedSpeaker] = useState(null)
 
   // Refs - these should maintain state during debates
   const audioRef = useRef(null)
@@ -96,27 +97,21 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   // Update refs ONLY when state actually changes and we're not resetting
   useEffect(() => {
-    if (currentTopic && !isStarting) {
-      topicRef.current = currentTopic
-      console.log("Topic ref updated to:", topicRef.current)
-      if (!embedded && debateState) debateState.saveTopic(currentTopic)
-    }
-  }, [currentTopic, embedded, debateState, isStarting])
+    topicRef.current = currentTopic
+    console.log("Topic ref updated to:", topicRef.current)
+    if (!embedded && debateState) debateState.saveTopic(currentTopic)
+  }, [currentTopic, embedded, debateState])
 
   useEffect(() => {
-    if (isDebating !== isDebatingRef.current) {
-      isDebatingRef.current = isDebating
-      console.log("isDebating ref updated to:", isDebatingRef.current)
-      if (!embedded && debateState) debateState.saveIsDebating(isDebating)
-    }
+    isDebatingRef.current = isDebating
+    console.log("isDebating ref updated to:", isDebatingRef.current)
+    if (!embedded && debateState) debateState.saveIsDebating(isDebating)
   }, [isDebating, embedded, debateState])
 
   useEffect(() => {
-    if (debateMessages.length !== debateMessagesRef.current.length || debateMessages !== debateMessagesRef.current) {
-      debateMessagesRef.current = debateMessages
-      console.log("debateMessages ref updated, length:", debateMessagesRef.current.length)
-      if (!embedded && debateState) debateState.saveMessages(debateMessages)
-    }
+    debateMessagesRef.current = debateMessages
+    console.log("debateMessages ref updated, length:", debateMessagesRef.current.length)
+    if (!embedded && debateState) debateState.saveMessages(debateMessages)
   }, [debateMessages, embedded, debateState])
 
   useEffect(() => {
@@ -129,6 +124,13 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       debateState.saveCharacters(char1, char2)
     }
   }, [char1, char2, embedded, debateState])
+
+  // Track speaker changes for visual feedback
+  useEffect(() => {
+    if (currentSpeaker && displayedSpeaker !== currentSpeaker) {
+      setDisplayedSpeaker(currentSpeaker)
+    }
+  }, [currentSpeaker, displayedSpeaker])
 
   // Load dependencies
   useEffect(() => {
@@ -310,14 +312,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       prepareNextTimeoutRef.current = null
     }
 
-    // Only clear refs when actually ending the debate
-    if (shouldCallOnDebateEnd) {
-      topicRef.current = ""
-      isDebatingRef.current = false
-      debateMessagesRef.current = []
-      exchangeCountRef.current = 0
-    }
-
     if (!embedded && debateState && shouldCallOnDebateEnd) {
       debateState.clearDebateState()
     }
@@ -410,11 +404,12 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   // Generate topics when characters change
   useEffect(() => {
-    if (isBrowser && initialStateLoaded) {
+    if (isBrowser && initialStateLoaded && !isDebating) {
+      // Only reset if we're not currently debating
       resetDebateState(true) // Full reset when characters change
       generateCharacterSpecificTopics()
     }
-  }, [char1, char2, initialStateLoaded])
+  }, [char1, char2, initialStateLoaded, isDebating])
 
   // Get voice for character
   function getVoiceForCharacter(characterId) {
@@ -980,7 +975,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         <DebateHeader
           character1={char1}
           character2={char2}
-          currentSpeaker={currentSpeaker}
+          currentSpeaker={displayedSpeaker}
           isPlaying={isPlaying}
           isLoadingAudio={isLoadingAudio}
           isPreparing={isPreparing}
