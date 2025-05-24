@@ -38,6 +38,9 @@ export default function Home() {
   const debateMessagesRef = useRef([])
   const debateRoundRef = useRef(0)
 
+  // ADD TOPIC REF - This is the key fix!
+  const debateTopicRef = useRef("")
+
   // Thinking messages for dynamic display
   const thinkingMessages = [
     "Thinking...",
@@ -174,6 +177,12 @@ export default function Home() {
     debateRoundRef.current = debateRound
   }, [debateRound])
 
+  // UPDATE TOPIC REF when debateTopic changes
+  useEffect(() => {
+    debateTopicRef.current = debateTopic
+    console.log("🔍 [TOPIC DEBUG] Topic ref updated to:", debateTopic)
+  }, [debateTopic])
+
   // Thinking message rotation effect
   useEffect(() => {
     let interval
@@ -222,6 +231,7 @@ export default function Home() {
             setShowTopicSelector(false)
             setIsDebating(false)
             setDebateTopic("")
+            debateTopicRef.current = "" // Clear topic ref too
             setDebateMessages([])
             setCurrentSpeaker(null)
             setSpeakerStatus(null)
@@ -468,11 +478,14 @@ export default function Home() {
     console.log("🔍 [DEBATE DEBUG] Topic string extracted:", topicString)
 
     setIsDebating(true)
-    setDebateTopic(topicString) // Make sure we set the topic properly
+    setDebateTopic(topicString) // Set state
+    debateTopicRef.current = topicString // Set ref immediately - THIS IS THE KEY FIX!
     setCurrentSpeaker(selectedCharacters[0])
     setSpeakerStatus("thinking")
     setDebateMessages([])
     setDebateRound(0)
+
+    console.log("🔍 [DEBATE DEBUG] Topic set in both state and ref:", topicString)
 
     try {
       const response = await fetch("/api/start-debate", {
@@ -522,12 +535,16 @@ export default function Home() {
   const continueDebate = async () => {
     console.log("🔍 [DEBATE DEBUG] Continuing debate, current round:", debateRoundRef.current)
     console.log("🔍 [DEBATE DEBUG] Selected characters:", selectedCharacters)
-    console.log("🔍 [DEBATE DEBUG] Debate topic:", debateTopic)
+    console.log("🔍 [DEBATE DEBUG] Debate topic from state:", debateTopic)
+    console.log("🔍 [DEBATE DEBUG] Debate topic from ref:", debateTopicRef.current) // Use ref!
     console.log("🔍 [DEBATE DEBUG] Current messages:", debateMessagesRef.current)
     console.log("🔍 [DEBATE DEBUG] Messages length:", debateMessagesRef.current.length)
 
+    // Use the ref instead of state - THIS IS THE KEY FIX!
+    const currentTopic = debateTopicRef.current
+
     // Validate we have a topic
-    if (!debateTopic || debateTopic.trim() === "") {
+    if (!currentTopic || currentTopic.trim() === "") {
       console.error("🔍 [DEBATE DEBUG] No topic available for continue")
       setAudioError("Debate topic is missing. Cannot continue.")
       return
@@ -541,7 +558,7 @@ export default function Home() {
         character1: selectedCharacters[0],
         character2: selectedCharacters[1],
         currentMessages: debateMessagesRef.current,
-        topic: debateTopic.trim(), // Ensure topic is trimmed
+        topic: currentTopic.trim(), // Use topic from ref
       }
 
       console.log("🔍 [DEBATE DEBUG] Request body being sent:", JSON.stringify(requestBody, null, 2))
@@ -691,6 +708,7 @@ export default function Home() {
     console.log("🔍 [DEBATE DEBUG] Ending debate")
     setIsDebating(false)
     setDebateTopic("")
+    debateTopicRef.current = "" // Clear topic ref too
     setSelectedCharacters([])
     setShowTopicSelector(false)
     setTopics([])
@@ -718,6 +736,7 @@ export default function Home() {
     setThinkingMessage("")
     setIsDebating(false)
     setDebateTopic("")
+    debateTopicRef.current = "" // Clear topic ref too
     setShowTopicSelector(false)
     setTopics([])
     setDebateMessages([])
