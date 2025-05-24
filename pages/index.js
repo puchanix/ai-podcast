@@ -62,27 +62,14 @@ export default function Home() {
   useEffect(() => {
     async function loadVoiceIds() {
       try {
-        console.log("🔍 [VOICE DEBUG] Starting to load voice IDs...")
         const response = await fetch("/api/get-voice-ids")
         if (response.ok) {
           const data = await response.json()
-          console.log("🔍 [VOICE DEBUG] Raw voice IDs from API:", data)
-          console.log("🔍 [VOICE DEBUG] Voice IDs keys:", Object.keys(data))
-          console.log("🔍 [VOICE DEBUG] Voice IDs values:", Object.values(data))
-
-          // Log each individual voice ID
-          Object.entries(data).forEach(([key, value]) => {
-            console.log(`🔍 [VOICE DEBUG] ${key}: ${value} (type: ${typeof value})`)
-          })
-
           setVoiceIds(data)
           voiceIdsRef.current = data // ALSO SET THE REF!
-          console.log("🔍 [VOICE DEBUG] Voice IDs set in both state and ref")
-        } else {
-          console.error("🔍 [VOICE DEBUG] Failed to load voice IDs, status:", response.status)
         }
       } catch (error) {
-        console.error("🔍 [VOICE DEBUG] Error loading voice IDs:", error)
+        console.error("Error loading voice IDs:", error)
       } finally {
         setIsLoadingVoices(false)
       }
@@ -95,12 +82,10 @@ export default function Home() {
   useEffect(() => {
     async function loadPersonas() {
       try {
-        console.log("🔍 [PERSONA DEBUG] Loading personas...")
         const personasModule = await import("../lib/personas")
         setPersonas(personasModule.personas)
-        console.log("🔍 [PERSONA DEBUG] Personas loaded:", Object.keys(personasModule.personas))
       } catch (error) {
-        console.error("🔍 [PERSONA DEBUG] Error loading personas:", error)
+        console.error("Error loading personas:", error)
       } finally {
         setIsLoading(false)
       }
@@ -115,7 +100,6 @@ export default function Home() {
       if (selectedCharacters.length === 2) {
         setLoadingTopics(true)
         try {
-          console.log("🔍 [TOPIC DEBUG] Fetching topics for:", selectedCharacters)
           const response = await fetch("/api/generate-character-topics", {
             method: "POST",
             headers: {
@@ -129,10 +113,8 @@ export default function Home() {
 
           if (response.ok) {
             const data = await response.json()
-            console.log("🔍 [TOPIC DEBUG] Topics received:", data)
             setTopics(data.topics || [])
           } else {
-            console.error("🔍 [TOPIC DEBUG] Failed to fetch topics:", response.status)
             setTopics([
               {
                 id: "fallback-1",
@@ -149,7 +131,6 @@ export default function Home() {
             ])
           }
         } catch (error) {
-          console.error("🔍 [TOPIC DEBUG] Error fetching topics:", error)
           setTopics([
             {
               id: "fallback-1",
@@ -170,7 +151,6 @@ export default function Home() {
   // Update ref when selectedPersona changes
   useEffect(() => {
     currentPersonaRef.current = selectedPersona
-    console.log("🔍 [PERSONA DEBUG] Selected persona updated to:", selectedPersona)
   }, [selectedPersona])
 
   // Update refs for debate state
@@ -185,13 +165,11 @@ export default function Home() {
   // UPDATE TOPIC REF when debateTopic changes
   useEffect(() => {
     debateTopicRef.current = debateTopic
-    console.log("🔍 [TOPIC DEBUG] Topic ref updated to:", debateTopic)
   }, [debateTopic])
 
   // UPDATE VOICE IDS REF when voiceIds changes
   useEffect(() => {
     voiceIdsRef.current = voiceIds
-    console.log("🔍 [VOICE DEBUG] Voice IDs ref updated:", voiceIds)
   }, [voiceIds])
 
   // Thinking message rotation effect
@@ -214,7 +192,6 @@ export default function Home() {
 
   const handleCharacterSelect = useCallback(
     async (characterId) => {
-      console.log("🔍 [CHARACTER DEBUG] Character selected:", characterId)
       if (mode === "question") {
         setSelectedPersona(characterId)
         currentPersonaRef.current = characterId
@@ -233,10 +210,7 @@ export default function Home() {
             newSelection = [prev[1], characterId]
           }
 
-          console.log("🔍 [CHARACTER DEBUG] Selected characters updated to:", newSelection)
-
           if (newSelection.length === 2) {
-            console.log("🔍 [CHARACTER DEBUG] Two characters selected, showing topic selector")
             setShowTopicSelector(true)
           } else {
             setShowTopicSelector(false)
@@ -258,29 +232,16 @@ export default function Home() {
 
   const startListening = useCallback(async () => {
     try {
-      console.log("🔍 [AUDIO DEBUG] Starting to listen...")
       setAudioError(null)
-
-      // Add constraint debugging
-      const constraints = {
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
           sampleRate: 16000,
         },
-      }
-      console.log("🔍 [AUDIO DEBUG] Using constraints:", constraints)
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
-      streamRef.current = stream
-
-      // Log stream details
-      const audioTracks = stream.getAudioTracks()
-      console.log("🔍 [AUDIO DEBUG] Audio tracks:", audioTracks.length)
-      audioTracks.forEach((track, i) => {
-        console.log(`🔍 [AUDIO DEBUG] Track ${i}:`, track.label, track.getSettings())
       })
+      streamRef.current = stream
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: "audio/webm;codecs=opus",
@@ -291,107 +252,62 @@ export default function Home() {
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data)
-          console.log("🔍 [AUDIO DEBUG] Audio chunk received, size:", event.data.size)
         }
       }
 
       mediaRecorder.onstop = async () => {
-        console.log("🔍 [AUDIO DEBUG] Recording stopped, total chunks:", audioChunksRef.current.length)
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
-        console.log("🔍 [AUDIO DEBUG] Audio blob size:", audioBlob.size, "bytes")
-
-        // ADD THIS: Create a temporary audio player to test what was recorded
-        const audioUrl = URL.createObjectURL(audioBlob)
-        console.log("🔍 [AUDIO DEBUG] Test audio URL created:", audioUrl)
-
-        // Create a temporary audio element for testing
-        const testAudio = new Audio(audioUrl)
-        testAudio.controls = true
-        testAudio.style.position = "fixed"
-        testAudio.style.top = "10px"
-        testAudio.style.right = "10px"
-        testAudio.style.zIndex = "9999"
-        testAudio.style.backgroundColor = "white"
-        testAudio.style.border = "2px solid red"
-        testAudio.title = "Test: What was actually recorded"
-        document.body.appendChild(testAudio)
-
-        // Remove the test audio player after 30 seconds
-        setTimeout(() => {
-          if (document.body.contains(testAudio)) {
-            document.body.removeChild(testAudio)
-          }
-          URL.revokeObjectURL(audioUrl)
-        }, 30000)
-
-        console.log("🔍 [AUDIO DEBUG] Temporary audio player added to page (top-right corner)")
-
         await processAudioQuestion(audioBlob)
-
-        // Clean up the URL after a delay
-        setTimeout(() => URL.revokeObjectURL(audioUrl), 10000)
       }
 
       mediaRecorder.start(1000)
       setIsListening(true)
-      console.log("🔍 [AUDIO DEBUG] Recording started")
     } catch (error) {
-      console.error("🔍 [AUDIO DEBUG] Error accessing microphone:", error)
+      console.error("Error accessing microphone:", error)
       setAudioError("Could not access microphone. Please check permissions.")
     }
   }, [])
 
   const stopListening = useCallback(() => {
-    console.log("🔍 [AUDIO DEBUG] Stop listening called")
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop()
       setIsListening(false)
-      console.log("🔍 [AUDIO DEBUG] MediaRecorder stopped")
     }
 
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => {
         track.stop()
-        console.log("🔍 [AUDIO DEBUG] Track stopped:", track.kind)
       })
       streamRef.current = null
     }
   }, [])
 
   const pauseAudio = useCallback(() => {
-    console.log("🔍 [AUDIO DEBUG] Pause audio called")
     if (audioRef.current && !audioRef.current.paused) {
       audioRef.current.pause()
       setIsPlaying(false)
-      console.log("🔍 [AUDIO DEBUG] Audio paused")
     }
   }, [])
 
   const resumeAudio = useCallback(() => {
-    console.log("🔍 [AUDIO DEBUG] Resume audio called")
     if (audioRef.current && audioRef.current.paused) {
       audioRef.current.play()
       setIsPlaying(true)
-      console.log("🔍 [AUDIO DEBUG] Audio resumed")
     }
   }, [])
 
   const stopAudio = useCallback(() => {
-    console.log("🔍 [AUDIO DEBUG] Stop audio called")
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
       setIsPlaying(false)
-      console.log("🔍 [AUDIO DEBUG] Audio stopped")
     }
   }, [])
 
   const processAudioQuestion = useCallback(async (audioBlob) => {
     const currentPersona = currentPersonaRef.current
-    console.log("🔍 [AUDIO DEBUG] Processing audio question, selectedPersona from ref:", currentPersona)
 
     if (!currentPersona) {
-      console.error("🔍 [AUDIO DEBUG] No persona selected!")
       setAudioError("Please select a character first")
       return
     }
@@ -401,9 +317,7 @@ export default function Home() {
 
     try {
       const formData = new FormData()
-      formData.append("audio", audioBlob, "question.webm") // Use correct extension
-
-      console.log("🔍 [AUDIO DEBUG] Sending audio for transcription, blob size:", audioBlob.size)
+      formData.append("audio", audioBlob, "question.webm")
 
       const transcriptionResponse = await fetch("/api/transcribe", {
         method: "POST",
@@ -412,12 +326,10 @@ export default function Home() {
 
       if (!transcriptionResponse.ok) {
         const errorText = await transcriptionResponse.text()
-        console.error("🔍 [AUDIO DEBUG] Transcription API error:", errorText)
         throw new Error("Failed to transcribe audio: " + errorText)
       }
 
       const { text } = await transcriptionResponse.json()
-      console.log("🔍 [AUDIO DEBUG] Transcribed text:", text)
 
       if (!text || text.trim().length === 0) {
         throw new Error("No speech detected. Please try again.")
@@ -425,7 +337,7 @@ export default function Home() {
 
       await processQuestionWithStreaming(text, currentPersona)
     } catch (error) {
-      console.error("🔍 [AUDIO DEBUG] Error processing audio question:", error)
+      console.error("Error processing audio question:", error)
       setAudioError(`Error: ${error.message}`)
     } finally {
       setIsProcessing(false)
@@ -453,11 +365,10 @@ export default function Home() {
       }
 
       const { content: responseText } = await textResponse.json()
-      console.log("🔍 [AUDIO DEBUG] Generated response:", responseText)
 
       await generateAudioResponse(responseText, persona)
     } catch (error) {
-      console.error("🔍 [AUDIO DEBUG] Error in parallel processing:", error)
+      console.error("Error in parallel processing:", error)
       setAudioError(`Error: ${error.message}`)
       setIsPlaying(false)
     }
@@ -470,24 +381,13 @@ export default function Home() {
       // USE REF INSTEAD OF STATE for voice IDs!
       const currentVoiceIds = voiceIdsRef.current
 
-      console.log("🔍 [VOICE DEBUG] generateAudioResponse called with:")
-      console.log("🔍 [VOICE DEBUG] - persona:", persona)
-      console.log("🔍 [VOICE DEBUG] - voiceKey:", voiceKey)
-      console.log("🔍 [VOICE DEBUG] - voiceIds from ref:", currentVoiceIds)
-      console.log("🔍 [VOICE DEBUG] - voiceIds keys from ref:", Object.keys(currentVoiceIds))
-      console.log("🔍 [VOICE DEBUG] - voiceIds[voiceKey] from ref:", currentVoiceIds[voiceKey])
-      console.log("🔍 [VOICE DEBUG] - typeof voiceIds[voiceKey]:", typeof currentVoiceIds[voiceKey])
-
       let voice = currentVoiceIds[voiceKey]
 
       if (voice && voice.length > 10) {
-        console.log(`🔍 [VOICE DEBUG] Using custom voice ID for ${persona}: ${voice}`)
+        // Use custom voice ID
       } else {
-        console.log(`🔍 [VOICE DEBUG] No voice ID found for ${persona} (key: ${voiceKey}), using echo`)
         voice = "echo"
       }
-
-      console.log(`🔍 [VOICE DEBUG] Final voice for ${persona}: ${voice}`)
 
       const response = await fetch("/api/speak", {
         method: "POST",
@@ -502,7 +402,6 @@ export default function Home() {
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error("🔍 [VOICE DEBUG] Speak API error response:", errorText)
         throw new Error(`Audio generation failed: ${response.status} - ${errorText}`)
       }
 
@@ -513,19 +412,17 @@ export default function Home() {
 
       audio.onended = () => {
         setIsPlaying(false)
-        console.log("🔍 [AUDIO DEBUG] Audio playback completed")
       }
 
       audio.onerror = (e) => {
-        console.error("🔍 [AUDIO DEBUG] Audio playback error:", e)
+        console.error("Audio playback error:", e)
         setAudioError("Audio playback failed")
         setIsPlaying(false)
       }
 
       await audio.play()
-      console.log("🔍 [AUDIO DEBUG] Started audio playback")
     } catch (error) {
-      console.error("🔍 [AUDIO DEBUG] Error in audio generation:", error)
+      console.error("Error in audio generation:", error)
       setAudioError(`Audio error: ${error.message}`)
       setIsPlaying(false)
     }
@@ -533,16 +430,12 @@ export default function Home() {
 
   // Start debate function
   const startDebate = async (topic) => {
-    console.log("🔍 [DEBATE DEBUG] Starting debate with topic:", topic)
-
     if (!selectedCharacters || selectedCharacters.length !== 2) {
-      console.error("🔍 [DEBATE DEBUG] Invalid characters:", selectedCharacters)
       return
     }
 
     // Extract topic string if it's an object
     const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
-    console.log("🔍 [DEBATE DEBUG] Topic string extracted:", topicString)
 
     setIsDebating(true)
     setDebateTopic(topicString) // Set state
@@ -551,8 +444,6 @@ export default function Home() {
     setSpeakerStatus("thinking")
     setDebateMessages([])
     setDebateRound(0)
-
-    console.log("🔍 [DEBATE DEBUG] Topic set in both state and ref:", topicString)
 
     try {
       const response = await fetch("/api/start-debate", {
@@ -570,7 +461,6 @@ export default function Home() {
       }
 
       const data = await response.json()
-      console.log("🔍 [DEBATE DEBUG] Debate started successfully:", data)
 
       const messages = [
         {
@@ -590,7 +480,7 @@ export default function Home() {
       // Start playing first message
       playDebateAudio(messages[0], messages, 0)
     } catch (error) {
-      console.error("🔍 [DEBATE DEBUG] Error starting debate:", error)
+      console.error("Error starting debate:", error)
       setAudioError(`Failed to start debate: ${error.message}`)
       setIsDebating(false)
       setSpeakerStatus(null)
@@ -600,19 +490,11 @@ export default function Home() {
 
   // Continue debate with next round
   const continueDebate = async () => {
-    console.log("🔍 [DEBATE DEBUG] Continuing debate, current round:", debateRoundRef.current)
-    console.log("🔍 [DEBATE DEBUG] Selected characters:", selectedCharacters)
-    console.log("🔍 [DEBATE DEBUG] Debate topic from state:", debateTopic)
-    console.log("🔍 [DEBATE DEBUG] Debate topic from ref:", debateTopicRef.current) // Use ref!
-    console.log("🔍 [DEBATE DEBUG] Current messages:", debateMessagesRef.current)
-    console.log("🔍 [DEBATE DEBUG] Messages length:", debateMessagesRef.current.length)
-
     // Use the ref instead of state - THIS IS THE KEY FIX!
     const currentTopic = debateTopicRef.current
 
     // Validate we have a topic
     if (!currentTopic || currentTopic.trim() === "") {
-      console.error("🔍 [DEBATE DEBUG] No topic available for continue")
       setAudioError("Debate topic is missing. Cannot continue.")
       return
     }
@@ -628,25 +510,18 @@ export default function Home() {
         topic: currentTopic.trim(), // Use topic from ref
       }
 
-      console.log("🔍 [DEBATE DEBUG] Request body being sent:", JSON.stringify(requestBody, null, 2))
-
       const response = await fetch("/api/auto-continue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       })
 
-      console.log("🔍 [DEBATE DEBUG] Response status:", response.status)
-      console.log("🔍 [DEBATE DEBUG] Response headers:", response.headers)
-
       if (!response.ok) {
         const errorText = await response.text()
-        console.error("🔍 [DEBATE DEBUG] Error response body:", errorText)
         throw new Error(`Failed to continue debate: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
-      console.log("🔍 [DEBATE DEBUG] Debate continued successfully:", data)
 
       const newMessages = [
         {
@@ -668,7 +543,7 @@ export default function Home() {
       // Start playing the new messages
       playDebateAudio(newMessages[0], allMessages, debateMessagesRef.current.length)
     } catch (error) {
-      console.error("🔍 [DEBATE DEBUG] Error continuing debate:", error)
+      console.error("Error continuing debate:", error)
       setAudioError(`Failed to continue debate: ${error.message}`)
     }
   }
@@ -676,7 +551,6 @@ export default function Home() {
   // Play debate audio with retry logic
   const playDebateAudio = async (message, allMessages, currentIndex, retryCount = 0) => {
     const { character, content } = message
-    console.log(`🔍 [DEBATE DEBUG] Playing audio for ${character} (attempt ${retryCount + 1})`)
 
     setCurrentSpeaker(character)
     setSpeakerStatus("speaking")
@@ -708,7 +582,6 @@ export default function Home() {
       currentAudioRef.current = audio
 
       audio.onended = () => {
-        console.log(`🔍 [DEBATE DEBUG] ${character} finished speaking`)
         setSpeakerStatus("waiting")
 
         // Auto-continue to next message
@@ -720,7 +593,6 @@ export default function Home() {
         } else {
           // Check if we should continue with more rounds
           const currentRound = debateRoundRef.current
-          console.log(`🔍 [DEBATE DEBUG] Finished round ${currentRound}, total messages: ${allMessages.length}`)
 
           // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
           if (allMessages.length < 8) {
@@ -729,7 +601,6 @@ export default function Home() {
             }, 2000)
           } else {
             // Debate finished
-            console.log("🔍 [DEBATE DEBUG] Debate completed after all rounds")
             setTimeout(() => {
               endDebate()
             }, 3000)
@@ -743,11 +614,10 @@ export default function Home() {
 
       await audio.play()
     } catch (error) {
-      console.error(`🔍 [DEBATE DEBUG] Error playing audio for ${character}:`, error)
+      console.error(`Error playing audio for ${character}:`, error)
 
       // Retry logic for network timeouts
       if ((error.name === "AbortError" || error.message.includes("Failed to fetch")) && retryCount < 2) {
-        console.log(`🔍 [DEBATE DEBUG] Retrying audio for ${character} in 3 seconds...`)
         setSpeakerStatus("thinking")
         setTimeout(() => {
           playDebateAudio(message, allMessages, currentIndex, retryCount + 1)
@@ -773,7 +643,6 @@ export default function Home() {
   }
 
   const endDebate = () => {
-    console.log("🔍 [DEBATE DEBUG] Ending debate")
     setIsDebating(false)
     setDebateTopic("")
     debateTopicRef.current = "" // Clear topic ref too
@@ -792,7 +661,6 @@ export default function Home() {
   }
 
   const toggleMode = () => {
-    console.log("🔍 [MODE DEBUG] Toggling mode from", mode, "to", mode === "question" ? "debate" : "question")
     setMode(mode === "question" ? "debate" : "question")
     setSelectedPersona("")
     currentPersonaRef.current = ""
@@ -817,19 +685,15 @@ export default function Home() {
   const handleRecordingButtonClick = useCallback(
     async (characterId, e) => {
       e.stopPropagation()
-      console.log("🔍 [BUTTON DEBUG] Recording button clicked for character:", characterId)
 
       if (mode === "question") {
         if (selectedPersona === characterId) {
           if (isListening) {
-            console.log("🔍 [BUTTON DEBUG] Stopping recording...")
             stopListening()
           } else if (!isProcessing && !isPlaying) {
-            console.log("🔍 [BUTTON DEBUG] Starting new recording...")
             await startListening()
           }
         } else {
-          console.log("🔍 [BUTTON DEBUG] Selecting new character and starting recording...")
           setSelectedPersona(characterId)
           currentPersonaRef.current = characterId
           setSelectedCharacters([characterId])
@@ -842,12 +706,8 @@ export default function Home() {
 
   const handleTopicSelect = useCallback(
     (topic) => {
-      console.log("🔍 [DEBATE DEBUG] Topic selected:", topic)
-      console.log("🔍 [DEBATE DEBUG] Selected characters:", selectedCharacters)
-
       // Extract topic string properly
       const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
-      console.log("🔍 [DEBATE DEBUG] Topic string for debate:", topicString)
 
       setShowTopicSelector(false)
       startDebate(topicString)
@@ -1013,8 +873,6 @@ export default function Home() {
                     <div className="p-3 min-h-[120px] flex flex-col">
                       {/* Character Name - Always at top */}
                       <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
-
-                      {/* NO MORE DEBATE MESSAGE DISPLAY - REMOVED */}
 
                       {/* Button Section - Always at bottom */}
                       <div className="mt-auto flex space-x-1">
