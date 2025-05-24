@@ -14,12 +14,31 @@ export default function Home() {
   const [selectedCharacters, setSelectedCharacters] = useState([])
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
+  const [thinkingMessage, setThinkingMessage] = useState("")
+  const [audioLevel, setAudioLevel] = useState(0)
 
   // Audio refs
   const audioRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const streamRef = useRef(null)
+  const audioContextRef = useRef(null)
+  const analyserRef = useRef(null)
+  const animationFrameRef = useRef(null)
+
+  // Thinking messages for dynamic display
+  const thinkingMessages = [
+    "Thinking...",
+    "Pondering your question...",
+    "Reflecting on this matter...",
+    "Considering the depths of this inquiry...",
+    "Gathering thoughts...",
+    "Contemplating...",
+    "Preparing a response...",
+    "Delving into wisdom...",
+    "Searching through memories...",
+    "Formulating thoughts...",
+  ]
 
   // Load voice IDs when component mounts
   useEffect(() => {
@@ -52,12 +71,72 @@ export default function Home() {
     loadVoiceIds()
   }, [])
 
+  // Thinking message rotation effect
+  useEffect(() => {
+    let interval
+    if (isProcessing) {
+      let messageIndex = 0
+      setThinkingMessage(thinkingMessages[0])
+
+      interval = setInterval(() => {
+        messageIndex = (messageIndex + 1) % thinkingMessages.length
+        setThinkingMessage(thinkingMessages[messageIndex])
+      }, 2000) // Change message every 2 seconds
+    }
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [isProcessing])
+
+  // Audio level monitoring
+  const startAudioLevelMonitoring = (stream) => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+      const analyser = audioContext.createAnalyser()
+      const microphone = audioContext.createMediaStreamSource(stream)
+
+      analyser.fftSize = 256
+      microphone.connect(analyser)
+
+      audioContextRef.current = audioContext
+      analyserRef.current = analyser
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount)
+
+      const updateAudioLevel = () => {
+        if (analyserRef.current && isListening) {
+          analyserRef.current.getByteFrequencyData(dataArray)
+          const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length
+          setAudioLevel(Math.min(average / 128, 1)) // Normalize to 0-1
+          animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
+        }
+      }
+
+      updateAudioLevel()
+    } catch (error) {
+      console.error("Error setting up audio level monitoring:", error)
+    }
+  }
+
+  const stopAudioLevelMonitoring = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close()
+    }
+    setAudioLevel(0)
+  }
+
   const handleCharacterSelect = async (characterId) => {
     if (mode === "question") {
       setSelectedPersona(characterId)
       setSelectedCharacters([characterId])
-      // Immediately start recording when character is selected
-      await startListening()
+      // Use setTimeout to ensure state is updated before starting recording
+      setTimeout(async () => {
+        await startListening()
+      }, 100)
     } else if (mode === "debate") {
       if (selectedCharacters.includes(characterId)) {
         setSelectedCharacters(selectedCharacters.filter((id) => id !== characterId))
@@ -73,6 +152,9 @@ export default function Home() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       streamRef.current = stream
 
+      // Start audio level monitoring
+      startAudioLevelMonitoring(stream)
+
       const mediaRecorder = new MediaRecorder(stream)
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
@@ -82,6 +164,7 @@ export default function Home() {
       }
 
       mediaRecorder.onstop = async () => {
+        stopAudioLevelMonitoring()
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" })
         await processAudioQuestion(audioBlob)
       }
@@ -103,10 +186,15 @@ export default function Home() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop())
     }
+
+    stopAudioLevelMonitoring()
   }
 
   const processAudioQuestion = async (audioBlob) => {
-    if (!selectedPersona) {
+    // Use current selectedPersona from state or get it from the function parameter
+    const currentPersona = selectedPersona
+
+    if (!currentPersona) {
       setAudioError("Please select a character first")
       return
     }
@@ -136,12 +224,13 @@ export default function Home() {
       }
 
       // Start parallel processing: text generation and audio preparation
-      await processQuestionWithStreaming(text, selectedPersona)
+      await processQuestionWithStreaming(text, currentPersona)
     } catch (error) {
       console.error("Error processing audio question:", error)
       setAudioError(`Error: ${error.message}`)
     } finally {
       setIsProcessing(false)
+      setThinkingMessage("")
     }
   }
 
@@ -246,6 +335,8 @@ export default function Home() {
     setIsProcessing(false)
     setIsPlaying(false)
     setAudioError(null)
+    setThinkingMessage("")
+    stopAudioLevelMonitoring()
   }
 
   const handleButtonClick = async (characterId) => {
@@ -262,9 +353,31 @@ export default function Home() {
         // Select new character and start recording
         setSelectedPersona(characterId)
         setSelectedCharacters([characterId])
-        await startListening()
+        setTimeout(async () => {
+          await startListening()
+        }, 100)
       }
     }
+  }
+
+  // Voice visualizer component
+  const VoiceVisualizer = () => {
+    const bars = Array.from({ length: 8 }, (_, i) => {
+      const height = Math.max(4, audioLevel * 40 + Math.random() * 10)
+      return (
+        <div
+          key={i}
+          className="bg-yellow-400 rounded-full transition-all duration-100"
+          style={{
+            width: "3px",
+            height: `${height}px`,
+            animationDelay: `${i * 0.1}s`,
+          }}
+        />
+      )
+    })
+
+    return <div className="flex items-end justify-center space-x-1 h-12">{bars}</div>
   }
 
   return (
@@ -404,6 +517,37 @@ export default function Home() {
               )
             })}
           </div>
+
+          {/* Voice Visualizer - Show when listening */}
+          {isListening && (
+            <div className="mb-8 text-center">
+              <div className="bg-gray-800 rounded-xl p-6 max-w-md mx-auto">
+                <h3 className="text-lg font-bold mb-4 text-yellow-400">🎤 Listening...</h3>
+                <VoiceVisualizer />
+                <p className="text-sm text-gray-400 mt-4">Speak your question clearly</p>
+              </div>
+            </div>
+          )}
+
+          {/* Processing Indicator with Rotating Messages */}
+          {isProcessing && (
+            <div className="mb-8 text-center">
+              <div className="bg-gray-800 rounded-xl p-6 max-w-md mx-auto">
+                <div className="inline-flex items-center space-x-2 mb-4">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce"></div>
+                  <div
+                    className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.1s" }}
+                  ></div>
+                  <div
+                    className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce"
+                    style={{ animationDelay: "0.2s" }}
+                  ></div>
+                </div>
+                <p className="text-yellow-400 font-semibold">{thinkingMessage}</p>
+              </div>
+            </div>
+          )}
 
           {/* Audio Error Display */}
           {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
