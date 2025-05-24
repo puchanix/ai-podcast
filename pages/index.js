@@ -502,9 +502,13 @@ export default function Home() {
 
   const processQuestionWithStreaming = async (question, persona) => {
     try {
+      console.log("⏱️ [TIMING] Starting question processing at:", Date.now())
       setIsPlaying(true)
 
       // Start text generation
+      const textStartTime = Date.now()
+      console.log("⏱️ [TIMING] Starting text generation at:", textStartTime)
+
       const textResponse = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -521,8 +525,12 @@ export default function Home() {
       }
 
       const { content: responseText } = await textResponse.json()
+      const textEndTime = Date.now()
+      console.log("⏱️ [TIMING] Text generation completed in:", textEndTime - textStartTime + "ms")
+      console.log("⏱️ [TIMING] Generated text length:", responseText.length, "characters")
 
       // Start audio generation immediately (parallel processing)
+      console.log("⏱️ [TIMING] Starting audio generation at:", textEndTime)
       await generateAudioResponse(responseText, persona)
     } catch (error) {
       console.error("Error in parallel processing:", error)
@@ -533,23 +541,22 @@ export default function Home() {
 
   const generateAudioResponse = async (text, persona) => {
     try {
-      console.log("🎵 [AUDIO] Starting audio generation for:", text.substring(0, 50) + "...")
+      const audioStartTime = Date.now()
+      console.log("🎵 [AUDIO TIMING] Starting audio generation at:", audioStartTime)
+      console.log("🎵 [AUDIO TIMING] Text to convert:", text.substring(0, 100) + "...")
 
       const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
-
-      // USE REF INSTEAD OF STATE for voice IDs!
       const currentVoiceIds = voiceIdsRef.current
-
       let voice = currentVoiceIds[voiceKey]
 
       if (voice && voice.length > 10) {
-        // Use custom voice ID
+        console.log("🎵 [AUDIO TIMING] Using custom voice:", voiceKey)
       } else {
         voice = "echo"
+        console.log("🎵 [AUDIO TIMING] Using default voice: echo")
       }
 
       // Start audio generation immediately
-      const audioStartTime = Date.now()
       const response = await fetch("/api/speak", {
         method: "POST",
         headers: {
@@ -568,7 +575,7 @@ export default function Home() {
 
       const { audioUrl } = await response.json()
       const audioGenerationTime = Date.now() - audioStartTime
-      console.log("🎵 [AUDIO] Audio generated in:", audioGenerationTime + "ms")
+      console.log("🎵 [AUDIO TIMING] Audio generated in:", audioGenerationTime + "ms")
 
       const audio = new Audio(audioUrl)
       audioRef.current = audio
@@ -587,7 +594,9 @@ export default function Home() {
 
       const playStartTime = Date.now()
       await audio.play()
-      console.log("🎵 [AUDIO] Audio started playing after:", playStartTime - audioStartTime + "ms total")
+      const totalTime = playStartTime - audioStartTime
+      console.log("🎵 [AUDIO TIMING] Audio started playing after:", totalTime + "ms total")
+      console.log("🎵 [AUDIO TIMING] TOTAL RESPONSE TIME:", totalTime + "ms")
     } catch (error) {
       console.error("Error in audio generation:", error)
       setAudioError(`Audio error: ${error.message}`)

@@ -53,12 +53,15 @@ export default async function handler(req, res) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      max_tokens: 100,
+      max_tokens: 100, // Verify this is 100
       temperature: 0.7,
     })
 
+    console.log("🔍 [CHAT DEBUG] Token limit used:", 100)
+
     const response = completion.choices[0]?.message?.content || "I need to think more about this."
     console.log("🔍 [CHAT DEBUG] Generated response:", response.substring(0, 100) + "...")
+    console.log("🔍 [CHAT DEBUG] Response length:", response.length, "characters")
 
     // Return in both formats for compatibility
     return res.status(200).json({
