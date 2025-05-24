@@ -323,15 +323,16 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     try {
       const conversationContext = messages.map((msg) => `${msg.character}: ${msg.content}`).join("\n\n")
 
-      const response = await fetch("/api/generate-single-response", {
+      const response = await fetch("/api/auto-continue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          character: nextCharacter,
-          opponent: currentCharacter,
+          character1: nextCharacter,
+          character2: currentCharacter,
+          currentMessages: messages,
           topic,
-          context: conversationContext,
-          messageCount: messages.length,
+          format: "pointCounterpoint",
+          historicalContext: true,
         }),
       })
 
@@ -339,9 +340,14 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         const data = await response.json()
         setNextResponseCache((prev) => ({
           ...prev,
-          [nextCharacter]: data.response,
+          [`${nextCharacter}_vs_${currentCharacter}`]: {
+            response1: data.response1,
+            response2: data.response2,
+          },
         }))
-        console.log(`🔍 [PREDICTIVE] Cached response for ${nextCharacter}`)
+        console.log(`🔍 [PREDICTIVE] Cached responses for next exchange`)
+      } else {
+        console.error(`🔍 [PREDICTIVE] API error:`, response.status)
       }
     } catch (error) {
       console.error(`🔍 [PREDICTIVE] Error generating next response:`, error)
@@ -360,20 +366,24 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
     try {
       // Check if we have cached responses
-      const cachedResponse1 = nextResponseCache[char1]
-      const cachedResponse2 = nextResponseCache[char2]
+      const cacheKey = `${char1}_vs_${char2}`
+      const cachedData = nextResponseCache[cacheKey]
 
       let response1, response2
 
-      if (cachedResponse1 && cachedResponse2) {
-        console.log("🔍 [CACHE] Using cached responses for both characters")
-        response1 = cachedResponse1
-        response2 = cachedResponse2
+      if (cachedData && cachedData.response1 && cachedData.response2) {
+        console.log("🔍 [CACHE] Using cached responses - INSTANT!")
+        response1 = cachedData.response1
+        response2 = cachedData.response2
 
-        // Clear cache
-        setNextResponseCache({})
+        // Clear this cache entry
+        setNextResponseCache((prev) => {
+          const newCache = { ...prev }
+          delete newCache[cacheKey]
+          return newCache
+        })
       } else {
-        console.log("🔍 [CACHE] Generating fresh responses")
+        console.log("🔍 [CACHE] No cache found, generating fresh responses")
         const response = await fetch("/api/auto-continue", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -415,15 +425,14 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
       setIsProcessing(false)
 
-      // Start playing the first new message
+      // Start playing the first new message immediately
       playAudio(newMessages[0], allMessages, debateMessagesRef.current.length)
 
-      // Predictively generate the next round while this round plays
+      // Predictively generate the next round while this round plays (only if not near end)
       if (allMessages.length < 8) {
-        // Don't generate if we're near the end
         setTimeout(() => {
-          generateNextResponse(char2, char1, currentTopic, allMessages)
-        }, 2000) // Start generating after 2 seconds
+          generateNextResponse(char1, char2, currentTopic, allMessages)
+        }, 1000) // Start generating after 1 second
       }
     } catch (error) {
       console.error("🔍 Error continuing debate:", error)
@@ -490,8 +499,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
       // Predictively generate first round responses while opening statements play
       setTimeout(() => {
-        generateNextResponse(char2, char1, topic, messages)
-      }, 3000) // Start generating after 3 seconds
+        generateNextResponse(char1, char2, topic, messages)
+      }, 2000) // Start generating after 2 seconds
     } catch (error) {
       console.error("🔍 Error starting debate:", error)
       setAudioError(`Failed to start debate: ${error.message}`)
