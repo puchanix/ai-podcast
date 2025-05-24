@@ -14,7 +14,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [dependenciesLoaded, setDependenciesLoaded] = useState(false)
   const [loadingError, setLoadingError] = useState(null)
 
-  // Character state
+  // Character state - use character keys, not objects
   const [char1, setChar1] = useState("")
   const [char2, setChar2] = useState("")
 
@@ -31,6 +31,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [isProcessing, setIsProcessing] = useState(false)
   const [audioError, setAudioError] = useState(null)
   const [debugInfo, setDebugInfo] = useState("")
+  const [voiceIds, setVoiceIds] = useState({})
 
   // Refs
   const currentAudioRef = useRef(null)
@@ -54,9 +55,23 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         setPersonas(personasData)
         setDebateState(debateStateModule)
 
-        // Set default characters
-        const defaultChar1 = character1 || Object.keys(personasData)[0] || "daVinci"
-        const defaultChar2 = character2 || Object.keys(personasData)[1] || "socrates"
+        // Convert character objects to keys if needed
+        let defaultChar1, defaultChar2
+        if (typeof character1 === "string") {
+          defaultChar1 = character1
+        } else if (character1 && Object.keys(personasData).includes(character1)) {
+          defaultChar1 = character1
+        } else {
+          defaultChar1 = Object.keys(personasData)[0] || "daVinci"
+        }
+
+        if (typeof character2 === "string") {
+          defaultChar2 = character2
+        } else if (character2 && Object.keys(personasData).includes(character2)) {
+          defaultChar2 = character2
+        } else {
+          defaultChar2 = Object.keys(personasData)[1] || "socrates"
+        }
 
         setChar1(defaultChar1)
         setChar2(defaultChar2)
@@ -72,6 +87,26 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
     loadDependencies()
   }, [character1, character2, initialTopic])
+
+  // Load voice IDs
+  useEffect(() => {
+    async function loadVoiceIds() {
+      try {
+        const response = await fetch("/api/get-voice-ids")
+        if (response.ok) {
+          const data = await response.json()
+          setVoiceIds(data)
+          console.log("🔍 Voice IDs loaded:", data)
+        } else {
+          console.error("🔍 Failed to load voice IDs")
+        }
+      } catch (error) {
+        console.error("🔍 Error loading voice IDs:", error)
+      }
+    }
+
+    loadVoiceIds()
+  }, [])
 
   // Helper functions
   const updateDebateState = (updates) => {
@@ -115,25 +150,33 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
   }
 
-  // Get voice for character
+  // Get voice for character - use the original working system
   const getVoiceForCharacter = (characterId) => {
     if (!personas[characterId]) return "echo"
 
-    // Try to get voice ID from personas
+    // Use the original voice mapping system that was working
+    const voiceKey = characterId === "daVinci" ? "davinci" : characterId.toLowerCase()
+
+    // First try to get from voiceIds state
+    if (voiceIds[voiceKey]) {
+      return voiceIds[voiceKey]
+    }
+
+    // Then try persona voiceId property
     if (personas[characterId].voiceId) {
       return personas[characterId].voiceId
     }
 
-    // Fallback to default voices
-    const defaultVoices = {
-      daVinci: "echo",
-      socrates: "echo",
-      frida: "nova",
-      shakespeare: "echo",
-      mozart: "echo",
+    // Fallback to default voice names
+    const voiceMapping = {
+      davinci: "davinci",
+      socrates: "socrates",
+      frida: "frida",
+      shakespeare: "shakespeare",
+      mozart: "mozart",
     }
 
-    return defaultVoices[characterId] || "echo"
+    return voiceMapping[voiceKey] || "echo"
   }
 
   // Play audio for message
@@ -347,7 +390,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // Show loading state
   if (!dependenciesLoaded) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
           <p className="text-yellow-400">Loading debate interface...</p>
@@ -360,7 +403,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // Show error state
   if (loadingError) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-400 mb-4">Failed to load debate interface</p>
           <p className="text-gray-400 mb-4">{loadingError}</p>
@@ -379,7 +422,9 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const character2Obj = personas[char2]
 
   return (
-    <div className={`${embedded ? "" : "container mx-auto py-8 px-4 max-w-6xl"} bg-gray-900 text-white`}>
+    <div
+      className={`${embedded ? "" : "container mx-auto py-8 px-4 max-w-6xl"} min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white`}
+    >
       {/* Header */}
       {!embedded && (
         <div className="mb-8 bg-gray-800 p-6 rounded-lg">
@@ -408,110 +453,110 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         </div>
       )}
 
-      {/* Character Grid */}
-      <div className="mb-8 bg-gray-800 rounded-lg p-6">
-        <div className="grid grid-cols-5 gap-4">
-          {Object.keys(personas).map((characterId) => {
-            const character = personas[characterId]
-            const isDebater = characterId === char1 || characterId === char2
-            const isCurrentSpeaker = characterId === currentSpeaker
-            const isChar1 = characterId === char1
-            const isChar2 = characterId === char2
+      {/* Character Grid - Only show when debating */}
+      {isDebating && (
+        <div className="mb-8 bg-gray-800 rounded-lg p-6">
+          <div className="grid grid-cols-5 gap-4">
+            {Object.keys(personas).map((characterId) => {
+              const character = personas[characterId]
+              const isDebater = characterId === char1 || characterId === char2
+              const isCurrentSpeaker = characterId === currentSpeaker
+              const isChar1 = characterId === char1
+              const isChar2 = characterId === char2
 
-            return (
-              <div
-                key={characterId}
-                className={`text-center transition-all duration-300 ${
-                  isDebater ? "opacity-100" : "opacity-30 grayscale"
-                }`}
-              >
-                {/* Character Avatar */}
-                <div className="relative mb-2">
-                  <div
-                    className={`w-20 h-20 mx-auto rounded-full overflow-hidden border-4 transition-all duration-300 ${
-                      isCurrentSpeaker && isPlaying
-                        ? "border-yellow-400 shadow-lg shadow-yellow-400/50"
-                        : isCurrentSpeaker && speakerStatus === "thinking"
-                          ? "border-blue-400"
-                          : isChar1
-                            ? "border-blue-600"
-                            : isChar2
-                              ? "border-red-600"
-                              : "border-gray-600"
-                    }`}
-                  >
-                    <img
-                      src={character?.image || "/placeholder.svg"}
-                      alt={character?.name}
-                      className="w-full h-full object-cover"
-                    />
+              return (
+                <div
+                  key={characterId}
+                  className={`text-center transition-all duration-300 ${
+                    isDebater ? "opacity-100" : "opacity-30 grayscale"
+                  }`}
+                >
+                  {/* Character Avatar */}
+                  <div className="relative mb-2">
+                    <div
+                      className={`w-20 h-20 mx-auto rounded-full overflow-hidden border-4 transition-all duration-300 ${
+                        isCurrentSpeaker && isPlaying
+                          ? "border-yellow-400 shadow-lg shadow-yellow-400/50"
+                          : isCurrentSpeaker && speakerStatus === "thinking"
+                            ? "border-blue-400"
+                            : isChar1
+                              ? "border-blue-600"
+                              : isChar2
+                                ? "border-red-600"
+                                : "border-gray-600"
+                      }`}
+                    >
+                      <img
+                        src={character?.image || "/placeholder.svg"}
+                        alt={character?.name}
+                        className="w-full h-full object-cover"
+                      />
 
-                    {/* Loading overlay for thinking */}
-                    {isCurrentSpeaker && speakerStatus === "thinking" && (
-                      <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
-                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      </div>
+                      {/* Loading overlay for thinking */}
+                      {isCurrentSpeaker && speakerStatus === "thinking" && (
+                        <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
+                          <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Speaking animation */}
+                    {isCurrentSpeaker && isPlaying && (
+                      <div className="absolute inset-0 rounded-full border-4 border-yellow-400 animate-ping opacity-75"></div>
                     )}
                   </div>
 
-                  {/* Speaking animation */}
-                  {isCurrentSpeaker && isPlaying && (
-                    <div className="absolute inset-0 rounded-full border-4 border-yellow-400 animate-ping opacity-75"></div>
+                  {/* Character Name */}
+                  <p
+                    className={`text-sm font-medium mb-1 ${
+                      isCurrentSpeaker ? "text-yellow-300" : isDebater ? "text-white" : "text-gray-500"
+                    }`}
+                  >
+                    {character?.name}
+                  </p>
+
+                  {/* Status Text */}
+                  {isDebater && (
+                    <p className="text-xs text-gray-400">
+                      {isCurrentSpeaker
+                        ? speakerStatus === "thinking"
+                          ? "Thinking..."
+                          : speakerStatus === "speaking"
+                            ? "Speaking..."
+                            : "Waiting..."
+                        : isDebating
+                          ? "Waiting turn"
+                          : "Ready"}
+                    </p>
+                  )}
+
+                  {/* Character Selection (only when not debating) */}
+                  {!isDebating && !embedded && (
+                    <div className="mt-2">
+                      <button
+                        onClick={() => handleCharacter1Change(characterId)}
+                        className={`text-xs px-2 py-1 rounded mr-1 ${
+                          isChar1 ? "bg-blue-600 text-white" : "bg-gray-600 text-gray-300 hover:bg-gray-500"
+                        }`}
+                      >
+                        1
+                      </button>
+                      <button
+                        onClick={() => handleCharacter2Change(characterId)}
+                        className={`text-xs px-2 py-1 rounded ${
+                          isChar2 ? "bg-red-600 text-white" : "bg-gray-600 text-gray-300 hover:bg-gray-500"
+                        }`}
+                      >
+                        2
+                      </button>
+                    </div>
                   )}
                 </div>
+              )
+            })}
+          </div>
 
-                {/* Character Name */}
-                <p
-                  className={`text-sm font-medium mb-1 ${
-                    isCurrentSpeaker ? "text-yellow-300" : isDebater ? "text-white" : "text-gray-500"
-                  }`}
-                >
-                  {character?.name}
-                </p>
-
-                {/* Status Text */}
-                {isDebater && (
-                  <p className="text-xs text-gray-400">
-                    {isCurrentSpeaker
-                      ? speakerStatus === "thinking"
-                        ? "Thinking..."
-                        : speakerStatus === "speaking"
-                          ? "Speaking..."
-                          : "Waiting..."
-                      : isDebating
-                        ? "Waiting turn"
-                        : "Ready"}
-                  </p>
-                )}
-
-                {/* Character Selection (only when not debating) */}
-                {!isDebating && !embedded && (
-                  <div className="mt-2">
-                    <button
-                      onClick={() => handleCharacter1Change(characterId)}
-                      className={`text-xs px-2 py-1 rounded mr-1 ${
-                        isChar1 ? "bg-blue-600 text-white" : "bg-gray-600 text-gray-300 hover:bg-gray-500"
-                      }`}
-                    >
-                      1
-                    </button>
-                    <button
-                      onClick={() => handleCharacter2Change(characterId)}
-                      className={`text-xs px-2 py-1 rounded ${
-                        isChar2 ? "bg-red-600 text-white" : "bg-gray-600 text-gray-300 hover:bg-gray-500"
-                      }`}
-                    >
-                      2
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Debate Controls */}
-        {isDebating && (
+          {/* Debate Controls */}
           <div className="mt-6 text-center">
             <div className="flex items-center justify-center space-x-4">
               <span className="text-yellow-400 font-medium">
@@ -526,8 +571,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
             </div>
             {isProcessing && <p className="text-yellow-300 text-sm mt-2">Preparing next exchange...</p>}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Topic Selector */}
       {!isDebating && !embedded && (

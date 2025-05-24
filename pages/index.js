@@ -74,7 +74,7 @@ export default function Home() {
     }
 
     loadVoiceIds()
-  }, [])
+  }, [personas])
 
   // Load personas when component mounts
   useEffect(() => {
@@ -660,16 +660,16 @@ export default function Home() {
           {showTopicSelector && selectedCharacters.length === 2 && (
             <EmbeddedTopicSelector
               onSelectTopic={handleTopicSelect}
-              character1={personas[selectedCharacters[0]]}
-              character2={personas[selectedCharacters[1]]}
+              character1={selectedCharacters[0]}
+              character2={selectedCharacters[1]}
             />
           )}
 
           {mode === "debate" && isDebating && selectedCharacters.length === 2 && (
             <div className="mb-8">
               <DebateInterface
-                character1={personas[selectedCharacters[0]]}
-                character2={personas[selectedCharacters[1]]}
+                character1={selectedCharacters[0]}
+                character2={selectedCharacters[1]}
                 initialTopic={debateTopic}
                 onDebateEnd={handleDebateEnd}
                 embedded={true}
