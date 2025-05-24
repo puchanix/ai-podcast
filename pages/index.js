@@ -427,16 +427,17 @@ export default function Home() {
       console.log("🔍 [VOICE DEBUG] - voiceIds state:", voiceIds)
       console.log("🔍 [VOICE DEBUG] - voice found:", voice)
 
-      if (!voice) {
+      // If we found a voice ID, use it directly (it's already the ElevenLabs voice ID)
+      if (voice && voice.length > 10) {
+        console.log(`🔍 [VOICE DEBUG] Using custom voice ID for ${persona}: ${voice}`)
+      } else {
         console.log(`🔍 [VOICE DEBUG] No voice ID found for ${persona} (key: ${voiceKey}), using echo`)
         voice = "echo"
-      } else {
-        console.log(`🔍 [VOICE DEBUG] Using voice ID for ${persona}: ${voice}`)
       }
 
-      console.log(`🔍 [VOICE DEBUG] Generating audio for ${persona} with voice: ${voice}`)
+      console.log(`🔍 [VOICE DEBUG] Final voice for ${persona}: ${voice}`)
 
-      // Use regular speak API instead of streaming
+      // Use regular speak API
       const response = await fetch("/api/speak", {
         method: "POST",
         headers: {
@@ -444,7 +445,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           text: text,
-          voice: voice,
+          voice: voice, // Pass the actual voice ID, not the key
         }),
       })
 
