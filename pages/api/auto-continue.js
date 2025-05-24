@@ -1,5 +1,4 @@
 import OpenAI from "openai"
-import { NextResponse } from "next/server"
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -18,10 +17,14 @@ const characters = {
     "You are Wolfgang Amadeus Mozart, the classical composer. Speak passionately about music, creativity, and artistic expression. Be energetic.",
 }
 
-export async function POST(request) {
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" })
+  }
+
   try {
     console.log("🔍 [AUTO-CONTINUE DEBUG] Auto-continue API called")
-    const { character1, character2, currentMessages, topic } = await request.json()
+    const { character1, character2, currentMessages, topic } = req.body
 
     if (!character1 || !character2 || !topic || !currentMessages) {
       console.error("🔍 [AUTO-CONTINUE DEBUG] Missing required parameters:", {
@@ -30,7 +33,7 @@ export async function POST(request) {
         topic,
         currentMessages: !!currentMessages,
       })
-      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
+      return res.status(400).json({ error: "Missing required parameters" })
     }
 
     console.log("🔍 [AUTO-CONTINUE DEBUG] Generating responses for:", character1, "vs", character2)
@@ -50,13 +53,13 @@ export async function POST(request) {
     console.log("🔍 [AUTO-CONTINUE DEBUG] Generated response1 length:", response1.length)
     console.log("🔍 [AUTO-CONTINUE DEBUG] Generated response2 length:", response2.length)
 
-    return NextResponse.json({
+    return res.status(200).json({
       response1,
       response2,
     })
   } catch (error) {
     console.error("🔍 [AUTO-CONTINUE DEBUG] Auto-continue API error:", error)
-    return NextResponse.json({ error: "Failed to continue debate" }, { status: 500 })
+    return res.status(500).json({ error: "Failed to continue debate" })
   }
 }
 
@@ -99,7 +102,7 @@ Give your next response in 2-3 sentences. Stay true to your character, respond t
         { role: "user", content: prompt },
       ],
       max_tokens: 200,
-      temperature: 0.8, // Slightly higher for more varied responses
+      temperature: 0.8,
     })
 
     const response = completion.choices[0]?.message?.content || "I need to think more about this."
