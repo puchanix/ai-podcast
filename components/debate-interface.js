@@ -111,7 +111,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // Helper functions to update both state and refs - MEMOIZED to prevent infinite loops
   const updateCurrentTopic = useCallback(
     (topic) => {
-      console.log("🔍 updateCurrentTopic called with:", topic)
       setCurrentTopic(topic)
       topicRef.current = topic
       if (!embedded && debateState) debateState.saveTopic(topic)
@@ -121,10 +120,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   const updateIsDebating = useCallback(
     (debating) => {
-      console.log("🔍 updateIsDebating called with:", debating)
       setIsDebating((prev) => {
         if (prev !== debating) {
-          console.log("🔍 isDebating state changing from", prev, "to", debating)
           isDebatingRef.current = debating
           if (!embedded && debateState) debateState.saveIsDebating(debating)
           return debating
@@ -137,7 +134,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   const updateDebateMessages = useCallback(
     (messages) => {
-      console.log("🔍 updateDebateMessages called with length:", messages.length)
       setDebateMessages(messages)
       debateMessagesRef.current = messages
       if (!embedded && debateState) debateState.saveMessages(messages)
@@ -147,7 +143,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   const updateExchangeCount = useCallback(
     (count) => {
-      console.log("🔍 updateExchangeCount called with:", count)
       setExchangeCount(count)
       exchangeCountRef.current = count
       if (!embedded && debateState) debateState.saveExchangeCount(count)
@@ -161,14 +156,10 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       if (!isBrowser || dependenciesLoaded) return
 
       try {
-        console.log("🔍 Loading dependencies...")
-
         const personasModule = await import("../lib/personas")
         const personasData = personasModule.personas
-        console.log("🔍 Personas loaded:", Object.keys(personasData))
 
         const debateStateModule = await import("../lib/debate-state")
-        console.log("🔍 Debate state module loaded")
 
         setPersonas(personasData)
         setDebateState(debateStateModule)
@@ -184,7 +175,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
             topic: initialTopic || "",
             exchangeCount: 0,
           }
-          console.log("🔍 Embedded mode - using props:", { character1, character2 })
         } else {
           defaultState = {
             character1: character1 || Object.keys(personasData)[0] || "daVinci",
@@ -194,10 +184,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
             topic: initialTopic || "",
             exchangeCount: 0,
           }
-          console.log("🔍 Non-embedded mode - using default characters")
         }
-
-        console.log("🔍 Setting default state:", defaultState)
 
         setChar1(defaultState.character1)
         setChar2(defaultState.character2)
@@ -207,8 +194,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         updateExchangeCount(defaultState.exchangeCount)
         setInitialStateLoaded(true)
         setDependenciesLoaded(true)
-
-        console.log("🔍 Dependencies loaded successfully!")
       } catch (error) {
         console.error("🔍 Error loading dependencies:", error)
         setLoadingError(error.message)
@@ -228,7 +213,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         if (response.ok) {
           const data = await response.json()
           setVoiceIds(data)
-          console.log("🔍 Voice IDs loaded:", data)
 
           Object.keys(personas).forEach((key) => {
             const voiceKey = key === "daVinci" ? "davinci" : key.toLowerCase()
@@ -271,11 +255,9 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // Audio unlock function
   const unlockAudio = useCallback(async () => {
     if (isUnlockingAudio || audioInitialized) {
-      console.log("🔍 Audio already unlocked or unlocking in progress")
       return
     }
 
-    console.log("🔍 Attempting to unlock audio...")
     setIsUnlockingAudio(true)
     setAudioError(null)
 
@@ -285,7 +267,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       unlockElement.load()
 
       await unlockElement.play()
-      console.log("🔍 Silent audio played successfully - audio unlocked")
       setAudioInitialized(true)
 
       await new Promise((resolve) => setTimeout(resolve, 300))
@@ -319,8 +300,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // Reset debate state
   const resetDebateState = useCallback(
     (shouldCallOnDebateEnd = true) => {
-      console.log("🔍 Resetting debate state, shouldCallOnDebateEnd:", shouldCallOnDebateEnd)
-
       updateIsDebating(false)
       updateDebateMessages([])
       updateCurrentTopic("")
@@ -393,28 +372,19 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // Start debate function
   const startDebate = useCallback(
     async (topic) => {
-      console.log("🔍 === START DEBATE CALLED ===")
-      console.log("🔍 startDebate called with topic:", topic)
-
       if (!dependenciesLoaded || !initialStateLoaded) {
-        console.log("🔍 Dependencies not ready, waiting...")
         updateCurrentTopic(topic)
         return
       }
 
       if (!char1 || !char2) {
-        console.log("🔍 Cannot start debate: missing characters", { char1, char2 })
         setAudioError("Cannot start debate: Please ensure both characters are selected")
         return
       }
 
       if (isStarting || isDebating) {
-        console.log("🔍 Debate already starting or in progress, ignoring duplicate start")
         return
       }
-
-      console.log("🔍 Starting debate with topic:", topic)
-      console.log("🔍 Using characters:", { char1, char2 })
 
       setIsStarting(true)
       setCurrentSpeaker(null)
@@ -441,8 +411,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           historicalContext,
         }
 
-        console.log("🔍 Sending request to /api/start-debate:", requestBody)
-
         const response = await fetch("/api/start-debate", {
           method: "POST",
           headers: {
@@ -451,8 +419,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           body: JSON.stringify(requestBody),
         })
 
-        console.log("🔍 Response status:", response.status)
-
         if (!response.ok) {
           const errorText = await response.text()
           console.error("🔍 API error response:", errorText)
@@ -460,7 +426,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         }
 
         const data = await response.json()
-        console.log("🔍 Debate started with data:", data)
 
         const messages = [
           {
@@ -482,8 +447,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         updateDebateMessages(messages)
         setIsSettingUp(false)
         setNextSpeaker(char2)
-
-        console.log("🔍 Debate setup complete, visuals should now be active")
       } catch (error) {
         console.error("🔍 Error starting debate:", error)
         updateIsDebating(false)
@@ -513,8 +476,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // Auto-start when dependencies loaded and topic available - FIXED dependencies
   useEffect(() => {
     if (dependenciesLoaded && initialStateLoaded && currentTopic && !isDebating && !isStarting && char1 && char2) {
-      console.log("🔍 Auto-starting debate with topic:", currentTopic)
-      console.log("🔍 Using characters:", char1, "vs", char2)
       const timer = setTimeout(() => {
         startDebate(currentTopic)
       }, 100)
@@ -527,20 +488,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const shouldShowCharacterGrid = isDebating && Object.keys(personas).length > 0
   const shouldShowDebateHeader = !embedded
 
-  console.log("🔍 VISUAL RENDER CONDITIONS:")
-  console.log("🔍 shouldShowVisuals:", shouldShowVisuals)
-  console.log("🔍 shouldShowCharacterGrid:", shouldShowCharacterGrid)
-  console.log("🔍 shouldShowDebateHeader:", shouldShowDebateHeader)
-  console.log("🔍 isDebating:", isDebating)
-  console.log("🔍 embedded:", embedded)
-  console.log("🔍 personas count:", Object.keys(personas).length)
-  console.log("🔍 char1:", char1, "char2:", char2)
-  console.log("🔍 character1Obj:", character1Obj?.name)
-  console.log("🔍 character2Obj:", character2Obj?.name)
-
   // Show loading state
   if (!dependenciesLoaded) {
-    console.log("🔍 RENDERING: Loading state")
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
@@ -554,7 +503,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   // Show error state
   if (loadingError) {
-    console.log("🔍 RENDERING: Error state")
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
@@ -583,61 +531,11 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     flexDirection: "column",
   }
 
-  console.log("🔍 RENDERING: Main component")
-
   return (
     <div
       className={`${embedded ? "" : "container mx-auto py-8 px-4 max-w-6xl"} bg-gray-900 text-white`}
       style={containerStyle}
     >
-      {/* COMPREHENSIVE DEBUG PANEL - FIXED to not cause re-renders */}
-      <div className="mb-4 p-4 bg-purple-900 text-purple-100 rounded-lg text-xs">
-        <h3 className="font-bold text-yellow-400 mb-2">🔍 COMPREHENSIVE DEBUG INFO</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p>
-              <strong>Component State:</strong>
-            </p>
-            <p>Render Count: {renderCountRef.current}</p>
-            <p>Dependencies Loaded: {dependenciesLoaded ? "✅" : "❌"}</p>
-            <p>Initial State Loaded: {initialStateLoaded ? "✅" : "❌"}</p>
-            <p>Embedded: {embedded ? "✅" : "❌"}</p>
-            <p>Loading Error: {loadingError || "None"}</p>
-          </div>
-          <div>
-            <p>
-              <strong>Debate State:</strong>
-            </p>
-            <p>Is Debating: {isDebating ? "✅" : "❌"}</p>
-            <p>Current Speaker: {currentSpeaker || "None"}</p>
-            <p>Is Playing: {isPlaying ? "✅" : "❌"}</p>
-            <p>Is Loading Audio: {isLoadingAudio ? "✅" : "❌"}</p>
-            <p>Current Topic: {currentTopic || "None"}</p>
-          </div>
-          <div>
-            <p>
-              <strong>Characters:</strong>
-            </p>
-            <p>
-              Char1: {char1} ({character1Obj?.name || "Not found"})
-            </p>
-            <p>
-              Char2: {char2} ({character2Obj?.name || "Not found"})
-            </p>
-            <p>Personas Loaded: {Object.keys(personas).length}</p>
-            <p>Personas: {Object.keys(personas).join(", ")}</p>
-          </div>
-          <div>
-            <p>
-              <strong>Visual Conditions:</strong>
-            </p>
-            <p>Should Show Visuals: {shouldShowVisuals ? "✅" : "❌"}</p>
-            <p>Should Show Character Grid: {shouldShowCharacterGrid ? "✅" : "❌"}</p>
-            <p>Should Show Debate Header: {shouldShowDebateHeader ? "✅" : "❌"}</p>
-          </div>
-        </div>
-      </div>
-
       <div style={mainContentStyle}>
         {isLoadingVoices && (
           <div className="mb-4 p-4 bg-yellow-800 text-yellow-100 rounded-lg text-center">
@@ -651,18 +549,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
             <p className="font-bold">Error:</p>
             <p>{audioError}</p>
             {retryCount > 0 && retryCount < 3 && <p className="mt-2">Retrying automatically ({retryCount}/3)...</p>}
-          </div>
-        )}
-
-        {/* STATIC TEST VISUAL - ALWAYS SHOW */}
-        <div className="mb-6 p-8 bg-red-600 text-white text-center text-2xl font-bold border-4 border-yellow-400">
-          🚨 STATIC TEST VISUAL - RENDER COUNT: {renderCountRef.current} 🚨
-        </div>
-
-        {/* CONDITIONAL TEST VISUAL - ONLY WHEN DEBATING */}
-        {isDebating && (
-          <div className="mb-6 p-8 bg-green-600 text-white text-center text-2xl font-bold border-4 border-yellow-400">
-            ✅ DEBATE ACTIVE TEST VISUAL - DEBATE IS RUNNING ✅
           </div>
         )}
 
