@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import Layout from "../components/layout"
 import DebateInterface from "../components/debate-interface"
-import EmbeddedTopicSelector from "../components/embedded-topic-selector"
 
 export default function Home() {
   const [selectedPersona, setSelectedPersona] = useState("")
@@ -23,6 +22,8 @@ export default function Home() {
   // Debate state
   const [isDebating, setIsDebating] = useState(false)
   const [debateTopic, setDebateTopic] = useState("")
+  const [topics, setTopics] = useState([])
+  const [loadingTopics, setLoadingTopics] = useState(false)
 
   // Audio refs
   const audioRef = useRef(null)
@@ -73,7 +74,9 @@ export default function Home() {
       }
     }
 
-    loadVoiceIds()
+    if (Object.keys(personas).length > 0) {
+      loadVoiceIds()
+    }
   }, [personas])
 
   // Load personas when component mounts
@@ -92,6 +95,84 @@ export default function Home() {
 
     loadPersonas()
   }, [])
+
+  // Load topics when two characters are selected
+  useEffect(() => {
+    async function fetchTopics() {
+      if (selectedCharacters.length === 2) {
+        setLoadingTopics(true)
+        try {
+          console.log("Fetching topics for:", selectedCharacters)
+          const response = await fetch("/pages/api/generate-character-topics", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              character1: selectedCharacters[0],
+              character2: selectedCharacters[1],
+            }),
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            console.log("Topics received:", data)
+            setTopics(data.topics || [])
+          } else {
+            console.error("Failed to fetch topics:", response.status)
+            // Fallback topics
+            setTopics([
+              {
+                id: "fallback-1",
+                title: "Philosophy and Wisdom",
+                description: "The nature of knowledge and understanding",
+                category: "philosophy",
+              },
+              {
+                id: "fallback-2",
+                title: "Art and Expression",
+                description: "The role of creativity in human experience",
+                category: "arts",
+              },
+              {
+                id: "fallback-3",
+                title: "Science and Discovery",
+                description: "The pursuit of knowledge and innovation",
+                category: "science",
+              },
+            ])
+          }
+        } catch (error) {
+          console.error("Error fetching topics:", error)
+          // Fallback topics on error
+          setTopics([
+            {
+              id: "fallback-1",
+              title: "Philosophy and Wisdom",
+              description: "The nature of knowledge and understanding",
+              category: "philosophy",
+            },
+            {
+              id: "fallback-2",
+              title: "Art and Expression",
+              description: "The role of creativity in human experience",
+              category: "arts",
+            },
+            {
+              id: "fallback-3",
+              title: "Science and Discovery",
+              description: "The pursuit of knowledge and innovation",
+              category: "science",
+            },
+          ])
+        } finally {
+          setLoadingTopics(false)
+        }
+      }
+    }
+
+    fetchTopics()
+  }, [selectedCharacters])
 
   // Update ref when selectedPersona changes
   useEffect(() => {
@@ -142,13 +223,15 @@ export default function Home() {
             newSelection = [prev[1], characterId]
           }
 
-          console.log("Selected persona updated to:", newSelection)
+          console.log("Selected characters updated to:", newSelection)
 
           if (newSelection.length === 2) {
             console.log("Two characters selected, showing topic selector")
             setShowTopicSelector(true)
           } else {
             setShowTopicSelector(false)
+            setIsDebating(false)
+            setDebateTopic("")
           }
 
           return newSelection
@@ -320,12 +403,17 @@ export default function Home() {
     }
   }
 
-  // Fallback to regular audio generation to avoid 504 timeouts
+  // Fixed audio generation to properly use voice IDs
   const generateAudioResponse = async (text, persona) => {
     try {
-      // Get voice for character
-      const character = personas[persona]
-      const voice = character?.voiceId || (character?.getVoiceId ? character.getVoiceId() : "echo")
+      // Get voice for character - FIXED to use voiceIds state properly
+      const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
+      let voice = voiceIds[voiceKey]
+
+      if (!voice) {
+        console.log(`No voice ID found for ${persona} (key: ${voiceKey}), using echo`)
+        voice = "echo"
+      }
 
       console.log(`Generating audio for ${persona} with voice: ${voice}`)
 
@@ -384,6 +472,7 @@ export default function Home() {
     setIsDebating(false)
     setDebateTopic("")
     setShowTopicSelector(false)
+    setTopics([])
   }
 
   const handleRecordingButtonClick = useCallback(
@@ -418,8 +507,9 @@ export default function Home() {
   // Handle debate topic selection
   const handleTopicSelect = useCallback((topic) => {
     console.log("Topic selected:", topic)
-    setDebateTopic(topic)
+    setDebateTopic(topic.title || topic)
     setIsDebating(true)
+    setShowTopicSelector(false)
   }, [])
 
   // Handle debate end/reset
@@ -429,6 +519,7 @@ export default function Home() {
     setDebateTopic("")
     setSelectedCharacters([])
     setShowTopicSelector(false)
+    setTopics([])
   }, [])
 
   // Small microphone icon component - Fixed SVG path
@@ -655,16 +746,41 @@ export default function Home() {
           {/* Audio Error Display */}
           {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
 
-          {/* Dynamic Content Area */}
+          {/* Topic Selector - Inline */}
+          {showTopicSelector && selectedCharacters.length === 2 && !isDebating && (
+            <div className="w-full max-w-4xl mx-auto mb-8">
+              <div className="bg-gray-800 rounded-xl p-6">
+                <h2 className="text-2xl font-bold text-yellow-400 mb-6 text-center">Choose a Debate Topic</h2>
 
-          {showTopicSelector && selectedCharacters.length === 2 && (
-            <EmbeddedTopicSelector
-              onSelectTopic={handleTopicSelect}
-              character1={selectedCharacters[0]}
-              character2={selectedCharacters[1]}
-            />
+                {loadingTopics ? (
+                  <div className="flex justify-center items-center py-8">
+                    <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full mr-3"></div>
+                    <span className="text-gray-300">Generating topics...</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {topics.map((topic) => (
+                      <div
+                        key={topic.id}
+                        onClick={() => handleTopicSelect(topic)}
+                        className="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 cursor-pointer transition-all duration-300 hover:scale-105 border border-gray-600 hover:border-yellow-400"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="text-lg font-semibold text-yellow-400 flex-1">{topic.title}</h3>
+                          <span className="text-xs bg-yellow-500 text-black px-2 py-1 rounded-full ml-2">
+                            {topic.category}
+                          </span>
+                        </div>
+                        <p className="text-gray-300 text-sm">{topic.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
+          {/* Debate Interface */}
           {mode === "debate" && isDebating && selectedCharacters.length === 2 && (
             <div className="mb-8">
               <DebateInterface
