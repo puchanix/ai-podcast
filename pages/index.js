@@ -300,10 +300,31 @@ export default function Home() {
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
         console.log("🔍 [AUDIO DEBUG] Audio blob size:", audioBlob.size, "bytes")
 
-        // ADD THIS: Create a temporary audio URL to test playback
+        // ADD THIS: Create a temporary audio player to test what was recorded
         const audioUrl = URL.createObjectURL(audioBlob)
         console.log("🔍 [AUDIO DEBUG] Test audio URL created:", audioUrl)
-        console.log("🔍 [AUDIO DEBUG] You can test this URL in browser to hear what was recorded")
+
+        // Create a temporary audio element for testing
+        const testAudio = new Audio(audioUrl)
+        testAudio.controls = true
+        testAudio.style.position = "fixed"
+        testAudio.style.top = "10px"
+        testAudio.style.right = "10px"
+        testAudio.style.zIndex = "9999"
+        testAudio.style.backgroundColor = "white"
+        testAudio.style.border = "2px solid red"
+        testAudio.title = "Test: What was actually recorded"
+        document.body.appendChild(testAudio)
+
+        // Remove the test audio player after 30 seconds
+        setTimeout(() => {
+          if (document.body.contains(testAudio)) {
+            document.body.removeChild(testAudio)
+          }
+          URL.revokeObjectURL(audioUrl)
+        }, 30000)
+
+        console.log("🔍 [AUDIO DEBUG] Temporary audio player added to page (top-right corner)")
 
         await processAudioQuestion(audioBlob)
 
