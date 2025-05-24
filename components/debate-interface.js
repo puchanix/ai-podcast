@@ -159,24 +159,19 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
     // First try to get from voiceIds state
     if (voiceIds[voiceKey]) {
+      console.log(`🔍 Using voice ID for ${characterId}: ${voiceIds[voiceKey]}`)
       return voiceIds[voiceKey]
     }
 
     // Then try persona voiceId property
-    if (personas[characterId].voiceId) {
+    if (personas[characterId]?.voiceId) {
+      console.log(`🔍 Using persona voice ID for ${characterId}: ${personas[characterId].voiceId}`)
       return personas[characterId].voiceId
     }
 
     // Fallback to default voice names
-    const voiceMapping = {
-      davinci: "davinci",
-      socrates: "socrates",
-      frida: "frida",
-      shakespeare: "shakespeare",
-      mozart: "mozart",
-    }
-
-    return voiceMapping[voiceKey] || "echo"
+    console.log(`🔍 No voice ID found for ${characterId}, using fallback: echo`)
+    return "echo"
   }
 
   // Play audio for message
