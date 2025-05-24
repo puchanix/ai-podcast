@@ -15,16 +15,12 @@ export default function Home() {
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
   const [thinkingMessage, setThinkingMessage] = useState("")
-  const [audioLevel, setAudioLevel] = useState(0)
 
   // Audio refs
   const audioRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const streamRef = useRef(null)
-  const audioContextRef = useRef(null)
-  const analyserRef = useRef(null)
-  const animationFrameRef = useRef(null)
   const currentPersonaRef = useRef("") // Use ref to track current persona
 
   // Thinking messages for dynamic display
@@ -95,26 +91,6 @@ export default function Home() {
       if (interval) clearInterval(interval)
     }
   }, [isProcessing])
-
-  // Simulated audio level monitoring since real monitoring isn't working
-  useEffect(() => {
-    let interval
-    if (isListening) {
-      interval = setInterval(() => {
-        // Simulate realistic voice levels with some randomness
-        const baseLevel = 0.2 + Math.random() * 0.6 // Random between 0.2 and 0.8
-        const variation = Math.sin(Date.now() * 0.01) * 0.2 // Smooth sine wave
-        const simulatedLevel = Math.max(0, Math.min(1, baseLevel + variation))
-        setAudioLevel(simulatedLevel)
-      }, 100) // Update every 100ms for smooth animation
-    } else {
-      setAudioLevel(0)
-    }
-
-    return () => {
-      if (interval) clearInterval(interval)
-    }
-  }, [isListening])
 
   const handleCharacterSelect = useCallback(
     async (characterId) => {
@@ -187,6 +163,28 @@ export default function Home() {
       streamRef.current = null
     }
   }, [isListening])
+
+  const pauseAudio = useCallback(() => {
+    if (audioRef.current && isPlaying) {
+      audioRef.current.pause()
+      setIsPlaying(false)
+    }
+  }, [isPlaying])
+
+  const resumeAudio = useCallback(() => {
+    if (audioRef.current && !isPlaying) {
+      audioRef.current.play()
+      setIsPlaying(true)
+    }
+  }, [isPlaying])
+
+  const stopAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      setIsPlaying(false)
+    }
+  }, [])
 
   const processAudioQuestion = useCallback(async (audioBlob) => {
     // Use the ref value instead of state
@@ -363,34 +361,82 @@ export default function Home() {
     [mode, selectedPersona, isListening, isProcessing, isPlaying, startListening, stopListening],
   )
 
-  // Voice visualizer component with simulated levels
-  const VoiceVisualizer = () => {
-    const bars = Array.from({ length: 8 }, (_, i) => {
-      // Create dynamic height based on simulated audio level
-      const baseHeight = 4
-      const maxHeight = 40
-      const timeOffset = Date.now() * 0.005 + i * 0.5 // Different timing for each bar
-      const waveVariation = Math.sin(timeOffset) * 0.3 // Sine wave for natural movement
-      const height = baseHeight + (audioLevel + waveVariation) * maxHeight
+  // Microphone icon component
+  const MicrophoneIcon = () => (
+    <div className="relative flex items-center justify-center">
+      {/* Microphone SVG */}
+      <svg className="w-6 h-6 text-yellow-400 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+      </svg>
 
-      return (
-        <div
-          key={i}
-          className="bg-yellow-400 rounded-full transition-all duration-150"
-          style={{
-            width: "4px",
-            height: `${Math.max(baseHeight, height)}px`,
-          }}
-        />
-      )
-    })
-
-    return (
-      <div className="flex items-end justify-center space-x-1 h-12">
-        {bars}
-        <div className="ml-4 text-sm text-gray-400">Level: {Math.round(audioLevel * 100)}%</div>
+      {/* Radiating circles */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-yellow-400 rounded-full animate-ping opacity-30"></div>
       </div>
-    )
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div
+          className="w-12 h-12 border-2 border-yellow-400 rounded-full animate-ping opacity-20"
+          style={{ animationDelay: "0.5s" }}
+        ></div>
+      </div>
+    </div>
+  )
+
+  // Status display for character tiles
+  const getCharacterStatus = (characterId) => {
+    if (selectedPersona !== characterId) return null
+
+    if (isListening) {
+      return (
+        <div className="absolute inset-0 bg-red-500 bg-opacity-20 rounded-xl flex items-center justify-center">
+          <div className="bg-red-500 rounded-lg p-2 flex items-center space-x-2">
+            <MicrophoneIcon />
+            <span className="text-white text-sm font-semibold">Recording...</span>
+          </div>
+        </div>
+      )
+    }
+
+    if (isProcessing) {
+      return (
+        <div className="absolute inset-0 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center">
+          <div className="bg-blue-500 rounded-lg p-2 flex items-center space-x-2">
+            <div className="flex space-x-1">
+              <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
+              <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
+              <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
+            </div>
+            <span className="text-white text-sm font-semibold">{thinkingMessage}</span>
+          </div>
+        </div>
+      )
+    }
+
+    if (isPlaying) {
+      return (
+        <div className="absolute inset-0 bg-green-500 bg-opacity-20 rounded-xl flex items-center justify-center">
+          <div className="bg-green-500 rounded-lg p-2 flex items-center space-x-2">
+            <div className="flex space-x-1">
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={i}
+                  className="w-1 bg-white rounded-full animate-pulse"
+                  style={{
+                    height: "16px",
+                    animationDelay: `${i * 0.1}s`,
+                    animationDuration: "0.6s",
+                  }}
+                />
+              ))}
+            </div>
+            <span className="text-white text-sm font-semibold">Speaking...</span>
+          </div>
+        </div>
+      )
+    }
+
+    return null
   }
 
   return (
@@ -459,7 +505,7 @@ export default function Home() {
                     isSelected ? "ring-4 ring-yellow-400" : ""
                   } ${shouldGrayOut ? "opacity-30" : ""}`}
                 >
-                  <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl aspect-square">
+                  <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl aspect-square relative">
                     <div className="h-2/3">
                       <img
                         src={persona.image || "/placeholder.svg"}
@@ -471,36 +517,81 @@ export default function Home() {
                       <h3 className="text-sm font-bold text-yellow-400 truncate">{persona.name}</h3>
 
                       {/* Dynamic Button */}
-                      <div className="mt-2">
+                      <div className="mt-2 flex space-x-1">
                         {mode === "question" ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleButtonClick(key)
-                            }}
-                            disabled={shouldGrayOut}
-                            className={`w-full py-1 px-2 rounded text-xs font-semibold transition-all duration-300 ${
-                              selectedPersona === key && isListening
-                                ? "bg-red-500 text-white animate-pulse"
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleButtonClick(key)
+                              }}
+                              disabled={shouldGrayOut}
+                              className={`flex-1 py-1 px-2 rounded text-xs font-semibold transition-all duration-300 ${
+                                selectedPersona === key && isListening
+                                  ? "bg-red-500 text-white animate-pulse"
+                                  : selectedPersona === key && isProcessing
+                                    ? "bg-blue-500 text-white"
+                                    : selectedPersona === key && isPlaying
+                                      ? "bg-green-500 text-white"
+                                      : selectedPersona === key
+                                        ? "bg-yellow-500 text-black"
+                                        : shouldGrayOut
+                                          ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                                          : "bg-gray-700 text-white hover:bg-gray-600"
+                              }`}
+                            >
+                              {selectedPersona === key && isListening
+                                ? "Stop Recording"
                                 : selectedPersona === key && isProcessing
-                                  ? "bg-gray-600 text-gray-300"
+                                  ? "Processing..."
                                   : selectedPersona === key && isPlaying
-                                    ? "bg-green-500 text-white"
-                                    : selectedPersona === key
-                                      ? "bg-yellow-500 text-black"
-                                      : shouldGrayOut
-                                        ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                                        : "bg-gray-700 text-white hover:bg-gray-600"
-                            }`}
-                          >
-                            {selectedPersona === key && isListening
-                              ? "Recording (click to finish)"
-                              : selectedPersona === key && isProcessing
-                                ? "Processing..."
-                                : selectedPersona === key && isPlaying
-                                  ? "Playing..."
-                                  : "Ask Question"}
-                          </button>
+                                    ? "Speaking..."
+                                    : "Ask Question"}
+                            </button>
+
+                            {/* Pause/Resume/Stop buttons when playing */}
+                            {selectedPersona === key && isPlaying && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    pauseAudio()
+                                  }}
+                                  className="px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
+                                  title="Pause"
+                                >
+                                  ⏸
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    stopAudio()
+                                  }}
+                                  className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                                  title="Stop"
+                                >
+                                  ⏹
+                                </button>
+                              </>
+                            )}
+
+                            {/* Resume button when paused */}
+                            {selectedPersona === key &&
+                              !isPlaying &&
+                              audioRef.current &&
+                              audioRef.current.currentTime > 0 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    resumeAudio()
+                                  }}
+                                  className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700"
+                                  title="Resume"
+                                >
+                                  ▶
+                                </button>
+                              )}
+                          </>
                         ) : (
                           <button
                             onClick={(e) => {
@@ -525,42 +616,14 @@ export default function Home() {
                         )}
                       </div>
                     </div>
+
+                    {/* Status overlay */}
+                    {getCharacterStatus(key)}
                   </div>
                 </div>
               )
             })}
           </div>
-
-          {/* Voice Visualizer - Show when listening */}
-          {isListening && (
-            <div className="mb-8 text-center">
-              <div className="bg-gray-800 rounded-xl p-6 max-w-md mx-auto">
-                <h3 className="text-lg font-bold mb-4 text-yellow-400">🎤 Listening...</h3>
-                <VoiceVisualizer />
-                <p className="text-sm text-gray-400 mt-4">Speak your question clearly</p>
-              </div>
-            </div>
-          )}
-
-          {/* Processing Indicator with Rotating Messages */}
-          {isProcessing && (
-            <div className="mb-8 text-center">
-              <div className="bg-gray-800 rounded-xl p-6 max-w-md mx-auto">
-                <div className="inline-flex items-center space-x-2 mb-4">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce"></div>
-                  <div
-                    className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.1s" }}
-                  ></div>
-                  <div
-                    className="w-2 h-2 bg-yellow-500 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.2s" }}
-                  ></div>
-                </div>
-                <p className="text-yellow-400 font-semibold">{thinkingMessage}</p>
-              </div>
-            </div>
-          )}
 
           {/* Audio Error Display */}
           {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
