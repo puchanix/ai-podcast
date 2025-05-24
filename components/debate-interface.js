@@ -154,19 +154,12 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const getVoiceForCharacter = (characterId) => {
     if (!personas[characterId]) return "echo"
 
-    // Use the original voice mapping system that was working
+    // Use the voiceIds state that was loaded from the API
     const voiceKey = characterId === "daVinci" ? "davinci" : characterId.toLowerCase()
 
-    // First try to get from voiceIds state
     if (voiceIds[voiceKey]) {
       console.log(`🔍 Using voice ID for ${characterId}: ${voiceIds[voiceKey]}`)
-      return voiceIds[voiceKey]
-    }
-
-    // Then try persona voiceId property
-    if (personas[characterId]?.voiceId) {
-      console.log(`🔍 Using persona voice ID for ${characterId}: ${personas[characterId].voiceId}`)
-      return personas[characterId].voiceId
+      return voiceKey // Return the key, not the ID - the speak API will map it
     }
 
     // Fallback to default voice names
