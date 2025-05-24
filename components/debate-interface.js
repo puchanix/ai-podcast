@@ -555,99 +555,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     [voiceIds, personas],
   )
 
-  // Main debate starting function (without introduction)
-  const startDebateMain = useCallback(
-    async (topic) => {
-      // Prevent multiple simultaneous starts
-      if (isStarting || isDebating) {
-        console.log("Debate already starting or in progress, ignoring duplicate start")
-        return
-      }
-
-      console.log("Starting debate with topic:", topic)
-      setIsStarting(true)
-      resetDebateState(false) // Pass false to prevent calling onDebateEnd
-      setCurrentTopic(topic)
-      setIsDebating(true)
-      setIsProcessing(true)
-      setIsSettingUp(true)
-      setStatusMessage("Preparing debate...")
-
-      // Set the current speaker to character1 immediately to show the correct image
-      setCurrentSpeaker(char1)
-
-      // Ensure audio is unlocked
-      await unlockAudio()
-
-      try {
-        const response = await fetch("/api/start-debate", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            character1: char1,
-            character2: char2,
-            topic,
-            format: debateFormat,
-            historicalContext,
-          }),
-        })
-
-        if (!response.ok) throw new Error("Failed to start debate")
-
-        const data = await response.json()
-        console.log("Debate started with data:", data)
-
-        // Store the debate messages
-        const messages = [
-          {
-            character: char1,
-            content: data.opening1,
-            timestamp: Date.now(),
-            audioUrl: data.audioUrl1,
-            responseType: "Opening Remarks",
-          },
-          {
-            character: char2,
-            content: data.opening2,
-            timestamp: Date.now() + 100,
-            audioUrl: data.audioUrl2,
-            responseType: "Opening Remarks",
-          },
-        ]
-
-        setDebateMessages(messages)
-        setIsSettingUp(false)
-
-        // Set the next speaker to be character2 (for the thinking UI)
-        setNextSpeaker(char2)
-
-        // Play the first character's audio and preload the second character's audio
-        playDebateAudio(messages[0], messages, 0)
-      } catch (error) {
-        console.error("Error starting debate:", error)
-        setIsDebating(false)
-        setIsSettingUp(false)
-        setAudioError(`Failed to start debate: ${error.message}`)
-      } finally {
-        setIsProcessing(false)
-        setIsStarting(false)
-      }
-    },
-    [char1, char2, debateFormat, historicalContext, resetDebateState, unlockAudio, isStarting, isDebating],
-  )
-
-  // Start a debate on a specific topic
-  const startDebate = useCallback(
-    async (topic) => {
-      console.log("startDebate called with topic:", topic)
-      // Skip introduction for faster start
-      startDebateMain(topic)
-    },
-    [startDebateMain],
-  )
-
   // Function to play debate audio
   const playDebateAudio = useCallback(
     async (message, allMessages, currentIndex) => {
@@ -827,6 +734,111 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       }
     },
     [getVoiceForCharacter, isAutoplaying, maxExchanges, volume, char1, char2, resetDebateState, personas],
+  )
+
+  // Main debate starting function (without introduction)
+  const startDebateMain = useCallback(
+    async (topic) => {
+      // Prevent multiple simultaneous starts
+      if (isStarting || isDebating) {
+        console.log("Debate already starting or in progress, ignoring duplicate start")
+        return
+      }
+
+      console.log("Starting debate with topic:", topic)
+      setIsStarting(true)
+      resetDebateState(false) // Pass false to prevent calling onDebateEnd
+      setCurrentTopic(topic)
+      setIsDebating(true)
+      setIsProcessing(true)
+      setIsSettingUp(true)
+      setStatusMessage("Preparing debate...")
+
+      // Set the current speaker to character1 immediately to show the correct image
+      setCurrentSpeaker(char1)
+
+      // Ensure audio is unlocked
+      await unlockAudio()
+
+      try {
+        const response = await fetch("/api/start-debate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            character1: char1,
+            character2: char2,
+            topic,
+            format: debateFormat,
+            historicalContext,
+          }),
+        })
+
+        if (!response.ok) throw new Error("Failed to start debate")
+
+        const data = await response.json()
+        console.log("Debate started with data:", data)
+
+        // Store the debate messages
+        const messages = [
+          {
+            character: char1,
+            content: data.opening1,
+            timestamp: Date.now(),
+            audioUrl: data.audioUrl1,
+            responseType: "Opening Remarks",
+          },
+          {
+            character: char2,
+            content: data.opening2,
+            timestamp: Date.now() + 100,
+            audioUrl: data.audioUrl2,
+            responseType: "Opening Remarks",
+          },
+        ]
+
+        setDebateMessages(messages)
+        setIsSettingUp(false)
+
+        // Set the next speaker to be character2 (for the thinking UI)
+        setNextSpeaker(char2)
+
+        // Play the first character's audio and preload the second character's audio
+        playDebateAudio(messages[0], messages, 0)
+      } catch (error) {
+        console.error("Error starting debate:", error)
+        setIsDebating(false)
+        setIsSettingUp(false)
+        setAudioError(`Failed to start debate: ${error.message}`)
+      } finally {
+        setIsProcessing(false)
+        setIsStarting(false)
+      }
+    },
+    [
+      char1,
+      char2,
+      debateFormat,
+      historicalContext,
+      resetDebateState,
+      unlockAudio,
+      isStarting,
+      isDebating,
+      playDebateAudio,
+    ],
+  )
+
+  // Start a debate on a specific topic
+  const startDebate = useCallback(
+    async (topic) => {
+      console.log("startDebate called with topic:", topic)
+      console.log("Characters:", char1, char2)
+      console.log("Dependencies loaded:", dependenciesLoaded)
+      // Skip introduction for faster start
+      startDebateMain(topic)
+    },
+    [startDebateMain],
   )
 
   // Add this function to toggle auto-play
