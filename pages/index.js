@@ -54,6 +54,9 @@ export default function Home() {
   // ADD VOICE IDS REF - Fix for voice persistence!
   const voiceIdsRef = useRef({})
 
+  // ADD SELECTED CHARACTERS REF - Fix for character persistence!
+  const selectedCharactersRef = useRef([])
+
   // Thinking messages for dynamic display
   const thinkingMessages = [
     "Thinking...",
@@ -181,6 +184,11 @@ export default function Home() {
   useEffect(() => {
     voiceIdsRef.current = voiceIds
   }, [voiceIds])
+
+  // UPDATE SELECTED CHARACTERS REF when selectedCharacters changes
+  useEffect(() => {
+    selectedCharactersRef.current = selectedCharacters
+  }, [selectedCharacters])
 
   // Thinking message rotation effect
   useEffect(() => {
@@ -357,7 +365,8 @@ export default function Home() {
   const processCustomTopicAudio = useCallback(
     async (audioBlob) => {
       console.log("🎤 [CUSTOM TOPIC] Processing custom topic audio...")
-      console.log("🎤 [CUSTOM TOPIC] Current selectedCharacters:", selectedCharacters)
+      console.log("🎤 [CUSTOM TOPIC] Current selectedCharacters state:", selectedCharacters)
+      console.log("🎤 [CUSTOM TOPIC] Current selectedCharacters ref:", selectedCharactersRef.current)
       setIsProcessingCustomTopic(true)
       setAudioError(null)
 
@@ -386,17 +395,21 @@ export default function Home() {
           throw new Error("No speech detected. Please try again.")
         }
 
+        // Use ref instead of state for characters
+        const currentCharacters = selectedCharactersRef.current
+        console.log("🎤 [CUSTOM TOPIC] Using characters from ref:", currentCharacters)
+
         // Validate we have characters before proceeding
-        if (!selectedCharacters || selectedCharacters.length !== 2) {
+        if (!currentCharacters || currentCharacters.length !== 2) {
           console.error("🎤 [CUSTOM TOPIC] No characters selected, cannot start debate")
           throw new Error("Please select two characters first")
         }
 
         // Start debate with the custom topic
         console.log("🎤 [CUSTOM TOPIC] Starting debate with custom topic:", text.trim())
-        console.log("🎤 [CUSTOM TOPIC] Using characters:", selectedCharacters)
+        console.log("🎤 [CUSTOM TOPIC] Using characters:", currentCharacters)
         setShowTopicSelector(false)
-        startDebate(text.trim())
+        startDebateWithCharacters(text.trim(), currentCharacters)
       } catch (error) {
         console.error("🎤 [CUSTOM TOPIC] Error processing custom topic audio:", error)
         setAudioError(`Error: ${error.message}`)
@@ -404,8 +417,8 @@ export default function Home() {
         setIsProcessingCustomTopic(false)
       }
     },
-    [selectedCharacters],
-  ) // Add selectedCharacters as dependency
+    [], // Remove selectedCharacters dependency since we're using ref
+  )
 
   const pauseAudio = useCallback(() => {
     if (audioRef.current && !audioRef.current.paused) {
@@ -554,6 +567,81 @@ export default function Home() {
       console.error("Error in audio generation:", error)
       setAudioError(`Audio error: ${error.message}`)
       setIsPlaying(false)
+    }
+  }
+
+  // Start debate function with explicit characters
+  const startDebateWithCharacters = async (topic, characters) => {
+    console.log("🎯 [START DEBATE WITH CHARS] Function called with topic:", topic)
+    console.log("🎯 [START DEBATE WITH CHARS] Using characters:", characters)
+
+    if (!characters || characters.length !== 2) {
+      console.error("🎯 [START DEBATE WITH CHARS] Invalid characters - returning early")
+      setAudioError("Please select exactly two characters to start a debate")
+      return
+    }
+
+    // Extract topic string if it's an object
+    const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
+    console.log("🎯 [START DEBATE WITH CHARS] Topic string extracted:", topicString)
+
+    console.log("🎯 [START DEBATE WITH CHARS] Setting debate state...")
+    setIsDebating(true)
+    setDebateTopic(topicString)
+    debateTopicRef.current = topicString
+    setCurrentSpeaker(characters[0])
+    setSpeakerStatus("thinking")
+    setDebateMessages([])
+    setDebateRound(0)
+    console.log("🎯 [START DEBATE WITH CHARS] Debate state set, making API call...")
+
+    try {
+      const response = await fetch("/api/start-debate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          character1: characters[0],
+          character2: characters[1],
+          topic: topicString,
+        }),
+      })
+
+      console.log("🎯 [START DEBATE WITH CHARS] API response status:", response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("🎯 [START DEBATE WITH CHARS] API error:", errorText)
+        throw new Error(`Failed to start debate: ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("🎯 [START DEBATE WITH CHARS] API response data:", data)
+
+      const messages = [
+        {
+          character: characters[0],
+          content: data.opening1,
+          timestamp: Date.now(),
+        },
+        {
+          character: characters[1],
+          content: data.opening2,
+          timestamp: Date.now() + 100,
+        },
+      ]
+
+      console.log("🎯 [START DEBATE WITH CHARS] Messages created:", messages)
+      setDebateMessages(messages)
+
+      // Start playing first message
+      console.log("🎯 [START DEBATE WITH CHARS] Starting audio playback...")
+      playDebateAudio(messages[0], messages, 0)
+    } catch (error) {
+      console.error("🎯 [START DEBATE WITH CHARS] Error starting debate:", error)
+      setAudioError(`Failed to start debate: ${error.message}`)
+      setIsDebating(false)
+      setSpeakerStatus(null)
+      setCurrentSpeaker(null)
     }
   }
 
