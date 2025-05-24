@@ -463,8 +463,12 @@ export default function Home() {
       return
     }
 
+    // Extract topic string if it's an object
+    const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
+    console.log("🔍 [DEBATE DEBUG] Topic string extracted:", topicString)
+
     setIsDebating(true)
-    setDebateTopic(topic)
+    setDebateTopic(topicString) // Make sure we set the topic properly
     setCurrentSpeaker(selectedCharacters[0])
     setSpeakerStatus("thinking")
     setDebateMessages([])
@@ -477,7 +481,7 @@ export default function Home() {
         body: JSON.stringify({
           character1: selectedCharacters[0],
           character2: selectedCharacters[1],
-          topic,
+          topic: topicString, // Use the extracted string
         }),
       })
 
@@ -522,6 +526,13 @@ export default function Home() {
     console.log("🔍 [DEBATE DEBUG] Current messages:", debateMessagesRef.current)
     console.log("🔍 [DEBATE DEBUG] Messages length:", debateMessagesRef.current.length)
 
+    // Validate we have a topic
+    if (!debateTopic || debateTopic.trim() === "") {
+      console.error("🔍 [DEBATE DEBUG] No topic available for continue")
+      setAudioError("Debate topic is missing. Cannot continue.")
+      return
+    }
+
     try {
       setSpeakerStatus("thinking")
       setCurrentSpeaker(selectedCharacters[0]) // Reset to first character for new round
@@ -530,7 +541,7 @@ export default function Home() {
         character1: selectedCharacters[0],
         character2: selectedCharacters[1],
         currentMessages: debateMessagesRef.current,
-        topic: debateTopic,
+        topic: debateTopic.trim(), // Ensure topic is trimmed
       }
 
       console.log("🔍 [DEBATE DEBUG] Request body being sent:", JSON.stringify(requestBody, null, 2))
@@ -746,8 +757,13 @@ export default function Home() {
     (topic) => {
       console.log("🔍 [DEBATE DEBUG] Topic selected:", topic)
       console.log("🔍 [DEBATE DEBUG] Selected characters:", selectedCharacters)
+
+      // Extract topic string properly
+      const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
+      console.log("🔍 [DEBATE DEBUG] Topic string for debate:", topicString)
+
       setShowTopicSelector(false)
-      startDebate(topic.title || topic)
+      startDebate(topicString)
     },
     [selectedCharacters],
   )
