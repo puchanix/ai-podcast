@@ -1,114 +1,68 @@
-// pages/api/auto-continue.js
 import OpenAI from "openai"
-import { personas } from "../../lib/personas"
+import { NextResponse } from "next/server"
 
-// Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" })
-  }
+const characters = {
+  daVinci:
+    "You are Leonardo da Vinci, the great Renaissance polymath. Speak with curiosity about art, science, and invention.",
+  socrates: "You are Socrates, the ancient Greek philosopher. Use the Socratic method, asking probing questions.",
+  frida:
+    "You are Frida Kahlo, the passionate Mexican artist. Speak with intensity about art, pain, love, and identity.",
+  shakespeare:
+    "You are William Shakespeare, the Bard of Avon. Speak poetically but accessibly about human nature, love, and drama.",
+  mozart:
+    "You are Wolfgang Amadeus Mozart, the classical composer. Speak passionately about music, creativity, and artistic expression.",
+}
 
+export async function POST(request) {
   try {
-    const { character1, character2, currentMessages, topic, format, historicalContext } = req.body
+    const { character1, character2, currentMessages, topic } = await request.json()
 
-    // Validate required fields
-    if (!character1 || !character2 || !currentMessages || !topic) {
-      return res.status(400).json({ error: "Missing required fields" })
+    if (!character1 || !character2 || !topic || !currentMessages) {
+      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
     }
 
-    // Get the personas for each character
-    const persona1 = personas[character1]
-    const persona2 = personas[character2]
+    // Build conversation context
+    const conversationContext = currentMessages.map((msg) => `${msg.character}: ${msg.content}`).join("\n\n")
 
-    if (!persona1 || !persona2) {
-      return res.status(400).json({ error: "Invalid character selection" })
-    }
-
-    // Generate responses in parallel
-    const [response1Promise, response2Promise] = [
-      generateResponse(persona1, persona2, currentMessages, topic, format, historicalContext),
-      generateResponse(persona2, persona1, currentMessages, topic, format, historicalContext),
-    ]
-
-    const [response1, response2] = await Promise.all([response1Promise, response2Promise])
-
-    // Get voice IDs for both characters
-    const voice1 = persona1.getVoiceId ? persona1.getVoiceId() : persona1.voiceId || "echo"
-    const voice2 = persona2.getVoiceId ? persona2.getVoiceId() : persona2.voiceId || "echo"
-
-    // Generate streaming audio URLs in parallel
-    const [audioUrl1, audioUrl2] = await Promise.all([
-      generateStreamingAudio(response1, voice1),
-      generateStreamingAudio(response2, voice2),
+    // Generate next responses for both characters
+    const [response1, response2] = await Promise.all([
+      generateResponse(character1, character2, topic, conversationContext),
+      generateResponse(character2, character1, topic, conversationContext),
     ])
 
-    res.status(200).json({
+    return NextResponse.json({
       response1,
       response2,
-      audioUrl1,
-      audioUrl2,
     })
   } catch (error) {
-    console.error("Error continuing debate:", error)
-    res.status(500).json({ error: "Failed to continue debate" })
+    console.error("Auto-continue API error:", error)
+    return NextResponse.json({ error: "Failed to continue debate" }, { status: 500 })
   }
 }
 
-// Function to generate a response for a character
-async function generateResponse(persona, otherPersona, currentMessages, topic, format, historicalContext) {
-  // Build conversation context (last few messages only to save tokens)
-  const recentMessages = currentMessages.slice(-4) // Only last 4 messages
-  const conversationContext = recentMessages
-    .map((msg) => {
-      if (msg.character === "user") {
-        return `Question: ${msg.content}`
-      } else {
-        const speaker = msg.character === persona.id ? persona.name : otherPersona.name
-        return `${speaker}: ${msg.content}`
-      }
-    })
-    .join("\n")
+async function generateResponse(character, opponent, topic, context) {
+  const systemPrompt = characters[character]
 
-  const systemPrompt = `${persona.systemPrompt}
-You are ${persona.name} in a debate with ${otherPersona.name} on "${topic}".
-Keep your response very concise (40-60 words maximum). Be direct and engaging.
+  const prompt = `You are continuing a debate about "${topic}" with ${opponent}. 
+  
+Previous conversation:
+${context}
 
-Recent conversation:
-${conversationContext}`
+Give your next response in 2-3 sentences. Stay true to your character and respond to the previous points made.`
 
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4", // Reverted back to GPT-4
-      messages: [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `Continue the debate. Give your next response. Be very concise and impactful.`,
-        },
-      ],
-      temperature: 0.7,
-      max_tokens: 80, // Reverted back to 80 tokens
-    })
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: prompt },
+    ],
+    max_tokens: 200,
+    temperature: 0.7,
+  })
 
-    return completion.choices[0].message.content.trim()
-  } catch (error) {
-    console.error("Error generating response:", error)
-    throw error
-  }
-}
-
-// Function to generate streaming audio URL
-async function generateStreamingAudio(text, voiceId) {
-  try {
-    // Return the streaming URL instead of generating audio immediately
-    const audioId = `debate_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
-    return `/api/stream-audio-realtime?id=${audioId}&text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId)}`
-  } catch (error) {
-    console.error("Error generating streaming audio:", error)
-    throw error
-  }
+  return completion.choices[0]?.message?.content || "I need to think more about this."
 }
