@@ -39,12 +39,11 @@ const staticDebateTopics = [
 ]
 
 export function DebateInterface({ character1, character2, initialTopic, onDebateEnd, embedded = false }) {
-  // Add at the top of the component, right after all the state declarations
-  const [hasError, setHasError] = useState(false)
-
   // Lazy load personas and debate state only on client side
   const [personas, setPersonas] = useState({})
   const [debateState, setDebateState] = useState(null)
+  const [dependenciesLoaded, setDependenciesLoaded] = useState(false)
+  const [loadingError, setLoadingError] = useState(null)
 
   // Initialize state from localStorage or defaults
   const [initialStateLoaded, setInitialStateLoaded] = useState(false)
@@ -54,6 +53,9 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [debateMessages, setDebateMessages] = useState([])
   const [currentTopic, setCurrentTopic] = useState("")
   const [exchangeCount, setExchangeCount] = useState(0)
+
+  // Add at the top of the component, right after all the state declarations
+  const [hasError, setHasError] = useState(false)
 
   // UI state
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
@@ -86,10 +88,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [statusMessage, setStatusMessage] = useState("")
   const [isSettingUp, setIsSettingUp] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
-
-  // Voice state
-  const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
+  const [isLoadingVoices, setIsLoadingVoices] = useState(true)
 
   // Refs
   const audioRef = useRef(null)
@@ -636,6 +636,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         return
       }
 
+      console.log("Starting debate with topic:", topic)
       setIsStarting(true)
       resetDebateState(false) // Pass false to prevent calling onDebateEnd
       setCurrentTopic(topic)
@@ -712,6 +713,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // Start a debate on a specific topic
   const startDebate = useCallback(
     async (topic) => {
+      console.log("startDebate called with topic:", topic)
       // Skip introduction for faster start
       startDebateMain(topic)
     },
@@ -1356,12 +1358,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
                 setTimeout(() => {
                   resetDebateState()
                 }, 2000) // Give a moment before resetting
-              } else if (isAutoplaying) {
-                // Continue to next exchange
-                setStatusMessage("Preparing next exchange...")
-                setTimeout(() => {
-                  continueDebate()
-                }, 1000)
               }
             }
           }
@@ -1393,17 +1389,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         setStatusMessage("")
       }
     },
-    [
-      getVoiceForCharacter,
-      isAutoplaying,
-      maxExchanges,
-      volume,
-      char1,
-      char2,
-      resetDebateState,
-      continueDebate,
-      personas,
-    ],
+    [getVoiceForCharacter, isAutoplaying, maxExchanges, volume, char1, char2, resetDebateState, personas],
   )
 
   // Add this function to toggle auto-play
@@ -1462,43 +1448,32 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     flexDirection: "column",
   }
 
-  // Add this useEffect to catch and recover from errors
-  useEffect(() => {
-    if (hasError) {
-      // Try to recover from error
-      const recoverFromError = async () => {
-        try {
-          // Stop any playing audio
-          if (currentAudioRef.current) {
-            currentAudioRef.current.pause()
-            currentAudioRef.current = null
-          }
-
-          // Clear any timeouts
-          if (prepareNextTimeoutRef.current) {
-            clearTimeout(prepareNextTimeoutRef.current)
-            prepareNextTimeoutRef.current = null
-          }
-
-          // Reset error state
-          setHasError(false)
-          setAudioError("An error occurred. The application has recovered.")
-        } catch (e) {
-          console.error("Failed to recover from error:", e)
-        }
-      }
-
-      recoverFromError()
-    }
-  }, [hasError])
-
   // Show loading state while dependencies are loading
-  if (!personas || !debateState || Object.keys(personas).length === 0) {
+  if (!dependenciesLoaded) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
           <p className="text-yellow-400">Loading debate interface...</p>
+          {loadingError && <p className="text-red-400 mt-2">Error: {loadingError}</p>}
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state if dependencies failed to load
+  if (loadingError) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">Failed to load debate interface</p>
+          <p className="text-gray-400 mb-4">{loadingError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+          >
+            Reload Page
+          </button>
         </div>
       </div>
     )
@@ -1662,7 +1637,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           {/* Voice Input for Custom Questions */}
           {embedded && isDebating && (
             <div className="mb-8 flex justify-center">
-              <VoiceInput onSubmit={submitCustomQuestion} buttonText="Ask Custom Question" />
+              <VoiceInput onSubmit={() => {}} buttonText="Ask Custom Question" />
             </div>
           )}
 
