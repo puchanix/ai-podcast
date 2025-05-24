@@ -5,9 +5,10 @@ import dynamic from "next/dynamic"
 
 // Dynamically import components that use browser APIs
 const EmbeddedTopicSelector = dynamic(
-  () => import("./embedded-topic-selector").then((mod) => ({ default: mod.EmbeddedTopicSelector })),
+  () => import("./embedded-topic-selector").then((mod) => mod.EmbeddedTopicSelector),
   {
     ssr: false,
+    loading: () => <div>Loading topic selector...</div>,
   },
 )
 
@@ -1690,7 +1691,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           )}
 
           {/* Topic Selector - Only show when not debating and not playing intro */}
-          {!isDebating && !isIntroPlaying && !embedded && (
+          {!isDebating && !isIntroPlaying && !embedded && dependenciesLoaded && (
             <div className="mb-8">
               <EmbeddedTopicSelector onSelectTopic={startDebate} character1={char1} character2={char2} />
             </div>
