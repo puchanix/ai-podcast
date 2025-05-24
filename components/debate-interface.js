@@ -545,14 +545,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     async (topic) => {
       console.log("🔍 === START DEBATE CALLED ===")
       console.log("🔍 startDebate called with topic:", topic)
-      console.log("🔍 Current state:", {
-        dependenciesLoaded,
-        initialStateLoaded,
-        char1,
-        char2,
-        isStarting,
-        isDebating,
-      })
 
       if (!dependenciesLoaded || !initialStateLoaded) {
         console.log("🔍 Dependencies not ready, saving topic for later...")
@@ -574,21 +566,83 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       console.log("🔍 Starting debate with topic:", topic)
       console.log("🔍 Using characters:", { char1, char2 })
 
-      setIsStarting(true)
-      setCurrentSpeaker(null)
-      setNextSpeaker(null)
-      setIsPlaying(false)
-      setIsAudioLoaded(false)
-      setAudioError(null)
-      setStatusMessage("Preparing debate...")
-
       updateCurrentTopic(topic)
       updateIsDebating(true)
       setIsProcessing(true)
-      setIsSettingUp(true)
 
       await unlockAudio()
 
+      try {
+        // First, generate and play the introduction while preparing the debate
+        const character1Obj = personas[char1]
+        const character2Obj = personas[char2]
+
+        if (character1Obj && character2Obj) {
+          setHasIntroduction(true)
+          setIsIntroPlaying(true)
+
+          // Generate introduction
+          const introResponse = await fetch("/api/generate-topic-introduction", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              topic,
+              character1: character1Obj.name,
+              character2: character2Obj.name,
+            }),
+          })
+
+          if (introResponse.ok) {
+            const introData = await introResponse.json()
+
+            // Play introduction audio while preparing the debate
+            if (introData.audioUrl && introAudioRef.current) {
+              introAudioRef.current.src = introData.audioUrl
+              introAudioRef.current.onended = () => {
+                setIsIntroPlaying(false)
+                // Introduction finished, start the actual debate
+                startActualDebate(topic)
+              }
+              introAudioRef.current.play()
+            } else {
+              // No intro audio, start debate immediately
+              setIsIntroPlaying(false)
+              startActualDebate(topic)
+            }
+          } else {
+            // Failed to generate intro, start debate immediately
+            setIsIntroPlaying(false)
+            startActualDebate(topic)
+          }
+        } else {
+          // No character objects, start debate immediately
+          startActualDebate(topic)
+        }
+      } catch (error) {
+        console.error("🔍 Error starting debate:", error)
+        updateIsDebating(false)
+        setAudioError(`Failed to start debate: ${error.message}`)
+        setIsProcessing(false)
+      }
+    },
+    [
+      dependenciesLoaded,
+      initialStateLoaded,
+      char1,
+      char2,
+      isStarting,
+      isDebating,
+      isProcessing,
+      personas,
+      updateCurrentTopic,
+      updateIsDebating,
+      unlockAudio,
+    ],
+  )
+
+  // Separate function for the actual debate start
+  const startActualDebate = useCallback(
+    async (topic) => {
       try {
         const requestBody = {
           character1: char1,
@@ -602,13 +656,9 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
         const response = await fetch("/api/start-debate", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestBody),
         })
-
-        console.log("🔍 Response status:", response.status)
 
         if (!response.ok) {
           const errorText = await response.text()
@@ -637,43 +687,34 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         ]
 
         updateDebateMessages(messages)
-        setIsSettingUp(false)
+        setCurrentSpeaker(char1)
         setNextSpeaker(char2)
 
-        console.log("🔍 Debate setup complete, starting first audio...")
-
         // Start playing the first character's opening statement
-        if (data.audioUrl1) {
-          await playAudio(data.audioUrl1, char1)
+        if (data.audioUrl1 && char1AudioRef.current) {
+          char1AudioRef.current.src = data.audioUrl1
+          char1AudioRef.current.onended = () => {
+            // Move to next speaker
+            setCurrentSpeaker(char2)
+            if (data.audioUrl2 && char2AudioRef.current) {
+              char2AudioRef.current.src = data.audioUrl2
+              char2AudioRef.current.play()
+            }
+          }
+          char1AudioRef.current.play()
+          setIsPlaying(true)
         }
 
-        console.log("🔍 Debate setup complete, visuals should now be active")
+        console.log("🔍 Debate setup complete")
       } catch (error) {
-        console.error("🔍 Error starting debate:", error)
+        console.error("🔍 Error in actual debate start:", error)
         updateIsDebating(false)
-        setIsSettingUp(false)
         setAudioError(`Failed to start debate: ${error.message}`)
       } finally {
         setIsProcessing(false)
-        setIsStarting(false)
       }
     },
-    [
-      dependenciesLoaded,
-      initialStateLoaded,
-      char1,
-      char2,
-      isStarting,
-      isDebating,
-      updateCurrentTopic,
-      updateIsDebating,
-      updateDebateMessages,
-      unlockAudio,
-      debateFormat,
-      historicalContext,
-      isProcessing,
-      playAudio,
-    ],
+    [char1, char2, debateFormat, historicalContext, updateDebateMessages],
   )
 
   // Auto-start when dependencies loaded and topic available - FIXED dependencies
@@ -792,70 +833,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         {!isDebating && !isIntroPlaying && dependenciesLoaded && (
           <div className="mb-8">
             <EmbeddedTopicSelector onSelectTopic={startDebate} character1={char1} character2={char2} />
-          </div>
-        )}
-
-        {/* Show debate title and controls when debate is active */}
-        {isDebating && currentTopic && (
-          <div className="mb-6 text-center">
-            <h2 className="text-2xl font-bold text-yellow-400 mb-4">DEBATE: {currentTopic}</h2>
-
-            {/* Audio controls */}
-            <div className="flex justify-center space-x-4 mb-4">
-              {isPlaying ? (
-                <>
-                  <button
-                    onClick={pauseAudio}
-                    className="px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
-                    title="Pause"
-                  >
-                    ⏸ Pause
-                  </button>
-                  <button
-                    onClick={stopAudio}
-                    className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                    title="Stop"
-                  >
-                    ⏹ Stop
-                  </button>
-                </>
-              ) : (
-                currentAudioRef.current &&
-                currentAudioRef.current.currentTime > 0 &&
-                !currentAudioRef.current.ended && (
-                  <button
-                    onClick={resumeAudio}
-                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                    title="Resume"
-                  >
-                    ▶ Resume
-                  </button>
-                )
-              )}
-
-              <button
-                onClick={() => resetDebateState(true)}
-                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                End Debate
-              </button>
-            </div>
-          </div>
-        )}
-
-        {(isSettingUp || isPreparing) && (
-          <div className="flex justify-center items-center mb-8">
-            <div className="text-center">
-              <div className="inline-block animate-spin h-10 w-10 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
-              <p className="text-yellow-400 text-lg">
-                {isSettingUp
-                  ? "Setting up the debate..."
-                  : isPreparing
-                    ? "Preparing next response..."
-                    : "Processing..."}
-              </p>
-              {statusMessage && <p className="text-yellow-300 text-sm mt-2">{statusMessage}</p>}
-            </div>
           </div>
         )}
 
