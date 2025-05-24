@@ -169,24 +169,30 @@ export default function Home() {
   }, [])
 
   const pauseAudio = useCallback(() => {
-    if (audioRef.current && isPlaying) {
+    console.log("Pause audio called")
+    if (audioRef.current && !audioRef.current.paused) {
       audioRef.current.pause()
       setIsPlaying(false)
+      console.log("Audio paused")
     }
-  }, [isPlaying])
+  }, [])
 
   const resumeAudio = useCallback(() => {
-    if (audioRef.current && !isPlaying) {
+    console.log("Resume audio called")
+    if (audioRef.current && audioRef.current.paused) {
       audioRef.current.play()
       setIsPlaying(true)
+      console.log("Audio resumed")
     }
-  }, [isPlaying])
+  }, [])
 
   const stopAudio = useCallback(() => {
+    console.log("Stop audio called")
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
       setIsPlaying(false)
+      console.log("Audio stopped")
     }
   }, [])
 
@@ -370,7 +376,7 @@ export default function Home() {
     [mode, selectedPersona, isListening, isProcessing, isPlaying, startListening, stopListening],
   )
 
-  // Small microphone icon component
+  // Small microphone icon component - Fixed SVG path
   const SmallMicIcon = ({ isActive }) => (
     <svg
       className={`w-4 h-4 ${isActive ? "text-orange-400 animate-pulse" : "text-gray-400"}`}
@@ -378,53 +384,28 @@ export default function Home() {
       viewBox="0 0 24 24"
     >
       <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6.92h-2z" />
+      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
     </svg>
   )
 
-  // Status display for character tiles (only for processing and playing)
-  const getCharacterStatus = (characterId) => {
-    if (selectedPersona !== characterId) return null
+  // Get status text for button display
+  const getStatusText = (characterId) => {
+    if (selectedPersona !== characterId) return "Ask Question"
 
-    if (isProcessing) {
-      return (
-        <div className="absolute inset-0 bg-blue-500 bg-opacity-20 rounded-xl flex items-center justify-center">
-          <div className="bg-blue-500 rounded-lg p-2 flex items-center space-x-2">
-            <div className="flex space-x-1">
-              <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
-              <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
-              <div className="w-2 h-2 bg-white rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
-            </div>
-            <span className="text-white text-sm font-semibold">{thinkingMessage}</span>
-          </div>
-        </div>
-      )
-    }
+    if (isListening) return "Stop Recording"
+    if (isProcessing) return thinkingMessage || "Processing..."
+    if (isPlaying) return "Speaking..."
+    return "Ask Question"
+  }
 
-    if (isPlaying) {
-      return (
-        <div className="absolute inset-0 bg-green-500 bg-opacity-20 rounded-xl flex items-center justify-center">
-          <div className="bg-green-500 rounded-lg p-2 flex items-center space-x-2">
-            <div className="flex space-x-1">
-              {[...Array(5)].map((_, i) => (
-                <div
-                  key={i}
-                  className="w-1 bg-white rounded-full animate-pulse"
-                  style={{
-                    height: "16px",
-                    animationDelay: `${i * 0.1}s`,
-                    animationDuration: "0.6s",
-                  }}
-                />
-              ))}
-            </div>
-            <span className="text-white text-sm font-semibold">Speaking...</span>
-          </div>
-        </div>
-      )
-    }
+  // Get button color based on status
+  const getButtonColor = (characterId) => {
+    if (selectedPersona !== characterId) return "bg-gray-700 text-white hover:bg-gray-600"
 
-    return null
+    if (isListening) return "bg-red-500 text-white"
+    if (isProcessing) return "bg-blue-500 text-white"
+    if (isPlaying) return "bg-green-500 text-white"
+    return "bg-yellow-500 text-black"
   }
 
   return (
@@ -511,30 +492,12 @@ export default function Home() {
                             <button
                               onClick={(e) => handleRecordingButtonClick(key, e)}
                               disabled={shouldGrayOut}
-                              className={`flex-1 py-1 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${
-                                selectedPersona === key && isListening
-                                  ? "bg-red-500 text-white"
-                                  : selectedPersona === key && isProcessing
-                                    ? "bg-blue-500 text-white"
-                                    : selectedPersona === key && isPlaying
-                                      ? "bg-green-500 text-white"
-                                      : selectedPersona === key
-                                        ? "bg-yellow-500 text-black"
-                                        : shouldGrayOut
-                                          ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                                          : "bg-gray-700 text-white hover:bg-gray-600"
+                              className={`flex-1 py-1 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
+                                shouldGrayOut ? "bg-gray-600 text-gray-400 cursor-not-allowed" : ""
                               }`}
                             >
                               <SmallMicIcon isActive={selectedPersona === key && isListening} />
-                              <span>
-                                {selectedPersona === key && isListening
-                                  ? "Stop Recording"
-                                  : selectedPersona === key && isProcessing
-                                    ? "Processing..."
-                                    : selectedPersona === key && isPlaying
-                                      ? "Speaking..."
-                                      : "Ask Question"}
-                              </span>
+                              <span className="truncate">{getStatusText(key)}</span>
                             </button>
 
                             {/* Pause/Resume/Stop buttons when playing */}
@@ -567,7 +530,8 @@ export default function Home() {
                             {selectedPersona === key &&
                               !isPlaying &&
                               audioRef.current &&
-                              audioRef.current.currentTime > 0 && (
+                              audioRef.current.currentTime > 0 &&
+                              !audioRef.current.ended && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
@@ -604,9 +568,6 @@ export default function Home() {
                         )}
                       </div>
                     </div>
-
-                    {/* Status overlay (only for processing and playing) */}
-                    {getCharacterStatus(key)}
                   </div>
                 </div>
               )
