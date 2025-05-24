@@ -500,10 +500,10 @@ export default function Home() {
     }
   }
 
-  // Play debate audio
-  const playDebateAudio = async (message, allMessages, currentIndex) => {
+  // Play debate audio with retry logic
+  const playDebateAudio = async (message, allMessages, currentIndex, retryCount = 0) => {
     const { character, content } = message
-    console.log(`🔍 [DEBATE DEBUG] Playing audio for ${character}`)
+    console.log(`🔍 [DEBATE DEBUG] Playing audio for ${character} (attempt ${retryCount + 1})`)
 
     setCurrentSpeaker(character)
     setSpeakerStatus("speaking")
@@ -512,11 +512,18 @@ export default function Home() {
       const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
       const voice = voiceIds[voiceKey] || "echo"
 
+      // Add timeout to the fetch request
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+
       const response = await fetch("/api/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: content, voice }),
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
 
       if (!response.ok) {
         throw new Error(`Audio API returned ${response.status}`)
@@ -551,8 +558,31 @@ export default function Home() {
       await audio.play()
     } catch (error) {
       console.error(`🔍 [DEBATE DEBUG] Error playing audio for ${character}:`, error)
+
+      // Retry logic for network timeouts
+      if ((error.name === "AbortError" || error.message.includes("Failed to fetch")) && retryCount < 2) {
+        console.log(`🔍 [DEBATE DEBUG] Retrying audio for ${character} in 3 seconds...`)
+        setSpeakerStatus("thinking")
+        setTimeout(() => {
+          playDebateAudio(message, allMessages, currentIndex, retryCount + 1)
+        }, 3000)
+        return
+      }
+
       setAudioError(`Audio failed for ${character}: ${error.message}`)
       setSpeakerStatus(null)
+
+      // Continue to next speaker even if current one fails
+      const nextIndex = currentIndex + 1
+      if (nextIndex < allMessages.length) {
+        setTimeout(() => {
+          playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
+        }, 2000)
+      } else {
+        setTimeout(() => {
+          endDebate()
+        }, 2000)
+      }
     }
   }
 
@@ -749,22 +779,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Debate Topic Display */}
-          {isDebating && debateTopic && (
-            <div className="mb-8 text-center">
-              <div className="bg-gray-800 rounded-lg p-4 inline-block">
-                <h2 className="text-xl font-bold text-yellow-400 mb-2">Current Debate Topic</h2>
-                <p className="text-gray-300">{debateTopic}</p>
-                <button
-                  onClick={endDebate}
-                  className="mt-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm"
-                >
-                  End Debate
-                </button>
-              </div>
-            </div>
-          )}
-
           {/* Instructions */}
           <div className="text-center mb-8">
             {mode === "debate" && selectedCharacters.length < 2 && !isDebating && (
@@ -789,8 +803,9 @@ export default function Home() {
                     isSelected ? "ring-4 ring-yellow-400" : ""
                   } ${shouldGrayOut ? "opacity-30" : ""} ${isCurrentDebateSpeaker ? "ring-4 ring-green-400" : ""}`}
                 >
-                  <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl aspect-square relative">
-                    <div className="h-2/3">
+                  <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl">
+                    {/* Image Section - Fixed Height */}
+                    <div className="h-48 relative">
                       <img
                         src={persona.image || "/placeholder.svg"}
                         alt={persona.name}
@@ -805,24 +820,28 @@ export default function Home() {
                       )}
                     </div>
 
-                    <div className="p-3 h-1/3 flex flex-col justify-between">
-                      <h3 className="text-sm font-bold text-yellow-400 truncate">{persona.name}</h3>
+                    {/* Content Section - Fixed Layout */}
+                    <div className="p-3 min-h-[120px] flex flex-col">
+                      {/* Character Name - Always at top */}
+                      <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
 
-                      {/* Show latest debate message if available */}
+                      {/* Latest Message - Only show if available and not too long */}
                       {latestMessage && mode === "debate" && isDebating && (
-                        <div className="mt-1 mb-2 p-2 bg-gray-700 rounded text-xs text-gray-300 max-h-16 overflow-hidden">
-                          {latestMessage.length > 60 ? latestMessage.substring(0, 60) + "..." : latestMessage}
+                        <div className="mb-2 p-2 bg-gray-700 rounded text-xs text-gray-300 flex-1 overflow-hidden">
+                          <div className="line-clamp-3">
+                            {latestMessage.length > 80 ? latestMessage.substring(0, 80) + "..." : latestMessage}
+                          </div>
                         </div>
                       )}
 
-                      {/* Dynamic Button */}
-                      <div className="mt-2 flex space-x-1">
+                      {/* Button Section - Always at bottom */}
+                      <div className="mt-auto flex space-x-1">
                         {mode === "question" ? (
                           <>
                             <button
                               onClick={(e) => handleRecordingButtonClick(key, e)}
                               disabled={shouldGrayOut}
-                              className={`flex-1 py-1 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
+                              className={`flex-1 py-2 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
                                 shouldGrayOut ? "bg-gray-600 text-gray-400 cursor-not-allowed" : ""
                               }`}
                             >
@@ -838,7 +857,7 @@ export default function Home() {
                                     e.stopPropagation()
                                     pauseAudio()
                                   }}
-                                  className="px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
+                                  className="px-2 py-2 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
                                   title="Pause"
                                 >
                                   ⏸
@@ -848,7 +867,7 @@ export default function Home() {
                                     e.stopPropagation()
                                     stopAudio()
                                   }}
-                                  className="px-2 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                                  className="px-2 py-2 bg-red-600 text-white rounded text-xs hover:bg-red-700"
                                   title="Stop"
                                 >
                                   ⏹
@@ -864,7 +883,7 @@ export default function Home() {
                                 handleCharacterSelect(key)
                               }
                             }}
-                            className={`w-full py-1 px-2 rounded text-xs font-semibold transition-all duration-300 ${getButtonColor(key)}`}
+                            className={`w-full py-2 px-2 rounded text-xs font-semibold transition-all duration-300 ${getButtonColor(key)}`}
                             disabled={
                               isDebating || (selectedCharacters.length >= 2 && !selectedCharacters.includes(key))
                             }
@@ -879,6 +898,22 @@ export default function Home() {
               )
             })}
           </div>
+
+          {/* Debate Topic Display - MOVED BELOW CHARACTERS */}
+          {isDebating && debateTopic && (
+            <div className="mb-8 text-center">
+              <div className="bg-gray-800 rounded-lg p-4 inline-block">
+                <h2 className="text-xl font-bold text-yellow-400 mb-2">Current Debate Topic</h2>
+                <p className="text-gray-300">{debateTopic}</p>
+                <button
+                  onClick={endDebate}
+                  className="mt-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm"
+                >
+                  End Debate
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Audio Error Display */}
           {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
@@ -916,8 +951,6 @@ export default function Home() {
               </div>
             </div>
           )}
-
-          {/* NO MORE DUPLICATE DEBATE INTERFACE - Everything is integrated above! */}
         </div>
       </div>
     </Layout>
