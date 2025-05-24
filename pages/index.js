@@ -41,6 +41,9 @@ export default function Home() {
   // ADD TOPIC REF - This is the key fix!
   const debateTopicRef = useRef("")
 
+  // ADD VOICE IDS REF - Fix for voice persistence!
+  const voiceIdsRef = useRef({})
+
   // Thinking messages for dynamic display
   const thinkingMessages = [
     "Thinking...",
@@ -73,6 +76,8 @@ export default function Home() {
           })
 
           setVoiceIds(data)
+          voiceIdsRef.current = data // ALSO SET THE REF!
+          console.log("🔍 [VOICE DEBUG] Voice IDs set in both state and ref")
         } else {
           console.error("🔍 [VOICE DEBUG] Failed to load voice IDs, status:", response.status)
         }
@@ -183,6 +188,12 @@ export default function Home() {
     console.log("🔍 [TOPIC DEBUG] Topic ref updated to:", debateTopic)
   }, [debateTopic])
 
+  // UPDATE VOICE IDS REF when voiceIds changes
+  useEffect(() => {
+    voiceIdsRef.current = voiceIds
+    console.log("🔍 [VOICE DEBUG] Voice IDs ref updated:", voiceIds)
+  }, [voiceIds])
+
   // Thinking message rotation effect
   useEffect(() => {
     let interval
@@ -251,28 +262,35 @@ export default function Home() {
       setAudioError(null)
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
+          echoCancellation: true, // ENABLE echo cancellation for better transcription
+          noiseSuppression: true, // ENABLE noise suppression
+          autoGainControl: true, // ENABLE auto gain control
+          sampleRate: 16000, // Use 16kHz for better Whisper compatibility
         },
       })
       streamRef.current = stream
 
-      const mediaRecorder = new MediaRecorder(stream)
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm;codecs=opus", // Use better codec if available
+      })
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
 
       mediaRecorder.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data)
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+          console.log("🔍 [AUDIO DEBUG] Audio chunk received, size:", event.data.size)
+        }
       }
 
       mediaRecorder.onstop = async () => {
-        console.log("🔍 [AUDIO DEBUG] Recording stopped")
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" })
+        console.log("🔍 [AUDIO DEBUG] Recording stopped, total chunks:", audioChunksRef.current.length)
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
+        console.log("🔍 [AUDIO DEBUG] Audio blob size:", audioBlob.size, "bytes")
         await processAudioQuestion(audioBlob)
       }
 
-      mediaRecorder.start()
+      mediaRecorder.start(1000) // Record in 1-second chunks
       setIsListening(true)
       console.log("🔍 [AUDIO DEBUG] Recording started")
     } catch (error) {
@@ -341,7 +359,9 @@ export default function Home() {
 
     try {
       const formData = new FormData()
-      formData.append("audio", audioBlob, "question.wav")
+      formData.append("audio", audioBlob, "question.webm") // Use correct extension
+
+      console.log("🔍 [AUDIO DEBUG] Sending audio for transcription, blob size:", audioBlob.size)
 
       const transcriptionResponse = await fetch("/api/transcribe", {
         method: "POST",
@@ -349,7 +369,9 @@ export default function Home() {
       })
 
       if (!transcriptionResponse.ok) {
-        throw new Error("Failed to transcribe audio")
+        const errorText = await transcriptionResponse.text()
+        console.error("🔍 [AUDIO DEBUG] Transcription API error:", errorText)
+        throw new Error("Failed to transcribe audio: " + errorText)
       }
 
       const { text } = await transcriptionResponse.json()
@@ -403,15 +425,18 @@ export default function Home() {
     try {
       const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
 
+      // USE REF INSTEAD OF STATE for voice IDs!
+      const currentVoiceIds = voiceIdsRef.current
+
       console.log("🔍 [VOICE DEBUG] generateAudioResponse called with:")
       console.log("🔍 [VOICE DEBUG] - persona:", persona)
       console.log("🔍 [VOICE DEBUG] - voiceKey:", voiceKey)
-      console.log("🔍 [VOICE DEBUG] - voiceIds state:", voiceIds)
-      console.log("🔍 [VOICE DEBUG] - voiceIds keys:", Object.keys(voiceIds))
-      console.log("🔍 [VOICE DEBUG] - voiceIds[voiceKey]:", voiceIds[voiceKey])
-      console.log("🔍 [VOICE DEBUG] - typeof voiceIds[voiceKey]:", typeof voiceIds[voiceKey])
+      console.log("🔍 [VOICE DEBUG] - voiceIds from ref:", currentVoiceIds)
+      console.log("🔍 [VOICE DEBUG] - voiceIds keys from ref:", Object.keys(currentVoiceIds))
+      console.log("🔍 [VOICE DEBUG] - voiceIds[voiceKey] from ref:", currentVoiceIds[voiceKey])
+      console.log("🔍 [VOICE DEBUG] - typeof voiceIds[voiceKey]:", typeof currentVoiceIds[voiceKey])
 
-      let voice = voiceIds[voiceKey]
+      let voice = currentVoiceIds[voiceKey]
 
       if (voice && voice.length > 10) {
         console.log(`🔍 [VOICE DEBUG] Using custom voice ID for ${persona}: ${voice}`)
@@ -616,7 +641,8 @@ export default function Home() {
 
     try {
       const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
-      const voice = voiceIds[voiceKey] || "echo"
+      const currentVoiceIds = voiceIdsRef.current // Use ref for voice IDs
+      const voice = currentVoiceIds[voiceKey] || "echo"
 
       // Add timeout to the fetch request
       const controller = new AbortController()
