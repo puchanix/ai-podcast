@@ -400,7 +400,7 @@ export default function Home() {
 
   // Handle debate end/reset
   const handleDebateEnd = useCallback(() => {
-    console.log("Debate ended, returning to home")
+    console.log("Debate manually ended, returning to home")
     setIsDebating(false)
     setDebateTopic("")
     setSelectedCharacters([])
