@@ -695,15 +695,15 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           <div className="mb-8">
             <EmbeddedTopicSelector
               onSelectTopic={startDebate}
-              character1={char1}
-              character2={char2}
-              isDebating={isDebating}
-              currentSpeaker={currentSpeaker}
-              isPlaying={isPlaying}
-              isLoadingAudio={isLoadingAudio}
-              thinkingMessage={thinkingMessage}
-              char1Status={char1Status}
-              char2Status={char2Status}
+              character1={char1 || ""}
+              character2={char2 || ""}
+              isDebating={isDebating || false}
+              currentSpeaker={currentSpeaker || null}
+              isPlaying={isPlaying || false}
+              isLoadingAudio={isLoadingAudio || false}
+              thinkingMessage={thinkingMessage || ""}
+              char1Status={char1Status || "Ready"}
+              char2Status={char2Status || "Ready"}
             />
           </div>
         )}
