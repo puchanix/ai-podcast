@@ -384,21 +384,21 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
   function getCategoryColor(category) {
     switch (category) {
       case "science":
-        return "bg-blue-600/20 border-blue-500/30"
+        return "bg-blue-500/30 border-blue-400/50"
       case "philosophy":
-        return "bg-purple-600/20 border-purple-500/30"
+        return "bg-purple-500/30 border-purple-400/50"
       case "politics":
-        return "bg-red-600/20 border-red-500/30"
+        return "bg-red-500/30 border-red-400/50"
       case "arts":
-        return "bg-yellow-600/20 border-yellow-500/30"
+        return "bg-yellow-500/30 border-yellow-400/50"
       case "technology":
-        return "bg-green-600/20 border-green-500/30"
+        return "bg-green-500/30 border-green-400/50"
       case "history":
-        return "bg-orange-600/20 border-orange-500/30"
+        return "bg-orange-500/30 border-orange-400/50"
       case "education":
-        return "bg-teal-600/20 border-teal-500/30"
+        return "bg-teal-500/30 border-teal-400/50"
       default:
-        return "bg-gray-600/20 border-gray-500/30"
+        return "bg-gray-500/30 border-gray-400/50"
     }
   }
 
@@ -506,10 +506,9 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
   }
 
   return (
-    <div className="bg-gray-800 rounded-xl p-8 w-full">
-      <div className="mb-6">
+    <div className="bg-gray-800 rounded-xl p-6 w-full">
+      <div className="mb-4">
         <h2 className="text-2xl font-bold text-yellow-400 mb-2">Select a Debate Topic</h2>
-        <p className="text-gray-300">Choose from these curated topics or speak your own</p>
       </div>
 
       {isLoading ? (
@@ -521,11 +520,11 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
         <>
           {error && <div className="mb-6 p-4 bg-red-900/50 text-red-200 rounded-lg text-sm">{error}</div>}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             {topics.map((topic, index) => (
               <div
                 key={topic.id || index}
-                className={`border-2 rounded-xl p-6 cursor-pointer hover:bg-gray-700/50 transition-all duration-300 hover:scale-105 ${getCategoryColor(topic.category)}`}
+                className={`border-2 rounded-xl p-4 cursor-pointer hover:bg-gray-700/50 transition-all duration-300 hover:scale-105 ${getCategoryColor(topic.category)}`}
                 onClick={() => onSelectTopic(topic.title)}
               >
                 <div className="flex items-start space-x-4">
@@ -541,7 +540,7 @@ export function EmbeddedTopicSelector({ onSelectTopic, character1, character2 })
         </>
       )}
 
-      <div className="border-t border-gray-700 pt-6 flex justify-center">
+      <div className="border-t border-gray-700 pt-4 flex justify-center">
         <div className="flex flex-col items-center">
           <button
             onClick={isListening ? stopListening : startListening}
