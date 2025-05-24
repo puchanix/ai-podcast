@@ -369,8 +369,8 @@ export default function Home() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: question,
-          persona: persona,
+          messages: [{ role: "user", content: question }],
+          character: persona,
         }),
       })
 
@@ -378,7 +378,7 @@ export default function Home() {
         throw new Error("Failed to generate response")
       }
 
-      const { response: responseText } = await textResponse.json()
+      const { content: responseText } = await textResponse.json()
       console.log("🔍 [AUDIO DEBUG] Generated response:", responseText)
 
       await generateAudioResponse(responseText, persona)
@@ -613,10 +613,10 @@ export default function Home() {
         } else {
           // Check if we should continue with more rounds
           const currentRound = debateRoundRef.current
-          console.log(`🔍 [DEBATE DEBUG] Finished round ${currentRound}, checking if should continue...`)
+          console.log(`🔍 [DEBATE DEBUG] Finished round ${currentRound}, total messages: ${allMessages.length}`)
 
-          if (currentRound < 3) {
-            // Allow up to 3 additional rounds after opening
+          // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
+          if (allMessages.length < 8) {
             setTimeout(() => {
               continueDebate()
             }, 2000)
