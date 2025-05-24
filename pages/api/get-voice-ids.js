@@ -1,31 +1,18 @@
-// pages/api/get-voice-ids.js
-export default async function handler(req, res) {
-    try {
-      // Return the voice IDs from environment variables
-      const voiceIds = {
-        davinci: process.env.ELEONARDO_VOICE_ID || null,
-        socrates: process.env.SOCRATES_VOICE_ID || null,
-        frida: process.env.FRIDA_VOICE_ID || null,
-        shakespeare: process.env.SHAKESPEARE_VOICE_ID || null,
-        mozart: process.env.MOZART_VOICE_ID || null,
-      }
-  
-      // Log the voice IDs for debugging
-      console.log("API returning voice IDs:", voiceIds)
-  
-      // Check if any voice IDs are missing
-      const missingVoices = Object.entries(voiceIds)
-        .filter(([key, value]) => !value)
-        .map(([key]) => key)
-  
-      if (missingVoices.length > 0) {
-        console.warn(`Warning: Missing voice IDs for: ${missingVoices.join(", ")}`)
-      }
-  
-      res.status(200).json(voiceIds)
-    } catch (error) {
-      console.error("Error getting voice IDs:", error)
-      res.status(500).json({ error: "Failed to get voice IDs" })
+export default function handler(req, res) {
+    if (req.method !== "GET") {
+      return res.status(405).json({ error: "Method not allowed" })
     }
+  
+    // Return the voice IDs from environment variables
+    const voiceIds = {
+      davinci: process.env.ELEONARDO_VOICE_ID || "21m00Tcm4TlvDq8ikWAM",
+      socrates: process.env.SOCRATES_VOICE_ID || "21m00Tcm4TlvDq8ikWAM",
+      frida: process.env.FRIDA_VOICE_ID || "pMsXgVXv3BLzUgSXRplE",
+      shakespeare: process.env.SHAKESPEARE_VOICE_ID || "21m00Tcm4TlvDq8ikWAM",
+      mozart: process.env.MOZART_VOICE_ID || "21m00Tcm4TlvDq8ikWAM",
+    }
+  
+    console.log("🔍 Returning voice IDs:", voiceIds)
+    res.status(200).json(voiceIds)
   }
   

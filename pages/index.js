@@ -103,7 +103,7 @@ export default function Home() {
         setLoadingTopics(true)
         try {
           console.log("Fetching topics for:", selectedCharacters)
-          const response = await fetch("/pages/api/generate-character-topics", {
+          const response = await fetch("/api/generate-character-topics", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
