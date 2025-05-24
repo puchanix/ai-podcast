@@ -295,6 +295,7 @@ export default function Home() {
   // Custom topic recording functions
   const startCustomTopicRecording = useCallback(async () => {
     try {
+      console.log("🎤 [CUSTOM TOPIC] Starting custom topic recording...")
       setAudioError(null)
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -305,6 +306,7 @@ export default function Home() {
         },
       })
       customTopicStreamRef.current = stream
+      console.log("🎤 [CUSTOM TOPIC] Got media stream")
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: "audio/webm;codecs=opus",
@@ -315,65 +317,79 @@ export default function Home() {
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           customTopicAudioChunksRef.current.push(event.data)
+          console.log("🎤 [CUSTOM TOPIC] Audio chunk received, size:", event.data.size)
         }
       }
 
       mediaRecorder.onstop = async () => {
+        console.log("🎤 [CUSTOM TOPIC] Recording stopped, processing...")
         const audioBlob = new Blob(customTopicAudioChunksRef.current, { type: "audio/webm" })
+        console.log("🎤 [CUSTOM TOPIC] Audio blob created, size:", audioBlob.size)
         await processCustomTopicAudio(audioBlob)
       }
 
       mediaRecorder.start(1000)
       setIsRecordingCustomTopic(true)
+      console.log("🎤 [CUSTOM TOPIC] Recording started")
     } catch (error) {
-      console.error("Error accessing microphone for custom topic:", error)
+      console.error("🎤 [CUSTOM TOPIC] Error accessing microphone:", error)
       setAudioError("Could not access microphone. Please check permissions.")
     }
   }, [])
 
   const stopCustomTopicRecording = useCallback(() => {
+    console.log("🎤 [CUSTOM TOPIC] Stopping custom topic recording...")
     if (customTopicMediaRecorderRef.current && customTopicMediaRecorderRef.current.state === "recording") {
       customTopicMediaRecorderRef.current.stop()
       setIsRecordingCustomTopic(false)
+      console.log("🎤 [CUSTOM TOPIC] MediaRecorder stopped")
     }
 
     if (customTopicStreamRef.current) {
       customTopicStreamRef.current.getTracks().forEach((track) => {
         track.stop()
+        console.log("🎤 [CUSTOM TOPIC] Track stopped:", track.kind)
       })
       customTopicStreamRef.current = null
     }
   }, [])
 
   const processCustomTopicAudio = useCallback(async (audioBlob) => {
+    console.log("🎤 [CUSTOM TOPIC] Processing custom topic audio...")
     setIsProcessingCustomTopic(true)
     setAudioError(null)
 
     try {
       const formData = new FormData()
       formData.append("audio", audioBlob, "custom-topic.webm")
+      console.log("🎤 [CUSTOM TOPIC] Sending to transcription API...")
 
       const transcriptionResponse = await fetch("/api/transcribe", {
         method: "POST",
         body: formData,
       })
 
+      console.log("🎤 [CUSTOM TOPIC] Transcription response status:", transcriptionResponse.status)
+
       if (!transcriptionResponse.ok) {
         const errorText = await transcriptionResponse.text()
+        console.error("🎤 [CUSTOM TOPIC] Transcription error:", errorText)
         throw new Error("Failed to transcribe audio: " + errorText)
       }
 
       const { text } = await transcriptionResponse.json()
+      console.log("🎤 [CUSTOM TOPIC] Transcribed text:", text)
 
       if (!text || text.trim().length === 0) {
         throw new Error("No speech detected. Please try again.")
       }
 
       // Start debate with the custom topic
+      console.log("🎤 [CUSTOM TOPIC] Starting debate with custom topic:", text.trim())
       setShowTopicSelector(false)
       startDebate(text.trim())
     } catch (error) {
-      console.error("Error processing custom topic audio:", error)
+      console.error("🎤 [CUSTOM TOPIC] Error processing custom topic audio:", error)
       setAudioError(`Error: ${error.message}`)
     } finally {
       setIsProcessingCustomTopic(false)
@@ -842,17 +858,23 @@ export default function Home() {
 
   // Get status text for button display
   const getStatusText = (characterId) => {
-    if (mode === "debate" && isDebating) {
-      if (characterId === currentSpeaker) {
-        return speakerStatus === "thinking"
-          ? "Thinking..."
-          : speakerStatus === "speaking"
-            ? "Speaking..."
-            : "Waiting..."
+    if (mode === "debate") {
+      if (isDebating) {
+        if (characterId === currentSpeaker) {
+          return speakerStatus === "thinking"
+            ? "Thinking..."
+            : speakerStatus === "speaking"
+              ? "Speaking..."
+              : "Waiting..."
+        }
+        return selectedCharacters.includes(characterId) ? "Waiting turn" : "Watching"
+      } else {
+        // When not debating but in debate mode, show "Select" for unselected characters
+        return selectedCharacters.includes(characterId) ? "Selected" : "Select"
       }
-      return selectedCharacters.includes(characterId) ? "Waiting turn" : "Watching"
     }
 
+    // Question mode logic remains the same
     if (selectedPersona !== characterId) return "Ask Question"
     if (isListening) return "Stop Recording"
     if (isProcessing) return thinkingMessage || "Processing..."
