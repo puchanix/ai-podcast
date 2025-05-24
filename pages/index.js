@@ -502,14 +502,10 @@ export default function Home() {
 
   const processQuestionWithStreaming = async (question, persona) => {
     try {
-      console.log("⏱️ [TIMING] Starting question processing at:", Date.now())
+      console.log("⏱️ [STREAMING] Starting real-time streaming at:", Date.now())
       setIsPlaying(true)
 
-      // Start text generation
-      const textStartTime = Date.now()
-      console.log("⏱️ [TIMING] Starting text generation at:", textStartTime)
-
-      const textResponse = await fetch("/api/chat", {
+      const response = await fetch("/api/chat-stream", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -520,184 +516,120 @@ export default function Home() {
         }),
       })
 
-      if (!textResponse.ok) {
-        throw new Error("Failed to generate response")
+      if (!response.ok) {
+        throw new Error("Failed to start streaming")
       }
 
-      const { content: responseText } = await textResponse.json()
-      const textEndTime = Date.now()
-      console.log("⏱️ [TIMING] Text generation completed in:", textEndTime - textStartTime + "ms")
-      console.log("⏱️ [TIMING] Generated text length:", responseText.length, "characters")
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
 
-      // Break text into sentences and start streaming audio
-      console.log("⏱️ [TIMING] Starting sentence-by-sentence audio at:", textEndTime)
-      await generateStreamingAudioResponse(responseText, persona)
+      let accumulatedText = ""
+      const audioQueue = []
+      let isFirstChunk = true
+      let currentAudioIndex = 0
+      let isPlaying = false
+
+      const playNextAudio = async () => {
+        if (currentAudioIndex < audioQueue.length && audioQueue[currentAudioIndex]) {
+          const audioUrl = audioQueue[currentAudioIndex]
+          const audio = new Audio(audioUrl)
+          audioRef.current = audio
+
+          audio.onended = () => {
+            currentAudioIndex++
+            playNextAudio()
+          }
+
+          audio.onerror = () => {
+            currentAudioIndex++
+            playNextAudio()
+          }
+
+          await audio.play()
+          isPlaying = true
+        } else {
+          // Check if streaming is complete
+          setTimeout(() => {
+            if (currentAudioIndex >= audioQueue.length) {
+              setIsPlaying(false)
+              setIsPaused(false)
+            } else {
+              playNextAudio()
+            }
+          }, 100)
+        }
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split("\n").filter((line) => line.trim())
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line)
+
+            if (data.type === "chunk" && data.content) {
+              accumulatedText += data.content
+              console.log("⏱️ [STREAMING] Received chunk:", data.content.substring(0, 30) + "...")
+
+              // Generate audio for this chunk immediately
+              const chunkStartTime = Date.now()
+
+              try {
+                const audioResponse = await fetch("/api/speak-fast", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    text: data.content,
+                    voice: getVoiceForPersona(persona),
+                  }),
+                })
+
+                if (audioResponse.ok) {
+                  const { audioUrl } = await audioResponse.json()
+                  audioQueue.push(audioUrl)
+
+                  const chunkTime = Date.now() - chunkStartTime
+                  console.log("⏱️ [STREAMING] Chunk audio generated in:", chunkTime + "ms")
+
+                  // Start playing if this is the first chunk
+                  if (isFirstChunk) {
+                    isFirstChunk = false
+                    const firstAudioTime = Date.now() - chunkStartTime
+                    console.log("⏱️ [STREAMING] FIRST AUDIO READY IN:", firstAudioTime + "ms")
+                    playNextAudio()
+                  }
+                }
+              } catch (audioError) {
+                console.error("Audio generation error:", audioError)
+              }
+            } else if (data.type === "complete") {
+              console.log("⏱️ [STREAMING] Streaming complete")
+              break
+            } else if (data.type === "error") {
+              throw new Error(data.content)
+            }
+          } catch (parseError) {
+            console.error("Parse error:", parseError)
+          }
+        }
+      }
     } catch (error) {
-      console.error("Error in parallel processing:", error)
+      console.error("Error in streaming:", error)
       setAudioError(`Error: ${error.message}`)
       setIsPlaying(false)
     }
   }
 
-  const generateStreamingAudioResponse = async (text, persona) => {
-    try {
-      const streamStartTime = Date.now()
-      console.log("🎵 [STREAMING] Starting streaming audio at:", streamStartTime)
-
-      // Split text into sentences
-      const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
-      console.log("🎵 [STREAMING] Split into", sentences.length, "sentences")
-
-      // Get voice settings
-      const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
-      const currentVoiceIds = voiceIdsRef.current
-      let voice = currentVoiceIds[voiceKey]
-
-      if (voice && voice.length > 10) {
-        console.log("🎵 [STREAMING] Using custom voice:", voiceKey)
-      } else {
-        voice = "echo"
-        console.log("🎵 [STREAMING] Using default voice: echo")
-      }
-
-      // Start with first sentence to get audio playing ASAP
-      const firstSentence = sentences[0]?.trim()
-      if (!firstSentence) {
-        throw new Error("No valid sentences found")
-      }
-
-      console.log("🎵 [STREAMING] Generating first sentence:", firstSentence.substring(0, 50) + "...")
-
-      const firstAudioStartTime = Date.now()
-      const firstResponse = await fetch("/api/speak", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: firstSentence,
-          voice: voice,
-        }),
-      })
-
-      if (!firstResponse.ok) {
-        throw new Error(`First audio generation failed: ${firstResponse.status}`)
-      }
-
-      const { audioUrl: firstAudioUrl } = await firstResponse.json()
-      const firstAudioTime = Date.now() - firstAudioStartTime
-      console.log("🎵 [STREAMING] First sentence audio generated in:", firstAudioTime + "ms")
-
-      // Start playing first sentence immediately
-      const firstAudio = new Audio(firstAudioUrl)
-      audioRef.current = firstAudio
-
-      let isFirstAudio = true
-      const audioQueue = []
-      let currentAudioIndex = 0
-
-      // Generate remaining sentences in parallel
-      if (sentences.length > 1) {
-        console.log("🎵 [STREAMING] Starting parallel generation of remaining", sentences.length - 1, "sentences")
-
-        const remainingPromises = sentences.slice(1).map(async (sentence, index) => {
-          try {
-            const sentenceStartTime = Date.now()
-            const response = await fetch("/api/speak", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                text: sentence.trim(),
-                voice: voice,
-              }),
-            })
-
-            if (!response.ok) {
-              console.error(`Sentence ${index + 2} audio failed:`, response.status)
-              return null
-            }
-
-            const { audioUrl } = await response.json()
-            const sentenceTime = Date.now() - sentenceStartTime
-            console.log(`🎵 [STREAMING] Sentence ${index + 2} generated in:`, sentenceTime + "ms")
-
-            return { audioUrl, index: index + 1 }
-          } catch (error) {
-            console.error(`Error generating sentence ${index + 2}:`, error)
-            return null
-          }
-        })
-
-        // Process remaining audio as it becomes available
-        Promise.allSettled(remainingPromises).then((results) => {
-          results.forEach((result) => {
-            if (result.status === "fulfilled" && result.value) {
-              audioQueue[result.value.index] = result.value.audioUrl
-            }
-          })
-        })
-      }
-
-      // Audio playback chain
-      const playNextAudio = () => {
-        if (isFirstAudio) {
-          isFirstAudio = false
-          currentAudioIndex = 1
-        }
-
-        // Check if next audio is ready
-        if (currentAudioIndex < sentences.length && audioQueue[currentAudioIndex]) {
-          const nextAudio = new Audio(audioQueue[currentAudioIndex])
-          audioRef.current = nextAudio
-
-          nextAudio.onended = () => {
-            currentAudioIndex++
-            playNextAudio()
-          }
-
-          nextAudio.onerror = (e) => {
-            console.error("Audio playback error:", e)
-            currentAudioIndex++
-            playNextAudio()
-          }
-
-          nextAudio.play().catch((e) => {
-            console.error("Audio play error:", e)
-            currentAudioIndex++
-            playNextAudio()
-          })
-        } else if (currentAudioIndex >= sentences.length) {
-          // All audio finished
-          setIsPlaying(false)
-          setIsPaused(false)
-          const totalTime = Date.now() - streamStartTime
-          console.log("🎵 [STREAMING] Total streaming audio completed in:", totalTime + "ms")
-        } else {
-          // Wait for next audio to be ready
-          setTimeout(playNextAudio, 100)
-        }
-      }
-
-      firstAudio.onended = playNextAudio
-      firstAudio.onerror = (e) => {
-        console.error("First audio playback error:", e)
-        setAudioError("Audio playback failed")
-        setIsPlaying(false)
-        setIsPaused(false)
-      }
-
-      const playStartTime = Date.now()
-      await firstAudio.play()
-      const timeToFirstAudio = playStartTime - streamStartTime
-      console.log("🎵 [STREAMING] First audio started playing after:", timeToFirstAudio + "ms")
-      console.log("🎵 [STREAMING] FIRST AUDIO RESPONSE TIME:", timeToFirstAudio + "ms")
-    } catch (error) {
-      console.error("Error in streaming audio generation:", error)
-      setAudioError(`Audio error: ${error.message}`)
-      setIsPlaying(false)
-    }
+  const getVoiceForPersona = (persona) => {
+    const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
+    const currentVoiceIds = voiceIdsRef.current
+    return currentVoiceIds[voiceKey] || "echo"
   }
 
   const generateAudioResponse = async (text, persona) => {

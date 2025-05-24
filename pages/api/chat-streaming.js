@@ -23,53 +23,94 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log("🔍 [CHAT DEBUG] Chat API called with body:", req.body)
     const { messages, character, message, persona } = req.body
-
-    // Handle both old and new API formats
     const characterKey = character || persona
     const userMessage = message || (messages && messages[0]?.content)
 
     if (!characterKey || !userMessage) {
-      console.error("🔍 [CHAT DEBUG] Missing required parameters:", {
-        character: characterKey,
-        message: userMessage,
-      })
       return res.status(400).json({ error: "Missing character or message" })
     }
 
-    console.log("🔍 [CHAT DEBUG] Processing request for character:", characterKey)
-    console.log("🔍 [CHAT DEBUG] User message:", userMessage)
-
     const systemPrompt = characters[characterKey]
     if (!systemPrompt) {
-      console.error("🔍 [CHAT DEBUG] Unknown character:", characterKey)
       return res.status(400).json({ error: `Unknown character: ${characterKey}` })
     }
 
-    const completion = await openai.chat.completions.create({
+    // Set up streaming response
+    res.writeHead(200, {
+      "Content-Type": "text/plain",
+      "Transfer-Encoding": "chunked",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    })
+
+    const stream = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      max_tokens: 80, // Verify this is 100
+      max_tokens: 80,
       temperature: 0.7,
+      stream: true,
     })
 
-    console.log("🔍 [CHAT DEBUG] Token limit used:", 100)
+    let accumulatedText = ""
+    let wordCount = 0
+    const CHUNK_SIZE = 15 // Send chunk after 15 words
 
-    const response = completion.choices[0]?.message?.content || "I need to think more about this."
-    console.log("🔍 [CHAT DEBUG] Generated response:", response.substring(0, 100) + "...")
-    console.log("🔍 [CHAT DEBUG] Response length:", response.length, "characters")
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || ""
+      if (content) {
+        accumulatedText += content
+        wordCount += content.split(" ").length - 1
 
-    // Return in both formats for compatibility
-    return res.status(200).json({
-      content: response, // New format
-      response: response, // Old format
-    })
+        // Send chunk when we have enough words or hit sentence boundary
+        if (wordCount >= CHUNK_SIZE || content.includes(".") || content.includes("!") || content.includes("?")) {
+          res.write(
+            JSON.stringify({
+              type: "chunk",
+              content: accumulatedText.trim(),
+              isComplete: false,
+            }) + "\n",
+          )
+
+          accumulatedText = ""
+          wordCount = 0
+        }
+      }
+    }
+
+    // Send final chunk
+    if (accumulatedText.trim()) {
+      res.write(
+        JSON.stringify({
+          type: "chunk",
+          content: accumulatedText.trim(),
+          isComplete: false,
+        }) + "\n",
+      )
+    }
+
+    // Send completion signal
+    res.write(
+      JSON.stringify({
+        type: "complete",
+        content: "",
+        isComplete: true,
+      }) + "\n",
+    )
+
+    res.end()
   } catch (error) {
-    console.error("🔍 [CHAT DEBUG] Chat API error:", error)
-    return res.status(500).json({ error: "Failed to generate response" })
+    console.error("Streaming chat error:", error)
+    res.write(
+      JSON.stringify({
+        type: "error",
+        content: error.message,
+        isComplete: true,
+      }) + "\n",
+    )
+    res.end()
   }
 }
