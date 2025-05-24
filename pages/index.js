@@ -656,69 +656,6 @@ export default function Home() {
           {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
 
           {/* Dynamic Content Area */}
-          {!showTopicSelector && (
-            <div className="mb-12">
-              <h2 className="text-3xl font-bold text-center mb-8 text-yellow-400">Choose Your Debaters</h2>
-              <p className="text-center text-gray-400 mb-8">Select 2 historical figures to debate</p>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                {Object.entries(personas).map(([key, persona]) => {
-                  const isSelected = selectedCharacters.includes(key)
-                  const selectionIndex = selectedCharacters.indexOf(key)
-
-                  return (
-                    <div
-                      key={key}
-                      className={`relative cursor-pointer transition-all duration-300 ${
-                        isSelected ? "transform scale-105" : "hover:scale-105"
-                      }`}
-                      onClick={() => handleCharacterSelect(key)}
-                    >
-                      <div
-                        className={`relative rounded-lg overflow-hidden ${
-                          isSelected
-                            ? "ring-4 ring-yellow-500 shadow-lg shadow-yellow-500/50"
-                            : "ring-2 ring-gray-600 hover:ring-gray-500"
-                        }`}
-                      >
-                        <img
-                          src={persona.image || "/placeholder.svg"}
-                          alt={persona.name}
-                          className="w-full h-48 object-cover"
-                        />
-
-                        {isSelected && (
-                          <div className="absolute inset-0 bg-yellow-500 bg-opacity-20 flex items-center justify-center">
-                            <div className="bg-yellow-500 text-black px-3 py-1 rounded-full font-bold text-sm">
-                              Selected
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4">
-                          <h3 className="text-white font-bold text-lg">{persona.name}</h3>
-                          <p className="text-gray-300 text-sm">{persona.era}</p>
-                        </div>
-
-                        {selectedCharacters.length >= 2 && !isSelected && (
-                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                            <p className="text-gray-400 text-sm">Max 2</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {selectedCharacters.length > 0 && (
-                <div className="mt-8 text-center">
-                  <p className="text-gray-400">Selected: {selectedCharacters.length}/2 characters</p>
-                  {selectedCharacters.length === 2 && <p className="text-yellow-400 mt-2">Ready to debate!</p>}
-                </div>
-              )}
-            </div>
-          )}
 
           {showTopicSelector && selectedCharacters.length === 2 && (
             <EmbeddedTopicSelector
