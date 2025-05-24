@@ -1,4 +1,3 @@
-// pages/api/generate-character-topics.js
 import OpenAI from "openai"
 import { personas } from "../../lib/personas"
 
