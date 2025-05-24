@@ -4,13 +4,10 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import dynamic from "next/dynamic"
 
 // Dynamically import components that use browser APIs
-const EmbeddedTopicSelector = dynamic(
-  () => import("./embedded-topic-selector").then((mod) => mod.EmbeddedTopicSelector),
-  {
-    ssr: false,
-    loading: () => <div>Loading topic selector...</div>,
-  },
-)
+const EmbeddedTopicSelector = dynamic(() => import("./embedded-topic-selector"), {
+  ssr: false,
+  loading: () => <div>Loading topic selector...</div>,
+})
 
 const VoiceInput = dynamic(() => import("./voice-input").then((mod) => ({ default: mod.VoiceInput })), {
   ssr: false,
@@ -61,7 +58,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // UI state
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(isDebating ? true : false)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [nextSpeaker, setNextSpeaker] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false)

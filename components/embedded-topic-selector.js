@@ -63,4 +63,6 @@ const EmbeddedTopicSelector = ({ topics, onSelectTopic, character1, character2 }
   )
 }
 
+// Export both as named and default
+export { EmbeddedTopicSelector }
 export default EmbeddedTopicSelector
