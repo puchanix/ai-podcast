@@ -260,18 +260,30 @@ export default function Home() {
     try {
       console.log("🔍 [AUDIO DEBUG] Starting to listen...")
       setAudioError(null)
-      const stream = await navigator.mediaDevices.getUserMedia({
+
+      // Add constraint debugging
+      const constraints = {
         audio: {
-          echoCancellation: true, // ENABLE echo cancellation for better transcription
-          noiseSuppression: true, // ENABLE noise suppression
-          autoGainControl: true, // ENABLE auto gain control
-          sampleRate: 16000, // Use 16kHz for better Whisper compatibility
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 16000,
         },
-      })
+      }
+      console.log("🔍 [AUDIO DEBUG] Using constraints:", constraints)
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
       streamRef.current = stream
 
+      // Log stream details
+      const audioTracks = stream.getAudioTracks()
+      console.log("🔍 [AUDIO DEBUG] Audio tracks:", audioTracks.length)
+      audioTracks.forEach((track, i) => {
+        console.log(`🔍 [AUDIO DEBUG] Track ${i}:`, track.label, track.getSettings())
+      })
+
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm;codecs=opus", // Use better codec if available
+        mimeType: "audio/webm;codecs=opus",
       })
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
@@ -287,10 +299,19 @@ export default function Home() {
         console.log("🔍 [AUDIO DEBUG] Recording stopped, total chunks:", audioChunksRef.current.length)
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
         console.log("🔍 [AUDIO DEBUG] Audio blob size:", audioBlob.size, "bytes")
+
+        // ADD THIS: Create a temporary audio URL to test playback
+        const audioUrl = URL.createObjectURL(audioBlob)
+        console.log("🔍 [AUDIO DEBUG] Test audio URL created:", audioUrl)
+        console.log("🔍 [AUDIO DEBUG] You can test this URL in browser to hear what was recorded")
+
         await processAudioQuestion(audioBlob)
+
+        // Clean up the URL after a delay
+        setTimeout(() => URL.revokeObjectURL(audioUrl), 10000)
       }
 
-      mediaRecorder.start(1000) // Record in 1-second chunks
+      mediaRecorder.start(1000)
       setIsListening(true)
       console.log("🔍 [AUDIO DEBUG] Recording started")
     } catch (error) {
