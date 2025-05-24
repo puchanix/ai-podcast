@@ -153,16 +153,20 @@ export default function Home() {
 
   const stopListening = useCallback(() => {
     console.log("Stop listening called")
-    if (mediaRecorderRef.current && isListening) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
       mediaRecorderRef.current.stop()
       setIsListening(false)
+      console.log("MediaRecorder stopped")
     }
 
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current.getTracks().forEach((track) => {
+        track.stop()
+        console.log("Track stopped:", track.kind)
+      })
       streamRef.current = null
     }
-  }, [isListening])
+  }, [])
 
   const pauseAudio = useCallback(() => {
     if (audioRef.current && isPlaying) {
@@ -337,20 +341,25 @@ export default function Home() {
     setThinkingMessage("")
   }
 
-  const handleButtonClick = useCallback(
-    async (characterId) => {
-      console.log("Button clicked for character:", characterId)
+  const handleRecordingButtonClick = useCallback(
+    async (characterId, e) => {
+      e.stopPropagation()
+      console.log("Recording button clicked for character:", characterId)
+
       if (mode === "question") {
         if (selectedPersona === characterId) {
           // If this character is selected and we're listening, stop recording
           if (isListening) {
+            console.log("Stopping recording...")
             stopListening()
           } else if (!isProcessing && !isPlaying) {
             // If not currently doing anything, start recording again
+            console.log("Starting new recording...")
             await startListening()
           }
         } else {
           // Select new character and start recording
+          console.log("Selecting new character and starting recording...")
           setSelectedPersona(characterId)
           currentPersonaRef.current = characterId
           setSelectedCharacters([characterId])
@@ -361,42 +370,21 @@ export default function Home() {
     [mode, selectedPersona, isListening, isProcessing, isPlaying, startListening, stopListening],
   )
 
-  // Microphone icon component
-  const MicrophoneIcon = () => (
-    <div className="relative flex items-center justify-center">
-      {/* Microphone SVG */}
-      <svg className="w-6 h-6 text-yellow-400 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-      </svg>
-
-      {/* Radiating circles */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-yellow-400 rounded-full animate-ping opacity-30"></div>
-      </div>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div
-          className="w-12 h-12 border-2 border-yellow-400 rounded-full animate-ping opacity-20"
-          style={{ animationDelay: "0.5s" }}
-        ></div>
-      </div>
-    </div>
+  // Small microphone icon component
+  const SmallMicIcon = ({ isActive }) => (
+    <svg
+      className={`w-4 h-4 ${isActive ? "text-orange-400 animate-pulse" : "text-gray-400"}`}
+      fill="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6.92h-2z" />
+    </svg>
   )
 
-  // Status display for character tiles
+  // Status display for character tiles (only for processing and playing)
   const getCharacterStatus = (characterId) => {
     if (selectedPersona !== characterId) return null
-
-    if (isListening) {
-      return (
-        <div className="absolute inset-0 bg-red-500 bg-opacity-20 rounded-xl flex items-center justify-center">
-          <div className="bg-red-500 rounded-lg p-2 flex items-center space-x-2">
-            <MicrophoneIcon />
-            <span className="text-white text-sm font-semibold">Recording...</span>
-          </div>
-        </div>
-      )
-    }
 
     if (isProcessing) {
       return (
@@ -521,14 +509,11 @@ export default function Home() {
                         {mode === "question" ? (
                           <>
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleButtonClick(key)
-                              }}
+                              onClick={(e) => handleRecordingButtonClick(key, e)}
                               disabled={shouldGrayOut}
-                              className={`flex-1 py-1 px-2 rounded text-xs font-semibold transition-all duration-300 ${
+                              className={`flex-1 py-1 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${
                                 selectedPersona === key && isListening
-                                  ? "bg-red-500 text-white animate-pulse"
+                                  ? "bg-red-500 text-white"
                                   : selectedPersona === key && isProcessing
                                     ? "bg-blue-500 text-white"
                                     : selectedPersona === key && isPlaying
@@ -540,13 +525,16 @@ export default function Home() {
                                           : "bg-gray-700 text-white hover:bg-gray-600"
                               }`}
                             >
-                              {selectedPersona === key && isListening
-                                ? "Stop Recording"
-                                : selectedPersona === key && isProcessing
-                                  ? "Processing..."
-                                  : selectedPersona === key && isPlaying
-                                    ? "Speaking..."
-                                    : "Ask Question"}
+                              <SmallMicIcon isActive={selectedPersona === key && isListening} />
+                              <span>
+                                {selectedPersona === key && isListening
+                                  ? "Stop Recording"
+                                  : selectedPersona === key && isProcessing
+                                    ? "Processing..."
+                                    : selectedPersona === key && isPlaying
+                                      ? "Speaking..."
+                                      : "Ask Question"}
+                              </span>
                             </button>
 
                             {/* Pause/Resume/Stop buttons when playing */}
@@ -617,7 +605,7 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Status overlay */}
+                    {/* Status overlay (only for processing and playing) */}
                     {getCharacterStatus(key)}
                   </div>
                 </div>
