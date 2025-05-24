@@ -874,47 +874,55 @@ export default function Home() {
                       {/* Character Name - Always at top */}
                       <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
 
+                      {/* Pause/Resume/Stop buttons when playing - MOVED HERE */}
+                      {mode === "question" && selectedPersona === key && isPlaying && (
+                        <div className="flex space-x-1 mb-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              pauseAudio()
+                            }}
+                            className="flex-1 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
+                            title="Pause"
+                          >
+                            ⏸ Pause
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              resumeAudio()
+                            }}
+                            className="flex-1 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                            title="Resume"
+                          >
+                            ▶ Resume
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              stopAudio()
+                            }}
+                            className="flex-1 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                            title="Stop"
+                          >
+                            ⏹ Stop
+                          </button>
+                        </div>
+                      )}
+
                       {/* Button Section - Always at bottom */}
                       <div className="mt-auto flex space-x-1">
                         {mode === "question" ? (
-                          <>
-                            <button
-                              onClick={(e) => handleRecordingButtonClick(key, e)}
-                              disabled={shouldGrayOut}
-                              className={`flex-1 py-2 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
-                                shouldGrayOut ? "bg-gray-600 text-gray-400 cursor-not-allowed" : ""
-                              }`}
-                            >
-                              <SmallMicIcon isActive={selectedPersona === key && isListening} />
-                              <span className="truncate">{getStatusText(key)}</span>
-                            </button>
-
-                            {/* Pause/Resume/Stop buttons when playing */}
-                            {selectedPersona === key && isPlaying && (
-                              <>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    pauseAudio()
-                                  }}
-                                  className="px-2 py-2 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
-                                  title="Pause"
-                                >
-                                  ⏸
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    stopAudio()
-                                  }}
-                                  className="px-2 py-2 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                                  title="Stop"
-                                >
-                                  ⏹
-                                </button>
-                              </>
-                            )}
-                          </>
+                          <button
+                            onClick={(e) => handleRecordingButtonClick(key, e)}
+                            disabled={shouldGrayOut}
+                            className={`flex-1 py-2 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
+                              shouldGrayOut ? "bg-gray-600 text-gray-400 cursor-not-allowed" : ""
+                            }`}
+                          >
+                            <SmallMicIcon isActive={selectedPersona === key && isListening} />
+                            <span className="truncate">{getStatusText(key)}</span>
+                          </button>
                         ) : (
                           <button
                             onClick={(e) => {
