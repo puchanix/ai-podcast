@@ -35,7 +35,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [initialStateLoaded, setInitialStateLoaded] = useState(false)
   const [char1, setChar1] = useState("")
   const [char2, setChar2] = useState("")
-  const [isDebating, setIsDebating] = useState(false) // FIXED: removed circular reference
+  const [isDebating, setIsDebating] = useState(isDebating) // FIXED: removed circular reference
   const [debateMessages, setDebateMessages] = useState([])
   const [currentTopic, setCurrentTopic] = useState("")
   const [exchangeCount, setExchangeCount] = useState(0)
@@ -43,14 +43,14 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   // UI state - FIXED circular references
   const [debateFormat, setDebateFormat] = useState("pointCounterpoint")
   const [historicalContext, setHistoricalContext] = useState(true)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(isProcessing)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [nextSpeaker, setNextSpeaker] = useState(null)
   const [isPlaying, setIsPlaying] = useState(false) // FIXED: removed circular reference
   const [isAudioLoaded, setIsAudioLoaded] = useState(false)
   const [volume, setVolume] = useState(1.0)
   const [audioError, setAudioError] = useState(null)
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false) // FIXED: removed circular reference
+  const [isLoadingAudio, setIsLoadingAudio] = useState(isLoadingAudio) // FIXED: removed circular reference
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
@@ -178,6 +178,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
       try {
         console.log("🔍 Loading dependencies...")
+        console.log("🔍 Props received - character1:", character1, "character2:", character2, "embedded:", embedded)
 
         const personasModule = await import("../lib/personas")
         const personasData = personasModule.personas
@@ -189,13 +190,28 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         setPersonas(personasData)
         setDebateState(debateStateModule)
 
-        const defaultState = {
-          character1: character1 || Object.keys(personasData)[0] || "daVinci",
-          character2: character2 || Object.keys(personasData)[1] || "socrates",
-          isDebating: false,
-          messages: [],
-          topic: initialTopic || "",
-          exchangeCount: 0,
+        // For embedded mode, don't set default characters - let the topic selector handle it
+        let defaultState
+        if (embedded) {
+          defaultState = {
+            character1: "",
+            character2: "",
+            isDebating: false,
+            messages: [],
+            topic: initialTopic || "",
+            exchangeCount: 0,
+          }
+          console.log("🔍 Embedded mode - waiting for character selection")
+        } else {
+          defaultState = {
+            character1: character1 || Object.keys(personasData)[0] || "daVinci",
+            character2: character2 || Object.keys(personasData)[1] || "socrates",
+            isDebating: false,
+            messages: [],
+            topic: initialTopic || "",
+            exchangeCount: 0,
+          }
+          console.log("🔍 Non-embedded mode - using default characters")
         }
 
         console.log("🔍 Setting default state:", defaultState)
@@ -217,7 +233,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
 
     loadDependencies()
-  }, [character1, character2, initialTopic])
+  }, [character1, character2, initialTopic, embedded])
 
   // Load voice IDs
   useEffect(() => {
@@ -738,6 +754,9 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
 
     console.log("🔍 Starting debate with topic:", topic)
+    console.log("🔍 Using characters:", { char1, char2 })
+    console.log("🔍 Character objects:", { character1Obj: character1Obj?.name, character2Obj: character2Obj?.name })
+
     setIsStarting(true)
 
     setCurrentSpeaker(null)
@@ -756,21 +775,31 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     await unlockAudio()
 
     try {
+      const requestBody = {
+        character1: char1,
+        character2: char2,
+        topic,
+        format: debateFormat,
+        historicalContext,
+      }
+
+      console.log("🔍 Sending request to /api/start-debate:", requestBody)
+
       const response = await fetch("/api/start-debate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          character1: char1,
-          character2: char2,
-          topic,
-          format: debateFormat,
-          historicalContext,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
-      if (!response.ok) throw new Error("Failed to start debate")
+      console.log("🔍 Response status:", response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("🔍 API error response:", errorText)
+        throw new Error(`Failed to start debate: ${response.status} - ${errorText}`)
+      }
 
       const data = await response.json()
       console.log("🔍 Debate started with data:", data)
@@ -924,15 +953,49 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     setIsProcessing(false)
   }
 
+  // Function to update characters from embedded topic selector
+  const updateCharactersFromSelector = (char1Id, char2Id) => {
+    console.log("🔍 updateCharactersFromSelector called with:", char1Id, char2Id)
+    if (char1Id && char2Id && personas[char1Id] && personas[char2Id]) {
+      setChar1(char1Id)
+      setChar2(char2Id)
+      console.log("🔍 Characters updated successfully")
+    } else {
+      console.log("🔍 Invalid characters or personas not loaded yet")
+    }
+  }
+
   // Auto-start when dependencies loaded and topic available
   useEffect(() => {
+    console.log("🔍 Auto-start effect triggered")
+    console.log("🔍 Conditions:", {
+      dependenciesLoaded,
+      initialStateLoaded,
+      currentTopic: !!currentTopic,
+      isDebating,
+      isStarting,
+      char1,
+      char2,
+      embedded,
+    })
+
     if (dependenciesLoaded && initialStateLoaded && currentTopic && !isDebating && !isStarting) {
+      if (embedded) {
+        // For embedded mode, we need to wait for characters to be selected
+        // The characters should be set by the EmbeddedTopicSelector
+        if (!char1 || !char2) {
+          console.log("🔍 Embedded mode - waiting for character selection")
+          return
+        }
+      }
+
       console.log("🔍 Auto-starting debate with topic:", currentTopic)
+      console.log("🔍 Using characters:", char1, "vs", char2)
       setTimeout(() => {
         startDebateMain(currentTopic)
       }, 100)
     }
-  }, [dependenciesLoaded, initialStateLoaded, currentTopic, isDebating, isStarting, char1, char2])
+  }, [dependenciesLoaded, initialStateLoaded, currentTopic, isDebating, isStarting, char1, char2, embedded])
 
   // DEBUG: Check visual rendering conditions
   const shouldShowVisuals = isDebating
@@ -1235,7 +1298,12 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
             <div className="mb-4 p-2 bg-orange-900 text-orange-100 rounded">
               <p>🔍 RENDERING: EmbeddedTopicSelector</p>
             </div>
-            <EmbeddedTopicSelector onSelectTopic={startDebate} character1={char1} character2={char2} />
+            <EmbeddedTopicSelector
+              onSelectTopic={startDebate}
+              character1={char1}
+              character2={char2}
+              onCharactersUpdate={updateCharactersFromSelector}
+            />
           </div>
         )}
 
