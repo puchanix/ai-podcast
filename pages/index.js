@@ -92,11 +92,13 @@ export default function Home() {
   // Audio level monitoring
   const startAudioLevelMonitoring = (stream) => {
     try {
+      console.log("Starting audio level monitoring...")
       const audioContext = new (window.AudioContext || window.webkitAudioContext)()
       const analyser = audioContext.createAnalyser()
       const microphone = audioContext.createMediaStreamSource(stream)
 
-      analyser.fftSize = 256
+      analyser.fftSize = 512
+      analyser.smoothingTimeConstant = 0.8
       microphone.connect(analyser)
 
       audioContextRef.current = audioContext
@@ -107,8 +109,18 @@ export default function Home() {
       const updateAudioLevel = () => {
         if (analyserRef.current && isListening) {
           analyserRef.current.getByteFrequencyData(dataArray)
-          const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length
-          setAudioLevel(Math.min(average / 128, 1)) // Normalize to 0-1
+
+          // Calculate RMS (Root Mean Square) for better volume detection
+          let sum = 0
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i] * dataArray[i]
+          }
+          const rms = Math.sqrt(sum / dataArray.length)
+          const normalizedLevel = Math.min(rms / 50, 1) // Normalize and amplify
+
+          setAudioLevel(normalizedLevel)
+          console.log("Audio level:", normalizedLevel) // Debug log
+
           animationFrameRef.current = requestAnimationFrame(updateAudioLevel)
         }
       }
@@ -120,23 +132,24 @@ export default function Home() {
   }
 
   const stopAudioLevelMonitoring = () => {
+    console.log("Stopping audio level monitoring...")
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current)
     }
-    if (audioContextRef.current) {
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
       audioContextRef.current.close()
     }
     setAudioLevel(0)
   }
 
   const handleCharacterSelect = async (characterId) => {
+    console.log("Character selected:", characterId)
     if (mode === "question") {
       setSelectedPersona(characterId)
       setSelectedCharacters([characterId])
-      // Use setTimeout to ensure state is updated before starting recording
-      setTimeout(async () => {
-        await startListening()
-      }, 100)
+      // Start recording immediately after state update
+      await new Promise((resolve) => setTimeout(resolve, 50)) // Small delay for state update
+      await startListening()
     } else if (mode === "debate") {
       if (selectedCharacters.includes(characterId)) {
         setSelectedCharacters(selectedCharacters.filter((id) => id !== characterId))
@@ -148,8 +161,15 @@ export default function Home() {
 
   const startListening = async () => {
     try {
+      console.log("Starting to listen...")
       setAudioError(null)
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
+      })
       streamRef.current = stream
 
       // Start audio level monitoring
@@ -164,6 +184,7 @@ export default function Home() {
       }
 
       mediaRecorder.onstop = async () => {
+        console.log("Recording stopped")
         stopAudioLevelMonitoring()
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" })
         await processAudioQuestion(audioBlob)
@@ -171,6 +192,7 @@ export default function Home() {
 
       mediaRecorder.start()
       setIsListening(true)
+      console.log("Recording started")
     } catch (error) {
       console.error("Error accessing microphone:", error)
       setAudioError("Could not access microphone. Please check permissions.")
@@ -178,6 +200,7 @@ export default function Home() {
   }
 
   const stopListening = () => {
+    console.log("Stop listening called")
     if (mediaRecorderRef.current && isListening) {
       mediaRecorderRef.current.stop()
       setIsListening(false)
@@ -191,10 +214,10 @@ export default function Home() {
   }
 
   const processAudioQuestion = async (audioBlob) => {
-    // Use current selectedPersona from state or get it from the function parameter
-    const currentPersona = selectedPersona
+    console.log("Processing audio question, selectedPersona:", selectedPersona)
 
-    if (!currentPersona) {
+    if (!selectedPersona) {
+      console.error("No persona selected!")
       setAudioError("Please select a character first")
       return
     }
@@ -224,7 +247,7 @@ export default function Home() {
       }
 
       // Start parallel processing: text generation and audio preparation
-      await processQuestionWithStreaming(text, currentPersona)
+      await processQuestionWithStreaming(text, selectedPersona)
     } catch (error) {
       console.error("Error processing audio question:", error)
       setAudioError(`Error: ${error.message}`)
@@ -340,6 +363,7 @@ export default function Home() {
   }
 
   const handleButtonClick = async (characterId) => {
+    console.log("Button clicked for character:", characterId)
     if (mode === "question") {
       if (selectedPersona === characterId) {
         // If this character is selected and we're listening, stop recording
@@ -353,9 +377,8 @@ export default function Home() {
         // Select new character and start recording
         setSelectedPersona(characterId)
         setSelectedCharacters([characterId])
-        setTimeout(async () => {
-          await startListening()
-        }, 100)
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        await startListening()
       }
     }
   }
@@ -363,21 +386,31 @@ export default function Home() {
   // Voice visualizer component
   const VoiceVisualizer = () => {
     const bars = Array.from({ length: 8 }, (_, i) => {
-      const height = Math.max(4, audioLevel * 40 + Math.random() * 10)
+      // Create more dynamic height based on audio level
+      const baseHeight = 4
+      const maxHeight = 40
+      const randomVariation = Math.sin(Date.now() * 0.01 + i) * 5 // Smooth sine wave variation
+      const height = baseHeight + audioLevel * maxHeight + randomVariation
+
       return (
         <div
           key={i}
           className="bg-yellow-400 rounded-full transition-all duration-100"
           style={{
-            width: "3px",
-            height: `${height}px`,
+            width: "4px",
+            height: `${Math.max(baseHeight, height)}px`,
             animationDelay: `${i * 0.1}s`,
           }}
         />
       )
     })
 
-    return <div className="flex items-end justify-center space-x-1 h-12">{bars}</div>
+    return (
+      <div className="flex items-end justify-center space-x-1 h-12">
+        {bars}
+        <div className="ml-4 text-sm text-gray-400">Level: {Math.round(audioLevel * 100)}%</div>
+      </div>
+    )
   }
 
   return (
@@ -422,6 +455,12 @@ export default function Home() {
               Loading voice data... Please wait.
             </div>
           )}
+
+          {/* Debug Info */}
+          <div className="mb-4 text-center text-sm text-gray-400">
+            Debug: Selected Persona = "{selectedPersona}", Is Listening = {isListening.toString()}, Audio Level ={" "}
+            {audioLevel.toFixed(2)}
+          </div>
 
           {/* Instructions */}
           <div className="text-center mb-8">
@@ -551,28 +590,6 @@ export default function Home() {
 
           {/* Audio Error Display */}
           {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
-
-          {/* Audio Playing Indicator */}
-          {isPlaying && (
-            <div className="mb-8 text-center">
-              <div className="inline-flex items-center space-x-2">
-                <div className="flex space-x-1">
-                  {[...Array(5)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-1 bg-yellow-400 rounded-full animate-pulse"
-                      style={{
-                        height: "20px",
-                        animationDelay: `${i * 0.1}s`,
-                        animationDuration: "0.6s",
-                      }}
-                    />
-                  ))}
-                </div>
-                <span className="text-yellow-400">Playing response...</span>
-              </div>
-            </div>
-          )}
 
           {mode === "debate" && (
             <div className="text-center">
