@@ -15,8 +15,11 @@ export default async function handler(req, res) {
   try {
     const { character1, character2 } = req.body
 
+    console.log("🔍 API received request:", { character1, character2 })
+
     // Validate characters
     if (!character1 || !character2) {
+      console.log("🔍 Missing characters in request")
       return res.status(400).json({ error: "Both character1 and character2 are required" })
     }
 
@@ -24,16 +27,24 @@ export default async function handler(req, res) {
     const persona1 = personas[character1]
     const persona2 = personas[character2]
 
+    console.log("🔍 Looking up personas:", {
+      character1,
+      character2,
+      found1: !!persona1,
+      found2: !!persona2,
+      availablePersonas: Object.keys(personas),
+    })
+
     if (!persona1 || !persona2) {
-      return res.status(400).json({ error: "Invalid character selection" })
+      console.log("🔍 Invalid character selection")
+      return res.status(400).json({
+        error: "Invalid character selection",
+        available: Object.keys(personas),
+        requested: { character1, character2 },
+      })
     }
 
-    // Create a cache key based on the character pair (sorted for consistency)
-    const sortedChars = [character1, character2].sort()
-    const cacheKey = `debate_topics:${sortedChars[0]}:${sortedChars[1]}`
-
-    // Try to get topics from localStorage cache first (client-side caching only)
-    console.log(`Generating new topics for ${persona1.name} and ${persona2.name}`)
+    console.log(`🔍 Generating topics for ${persona1.name} vs ${persona2.name}`)
 
     // Use GPT-3.5-turbo for faster topic generation
     const completion = await openai.chat.completions.create({
@@ -68,7 +79,7 @@ Return only valid JSON.`,
     try {
       generatedTopics = JSON.parse(completion.choices[0].message.content.trim())
     } catch (parseError) {
-      console.error("Failed to parse GPT response:", completion.choices[0].message.content)
+      console.error("🔍 Failed to parse GPT response:", completion.choices[0].message.content)
       throw new Error("Invalid response format from GPT")
     }
 
@@ -85,13 +96,17 @@ Return only valid JSON.`,
       category: topic.category || "philosophy",
     }))
 
+    console.log("🔍 Generated topics:", validatedTopics)
+
     return res.status(200).json({ topics: validatedTopics })
   } catch (error) {
-    console.error("Error generating topics:", error)
+    console.error("🔍 Error generating topics:", error)
 
     // Fallback to default topics if GPT fails
     const { character1, character2 } = req.body
     const fallbackTopics = getDefaultTopics(character1, character2)
+
+    console.log("🔍 Using fallback topics:", fallbackTopics)
 
     res.status(200).json({ topics: fallbackTopics })
   }

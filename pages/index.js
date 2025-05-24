@@ -1,10 +1,9 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { personas } from "../lib/personas"
 import Layout from "../components/layout"
+import DebateInterface from "../components/debate-interface"
 import EmbeddedTopicSelector from "../components/embedded-topic-selector"
-import { DebateInterface } from "../components/debate-interface"
 
 export default function Home() {
   const [selectedPersona, setSelectedPersona] = useState("")
@@ -17,6 +16,9 @@ export default function Home() {
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
   const [thinkingMessage, setThinkingMessage] = useState("")
+  const [personas, setPersonas] = useState({})
+  const [showTopicSelector, setShowTopicSelector] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   // Debate state
   const [isDebating, setIsDebating] = useState(false)
@@ -74,6 +76,23 @@ export default function Home() {
     loadVoiceIds()
   }, [])
 
+  // Load personas when component mounts
+  useEffect(() => {
+    async function loadPersonas() {
+      try {
+        const personasModule = await import("../lib/personas")
+        setPersonas(personasModule.personas)
+        console.log("Personas loaded:", Object.keys(personasModule.personas))
+      } catch (error) {
+        console.error("Error loading personas:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadPersonas()
+  }, [])
+
   // Update ref when selectedPersona changes
   useEffect(() => {
     currentPersonaRef.current = selectedPersona
@@ -111,28 +130,32 @@ export default function Home() {
         // Start recording immediately
         await startListening()
       } else if (mode === "debate") {
-        if (selectedCharacters.includes(characterId)) {
-          // Deselect character
-          const newSelection = selectedCharacters.filter((id) => id !== characterId)
-          setSelectedCharacters(newSelection)
+        setSelectedCharacters((prev) => {
+          const isSelected = prev.includes(characterId)
+          let newSelection
 
-          // If we go back to less than 2 characters, reset debate state
-          if (newSelection.length < 2) {
-            setIsDebating(false)
-            setDebateTopic("")
+          if (isSelected) {
+            newSelection = prev.filter((key) => key !== characterId)
+          } else if (prev.length < 2) {
+            newSelection = [...prev, characterId]
+          } else {
+            newSelection = [prev[1], characterId]
           }
-        } else if (selectedCharacters.length < 2) {
-          const newSelection = [...selectedCharacters, characterId]
-          setSelectedCharacters(newSelection)
 
-          // Auto-trigger topic selection when 2nd character is selected
+          console.log("Selected persona updated to:", newSelection)
+
           if (newSelection.length === 2) {
             console.log("Two characters selected, showing topic selector")
+            setShowTopicSelector(true)
+          } else {
+            setShowTopicSelector(false)
           }
-        }
+
+          return newSelection
+        })
       }
     },
-    [mode, selectedCharacters],
+    [mode],
   )
 
   const startListening = useCallback(async () => {
@@ -360,6 +383,7 @@ export default function Home() {
     setThinkingMessage("")
     setIsDebating(false)
     setDebateTopic("")
+    setShowTopicSelector(false)
   }
 
   const handleRecordingButtonClick = useCallback(
@@ -404,6 +428,7 @@ export default function Home() {
     setIsDebating(false)
     setDebateTopic("")
     setSelectedCharacters([])
+    setShowTopicSelector(false)
   }, [])
 
   // Small microphone icon component - Fixed SVG path
@@ -450,11 +475,23 @@ export default function Home() {
     return false
   }
 
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
+            <p className="text-yellow-400">Loading personas...</p>
+          </div>
+        </div>
+      </Layout>
+    )
+  }
+
   return (
     <Layout>
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white">
-        <div className="container mx-auto px-4 py-8">
-          {/* Header */}
+        <div className="container mx-auto px-4 py-8 max-w-6xl">
           <div className="text-center mb-12">
             <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
               Heroes of History
@@ -619,17 +656,78 @@ export default function Home() {
           {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
 
           {/* Dynamic Content Area */}
-          {mode === "debate" && selectedCharacters.length === 2 && !isDebating && (
-            <div className="mb-8">
-              <EmbeddedTopicSelector
-                onSelectTopic={handleTopicSelect}
-                character1={personas[selectedCharacters[0]]}
-                character2={personas[selectedCharacters[1]]}
-              />
+          {!showTopicSelector && (
+            <div className="mb-12">
+              <h2 className="text-3xl font-bold text-center mb-8 text-yellow-400">Choose Your Debaters</h2>
+              <p className="text-center text-gray-400 mb-8">Select 2 historical figures to debate</p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                {Object.entries(personas).map(([key, persona]) => {
+                  const isSelected = selectedCharacters.includes(key)
+                  const selectionIndex = selectedCharacters.indexOf(key)
+
+                  return (
+                    <div
+                      key={key}
+                      className={`relative cursor-pointer transition-all duration-300 ${
+                        isSelected ? "transform scale-105" : "hover:scale-105"
+                      }`}
+                      onClick={() => handleCharacterSelect(key)}
+                    >
+                      <div
+                        className={`relative rounded-lg overflow-hidden ${
+                          isSelected
+                            ? "ring-4 ring-yellow-500 shadow-lg shadow-yellow-500/50"
+                            : "ring-2 ring-gray-600 hover:ring-gray-500"
+                        }`}
+                      >
+                        <img
+                          src={persona.image || "/placeholder.svg"}
+                          alt={persona.name}
+                          className="w-full h-48 object-cover"
+                        />
+
+                        {isSelected && (
+                          <div className="absolute inset-0 bg-yellow-500 bg-opacity-20 flex items-center justify-center">
+                            <div className="bg-yellow-500 text-black px-3 py-1 rounded-full font-bold text-sm">
+                              Selected
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4">
+                          <h3 className="text-white font-bold text-lg">{persona.name}</h3>
+                          <p className="text-gray-300 text-sm">{persona.era}</p>
+                        </div>
+
+                        {selectedCharacters.length >= 2 && !isSelected && (
+                          <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                            <p className="text-gray-400 text-sm">Max 2</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {selectedCharacters.length > 0 && (
+                <div className="mt-8 text-center">
+                  <p className="text-gray-400">Selected: {selectedCharacters.length}/2 characters</p>
+                  {selectedCharacters.length === 2 && <p className="text-yellow-400 mt-2">Ready to debate!</p>}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Debate Interface */}
+          {showTopicSelector && selectedCharacters.length === 2 && (
+            <EmbeddedTopicSelector
+              onSelectTopic={handleTopicSelect}
+              character1={personas[selectedCharacters[0]]}
+              character2={personas[selectedCharacters[1]]}
+            />
+          )}
+
           {mode === "debate" && isDebating && selectedCharacters.length === 2 && (
             <div className="mb-8">
               <DebateInterface
