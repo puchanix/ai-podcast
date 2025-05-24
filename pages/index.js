@@ -504,6 +504,7 @@ export default function Home() {
     try {
       setIsPlaying(true)
 
+      // Start text generation
       const textResponse = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -521,6 +522,7 @@ export default function Home() {
 
       const { content: responseText } = await textResponse.json()
 
+      // Start audio generation immediately (parallel processing)
       await generateAudioResponse(responseText, persona)
     } catch (error) {
       console.error("Error in parallel processing:", error)
@@ -531,6 +533,8 @@ export default function Home() {
 
   const generateAudioResponse = async (text, persona) => {
     try {
+      console.log("🎵 [AUDIO] Starting audio generation for:", text.substring(0, 50) + "...")
+
       const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
 
       // USE REF INSTEAD OF STATE for voice IDs!
@@ -544,6 +548,8 @@ export default function Home() {
         voice = "echo"
       }
 
+      // Start audio generation immediately
+      const audioStartTime = Date.now()
       const response = await fetch("/api/speak", {
         method: "POST",
         headers: {
@@ -561,6 +567,8 @@ export default function Home() {
       }
 
       const { audioUrl } = await response.json()
+      const audioGenerationTime = Date.now() - audioStartTime
+      console.log("🎵 [AUDIO] Audio generated in:", audioGenerationTime + "ms")
 
       const audio = new Audio(audioUrl)
       audioRef.current = audio
@@ -577,7 +585,9 @@ export default function Home() {
         setIsPaused(false)
       }
 
+      const playStartTime = Date.now()
       await audio.play()
+      console.log("🎵 [AUDIO] Audio started playing after:", playStartTime - audioStartTime + "ms total")
     } catch (error) {
       console.error("Error in audio generation:", error)
       setAudioError(`Audio error: ${error.message}`)
