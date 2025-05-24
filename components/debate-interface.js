@@ -395,15 +395,31 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
     if (!audioUrl) {
       console.error("🔍 No audio URL provided")
+      setAudioError("No audio URL provided")
+      return
+    }
+
+    // Check if URL is valid
+    if (!audioUrl.startsWith("http") && !audioUrl.startsWith("/")) {
+      console.error("🔍 Invalid audio URL format:", audioUrl)
+      setAudioError("Invalid audio URL format")
       return
     }
 
     try {
       setIsLoadingAudio(true)
       setCurrentSpeaker(character)
+      setAudioError(null)
+
+      // Test if the URL is accessible first
+      console.log("🔍 Testing audio URL accessibility...")
+      const testResponse = await fetch(audioUrl, { method: "HEAD" })
+      if (!testResponse.ok) {
+        throw new Error(`Audio URL not accessible: ${testResponse.status} ${testResponse.statusText}`)
+      }
 
       // Create new audio element
-      const audio = new Audio(audioUrl)
+      const audio = new Audio()
       currentAudioRef.current = audio
 
       audio.onloadstart = () => {
@@ -415,7 +431,11 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         console.log("🔍 Audio can play")
         setIsLoadingAudio(false)
         setIsPlaying(true)
-        audio.play()
+        audio.play().catch((err) => {
+          console.error("🔍 Failed to play audio:", err)
+          setAudioError(`Failed to play audio: ${err.message}`)
+          setIsPlaying(false)
+        })
       }
 
       audio.onended = () => {
@@ -427,12 +447,13 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
       audio.onerror = (error) => {
         console.error("🔍 Audio error:", error)
-        setAudioError("Failed to play audio")
+        setAudioError("Failed to load audio file")
         setIsLoadingAudio(false)
         setIsPlaying(false)
       }
 
-      // Start loading the audio
+      // Set the source and start loading
+      audio.src = audioUrl
       audio.load()
     } catch (error) {
       console.error("🔍 Error playing audio:", error)
@@ -777,7 +798,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         {/* Show debate title and controls when debate is active */}
         {isDebating && currentTopic && (
           <div className="mb-6 text-center">
-            <h2 className="text-2xl font-bold text-yellow-400 mb-4">🔥 DEBATE: {currentTopic} 🔥</h2>
+            <h2 className="text-2xl font-bold text-yellow-400 mb-4">DEBATE: {currentTopic}</h2>
 
             {/* Audio controls */}
             <div className="flex justify-center space-x-4 mb-4">
