@@ -2,178 +2,163 @@
 
 import { useState, useEffect } from "react"
 
-function EmbeddedTopicSelector({
-  onSelectTopic,
-  character1,
-  character2,
-  isDebating = false,
-  currentSpeaker = null,
-  isPlaying = false,
-  isLoadingAudio = false,
-  thinkingMessage = "",
-  char1Status = "Ready",
-  char2Status = "Ready",
-}) {
+function EmbeddedTopicSelector({ onSelectTopic, character1, character2 }) {
   const [topics, setTopics] = useState([])
-  const [isGeneratingTopics, setIsGeneratingTopics] = useState(false)
-  const [topicsError, setTopicsError] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
 
-  // Generate topics when characters are provided
   useEffect(() => {
-    async function generateTopics() {
+    async function fetchTopics() {
       if (!character1 || !character2) return
 
-      setIsGeneratingTopics(true)
-      setTopicsError(null)
+      setIsLoading(true)
+      setError(null)
 
       try {
+        console.log("🔍 Fetching topics for:", character1, "vs", character2)
+
         const response = await fetch("/api/generate-character-topics", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            character1: typeof character1 === "string" ? character1 : character1.name,
-            character2: typeof character2 === "string" ? character2 : character2.name,
+            character1: typeof character1 === "string" ? character1 : character1.name || character1,
+            character2: typeof character2 === "string" ? character2 : character2.name || character2,
           }),
         })
 
+        console.log("🔍 API Response status:", response.status)
+
         if (!response.ok) {
-          throw new Error(`Failed to generate topics: ${response.status}`)
+          throw new Error(`HTTP error! status: ${response.status}`)
         }
 
         const data = await response.json()
-        setTopics(data.topics || [])
+        console.log("🔍 API Response data:", data)
+
+        if (data.topics && Array.isArray(data.topics)) {
+          setTopics(data.topics)
+        } else {
+          throw new Error("Invalid response format")
+        }
       } catch (error) {
-        console.error("Error generating topics:", error)
-        setTopicsError(error.message)
-        // Fallback topics
-        setTopics([
-          {
-            id: "fallback-1",
-            title: "Philosophy and Wisdom",
-            description: "Different approaches to understanding life and truth",
-            category: "philosophy",
-          },
-          {
-            id: "fallback-2",
-            title: "Art and Expression",
-            description: "The role of creativity in human experience",
-            category: "arts",
-          },
-        ])
+        console.error("🔍 Error fetching topics:", error)
+        setError(error.message)
       } finally {
-        setIsGeneratingTopics(false)
+        setIsLoading(false)
       }
     }
 
-    generateTopics()
+    fetchTopics()
   }, [character1, character2])
 
-  const handleTopicSelection = (topic) => {
+  const handleTopicClick = (topic) => {
+    console.log("🔍 Topic selected:", topic)
     if (onSelectTopic) {
-      onSelectTopic(topic.title || topic)
+      onSelectTopic(topic.title)
     }
   }
 
   // Get character data safely
-  const getCharacterData = (char) => {
-    if (!char) return { name: "Unknown Character", image: "/placeholder.svg" }
-    if (typeof char === "object") return char
-    return { name: char, image: "/placeholder.svg" }
+  const getCharacterInfo = (char) => {
+    if (!char) return { name: "Unknown", image: "/placeholder.svg" }
+    if (typeof char === "string") return { name: char, image: "/placeholder.svg" }
+    return { name: char.name || "Unknown", image: char.image || "/placeholder.svg" }
   }
 
-  const char1Data = getCharacterData(character1)
-  const char2Data = getCharacterData(character2)
+  const char1Info = getCharacterInfo(character1)
+  const char2Info = getCharacterInfo(character2)
 
   return (
     <div className="bg-gray-800 rounded-xl p-6 mb-8">
       <h2 className="text-2xl font-bold text-yellow-400 mb-6 text-center">SELECT A DEBATE TOPIC</h2>
 
       {/* Character VS Display */}
-      <div className="flex justify-center items-center mb-6">
+      <div className="flex justify-center items-center mb-8">
         <div className="text-center">
-          <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-2 ring-2 ring-yellow-400">
+          <div className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-3 ring-4 ring-yellow-400">
             <img
-              src={char1Data.image || "/placeholder.svg"}
-              alt={char1Data.name}
+              src={char1Info.image || "/placeholder.svg"}
+              alt={char1Info.name}
               className="w-full h-full object-cover"
             />
           </div>
-          <p className="text-yellow-400 font-semibold">{char1Data.name}</p>
-          <p className="text-sm text-gray-400">{char1Status}</p>
+          <p className="text-yellow-400 font-bold text-lg">{char1Info.name}</p>
+          <p className="text-sm text-gray-400">Ready</p>
         </div>
 
-        <div className="mx-8 text-yellow-400 text-2xl font-bold">VS</div>
+        <div className="mx-12 text-yellow-400 text-3xl font-bold">VS</div>
 
         <div className="text-center">
-          <div className="w-16 h-16 rounded-full overflow-hidden mx-auto mb-2 ring-2 ring-yellow-400">
+          <div className="w-20 h-20 rounded-full overflow-hidden mx-auto mb-3 ring-4 ring-yellow-400">
             <img
-              src={char2Data.image || "/placeholder.svg"}
-              alt={char2Data.name}
+              src={char2Info.image || "/placeholder.svg"}
+              alt={char2Info.name}
               className="w-full h-full object-cover"
             />
           </div>
-          <p className="text-yellow-400 font-semibold">{char2Data.name}</p>
-          <p className="text-sm text-gray-400">{char2Status}</p>
+          <p className="text-yellow-400 font-bold text-lg">{char2Info.name}</p>
+          <p className="text-sm text-gray-400">Ready</p>
         </div>
       </div>
 
       {/* Loading State */}
-      {isGeneratingTopics && (
-        <div className="text-center py-8">
+      {isLoading && (
+        <div className="text-center py-12">
           <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
-          <p className="text-yellow-400">Generating debate topics...</p>
+          <p className="text-yellow-400 text-lg">Generating custom debate topics...</p>
+          <p className="text-gray-400 text-sm mt-2">
+            Tailored for {char1Info.name} vs {char2Info.name}
+          </p>
         </div>
       )}
 
       {/* Error State */}
-      {topicsError && (
-        <div className="bg-red-900 text-red-100 p-4 rounded-lg mb-4">
-          <p className="font-bold">Error generating topics:</p>
-          <p>{topicsError}</p>
+      {error && (
+        <div className="bg-red-900 text-red-100 p-4 rounded-lg mb-6 text-center">
+          <p className="font-bold">Failed to generate topics</p>
+          <p className="text-sm mt-1">{error}</p>
         </div>
       )}
 
-      {/* Topics Grid */}
-      {!isGeneratingTopics && topics.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Topics Display */}
+      {!isLoading && topics.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {topics.map((topic, index) => {
             const colors = [
-              "bg-purple-700 hover:bg-purple-600",
-              "bg-blue-700 hover:bg-blue-600",
-              "bg-green-700 hover:bg-green-600",
-              "bg-red-700 hover:bg-red-600",
-              "bg-pink-700 hover:bg-pink-600",
-              "bg-orange-700 hover:bg-orange-600",
+              "bg-purple-700 hover:bg-purple-600 border-purple-500",
+              "bg-blue-700 hover:bg-blue-600 border-blue-500",
             ]
             const colorClass = colors[index % colors.length]
 
             return (
               <button
                 key={topic.id || index}
-                onClick={() => handleTopicSelection(topic)}
-                className={`${colorClass} text-white p-6 rounded-lg transition-colors duration-300 text-left`}
+                onClick={() => handleTopicClick(topic)}
+                className={`${colorClass} text-white p-6 rounded-xl transition-all duration-300 text-left border-2 hover:scale-105 transform`}
               >
-                <h3 className="font-bold mb-2 text-lg uppercase tracking-wide">{topic.title}</h3>
-                <p className="text-sm text-gray-200">{topic.description}</p>
+                <h3 className="font-bold mb-3 text-xl uppercase tracking-wide">{topic.title}</h3>
+                <p className="text-gray-200 text-sm leading-relaxed">{topic.description}</p>
+                <div className="mt-4 text-xs text-gray-300 uppercase tracking-wider">
+                  {topic.category || "Philosophy"}
+                </div>
               </button>
             )
           })}
         </div>
       )}
 
-      {/* Debug info */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="mt-4 p-2 bg-gray-700 rounded text-xs text-gray-300">
-          <p>
-            Topics: {topics.length}, Generating: {isGeneratingTopics ? "true" : "false"}
-          </p>
-          <p>
-            Characters: {char1Data.name} vs {char2Data.name}
-          </p>
-        </div>
-      )}
+      {/* Debug Info */}
+      <div className="mt-6 p-3 bg-gray-700 rounded text-xs text-gray-300">
+        <p>
+          Debug: {char1Info.name} vs {char2Info.name}
+        </p>
+        <p>
+          Topics: {topics.length}, Loading: {isLoading ? "yes" : "no"}, Error: {error || "none"}
+        </p>
+        <p>API Call: /api/generate-character-topics</p>
+      </div>
     </div>
   )
 }
