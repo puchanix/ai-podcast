@@ -35,7 +35,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [initialStateLoaded, setInitialStateLoaded] = useState(false)
   const [char1, setChar1] = useState("")
   const [char2, setChar2] = useState("")
-  const [isDebating, setIsDebating] = useState(false) // Fixed circular reference
+  const [isDebating, setIsDebating] = useState(isDebating) // Fixed circular reference
   const [debateMessages, setDebateMessages] = useState([])
   const [currentTopic, setCurrentTopic] = useState("")
   const [exchangeCount, setExchangeCount] = useState(0)
@@ -75,7 +75,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [isProcessing, setIsProcessing] = useState(false)
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [nextSpeaker, setNextSpeaker] = useState(null)
-  const [isPlaying, setIsPlaying] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(isPlaying)
   const [isAudioLoaded, setIsAudioLoaded] = useState(false)
   const [volume, setVolume] = useState(1.0)
   const [audioError, setAudioError] = useState(null)
@@ -1014,7 +1014,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           </div>
         )}
 
-        {/* Show all characters with greyed out non-debaters */}
+        {/* Show all characters with greyed out non-debaters - ALWAYS show when debating */}
         {isDebating && (
           <div className="mb-6">
             <div className="bg-gray-800 rounded-lg p-6">
@@ -1129,6 +1129,21 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
                     </div>
                   )
                 })}
+              </div>
+
+              {/* Debug info to help us see what's happening */}
+              <div className="mt-4 p-3 bg-purple-900 text-purple-100 rounded text-sm">
+                <p>
+                  <strong>Debug:</strong>
+                </p>
+                <p>isDebating: {isDebating ? "true" : "false"}</p>
+                <p>currentSpeaker: {currentSpeaker || "null"}</p>
+                <p>isPlaying: {isPlaying ? "true" : "false"}</p>
+                <p>isLoadingAudio: {isLoadingAudio ? "true" : "false"}</p>
+                <p>
+                  char1: {char1}, char2: {char2}
+                </p>
+                <p>personas loaded: {Object.keys(personas).length}</p>
               </div>
             </div>
           </div>
