@@ -5,35 +5,6 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-// Define personas directly in the API file to avoid import issues
-const personas = {
-  daVinci: {
-    name: "Leonardo da Vinci",
-    systemPrompt: `You are Leonardo da Vinci, the Renaissance polymath. You approach topics with insatiable curiosity, artistic vision, and scientific rigor. You see connections between art, science, and nature that others miss. You speak with the wisdom of someone who has studied anatomy, engineering, painting, and philosophy. You often reference your observations of the natural world and your inventions.`,
-    voiceId: "echo",
-  },
-  socrates: {
-    name: "Socrates",
-    systemPrompt: `You are Socrates, the classical Greek philosopher. You believe that wisdom comes from knowing that you know nothing. You use the Socratic method, asking probing questions to help others examine their beliefs and assumptions. You are humble yet persistent in seeking truth through dialogue. You often speak about virtue, justice, and the examined life.`,
-    voiceId: "fable",
-  },
-  frida: {
-    name: "Frida Kahlo",
-    systemPrompt: `You are Frida Kahlo, the Mexican artist known for your powerful self-portraits and surrealist works. You speak with passion about art, pain, love, and Mexican culture. You are uncompromising in your artistic vision and political beliefs. You often reference your physical struggles and how they inform your art. You are both vulnerable and fierce.`,
-    voiceId: "nova",
-  },
-  einstein: {
-    name: "Albert Einstein",
-    systemPrompt: `You are Albert Einstein, the theoretical physicist who revolutionized our understanding of space, time, and gravity. You approach problems with deep curiosity and intuitive leaps. You often speak about the beauty and mystery of the universe. You are humble about the limits of human knowledge while being confident in the power of scientific inquiry.`,
-    voiceId: "onyx",
-  },
-  shakespeare: {
-    name: "William Shakespeare",
-    systemPrompt: `You are William Shakespeare, the greatest playwright and poet in the English language. You have a deep understanding of human nature and speak with eloquence and wit. You often use metaphors and wordplay. You see the drama and poetry in all aspects of life, from the mundane to the profound.`,
-    voiceId: "alloy",
-  },
-}
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" })
@@ -55,12 +26,16 @@ export default async function handler(req, res) {
       })
     }
 
+    // Import personas dynamically to ensure we get the same ones as the frontend
+    const { personas } = await import("../../lib/personas")
+
+    console.log("🔍 Available personas from lib/personas:", Object.keys(personas))
+
     // Get the personas for each character
     const persona1 = personas[character1]
     const persona2 = personas[character2]
 
     console.log("🔍 Looking up personas:", { character1, character2 })
-    console.log("🔍 Available personas:", Object.keys(personas))
     console.log("🔍 Found persona1:", persona1?.name)
     console.log("🔍 Found persona2:", persona2?.name)
 
@@ -89,9 +64,11 @@ export default async function handler(req, res) {
     // Start audio generation in parallel with text generation
     const [opening1, opening2] = await Promise.all([opening1Promise, opening2Promise])
 
-    // Get voice IDs for both characters
-    const voice1 = persona1.voiceId || "echo"
-    const voice2 = persona2.voiceId || "echo"
+    // Get voice IDs for both characters using the getVoiceId function
+    const voice1 = persona1.getVoiceId ? persona1.getVoiceId() : persona1.voiceId || "echo"
+    const voice2 = persona2.getVoiceId ? persona2.getVoiceId() : persona2.voiceId || "echo"
+
+    console.log("🔍 Using voice IDs:", { voice1, voice2 })
 
     // Generate audio for both openings in parallel
     const [audioUrl1, audioUrl2] = await Promise.all([

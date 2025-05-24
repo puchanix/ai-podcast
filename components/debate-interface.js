@@ -492,8 +492,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         return
       }
 
-      if (isStarting || isDebating) {
-        console.log("🔍 Debate already starting or in progress, ignoring duplicate start")
+      if (isStarting || isDebating || isProcessing) {
+        console.log("🔍 Debate already starting, in progress, or processing - ignoring duplicate start")
         return
       }
 
@@ -594,6 +594,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       unlockAudio,
       debateFormat,
       historicalContext,
+      isProcessing,
     ],
   )
 
@@ -606,12 +607,22 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       currentTopic: !!currentTopic,
       isDebating,
       isStarting,
+      isProcessing,
       char1,
       char2,
       embedded,
     })
 
-    if (dependenciesLoaded && initialStateLoaded && currentTopic && !isDebating && !isStarting && char1 && char2) {
+    if (
+      dependenciesLoaded &&
+      initialStateLoaded &&
+      currentTopic &&
+      !isDebating &&
+      !isStarting &&
+      !isProcessing &&
+      char1 &&
+      char2
+    ) {
       console.log("🔍 Auto-starting debate with topic:", currentTopic)
       console.log("🔍 Using characters:", char1, "vs", char2)
       const timer = setTimeout(() => {
@@ -619,7 +630,17 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       }, 100)
       return () => clearTimeout(timer)
     }
-  }, [dependenciesLoaded, initialStateLoaded, currentTopic, isDebating, isStarting, char1, char2, startDebate])
+  }, [
+    dependenciesLoaded,
+    initialStateLoaded,
+    currentTopic,
+    isDebating,
+    isStarting,
+    isProcessing,
+    char1,
+    char2,
+    startDebate,
+  ])
 
   // DEBUG: Check visual rendering conditions - MEMOIZED
   const shouldShowVisuals = isDebating
