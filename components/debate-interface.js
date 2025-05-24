@@ -367,10 +367,10 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
 
     // If embedded and onDebateEnd callback exists, call it
-    if (embedded && onDebateEnd) {
+    if (embedded && onDebateEnd && !audioError) {
       onDebateEnd()
     }
-  }, [embedded, onDebateEnd])
+  }, [embedded, onDebateEnd, audioError])
 
   // Generate character-specific debate topics
   const generateCharacterSpecificTopics = useCallback(async () => {
