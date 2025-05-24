@@ -35,7 +35,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [initialStateLoaded, setInitialStateLoaded] = useState(false)
   const [char1, setChar1] = useState("")
   const [char2, setChar2] = useState("")
-  const [isDebating, setIsDebating] = useState(false)
+  const [isDebating, setIsDebating] = useState(isDebating)
   const [debateMessages, setDebateMessages] = useState([])
   const [currentTopic, setCurrentTopic] = useState("")
   const [exchangeCount, setExchangeCount] = useState(0)
@@ -79,7 +79,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [isAudioLoaded, setIsAudioLoaded] = useState(false)
   const [volume, setVolume] = useState(1.0)
   const [audioError, setAudioError] = useState(null)
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false)
+  const [isLoadingAudio, setIsLoadingAudio] = useState(isLoadingAudio)
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
@@ -1014,12 +1014,28 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           </div>
         )}
 
+        {/* DEBUG INFO */}
+        <div className="mb-4 p-4 bg-purple-900 text-purple-100 rounded-lg">
+          <p>
+            <strong>Debug Info:</strong>
+          </p>
+          <p>isDebating: {isDebating ? "true" : "false"}</p>
+          <p>currentSpeaker: {currentSpeaker || "null"}</p>
+          <p>isPlaying: {isPlaying ? "true" : "false"}</p>
+          <p>isLoadingAudio: {isLoadingAudio ? "true" : "false"}</p>
+          <p>statusMessage: {statusMessage || "empty"}</p>
+          <p>
+            personas[currentSpeaker]?.name:{" "}
+            {currentSpeaker ? personas[currentSpeaker]?.name || "not found" : "no speaker"}
+          </p>
+        </div>
+
         {isDebating && (
           <div className="mb-6">
-            <div className="bg-gray-800 rounded-lg p-6">
+            <div className="bg-red-500 rounded-lg p-6 border-4 border-yellow-400">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-yellow-400">
-                  {character1Obj?.name} vs {character2Obj?.name}
+                  🔥 DEBATE ACTIVE: {character1Obj?.name} vs {character2Obj?.name} 🔥
                 </h2>
                 <button
                   onClick={() => resetDebateState(true)}
