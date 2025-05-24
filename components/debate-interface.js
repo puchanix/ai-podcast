@@ -587,8 +587,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               topic,
-              character1: character1Obj.name,
-              character2: character2Obj.name,
+              character1: char1, // Use character key, not name
+              character2: char2, // Use character key, not name
             }),
           })
 
@@ -827,6 +827,225 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
             <p className="font-bold">Error:</p>
             <p>{audioError}</p>
             {retryCount > 0 && retryCount < 3 && <p className="mt-2">Retrying automatically ({retryCount}/3)...</p>}
+          </div>
+        )}
+
+        {/* Show debate visuals when debate is active */}
+        {isDebating && character1Obj && character2Obj && (
+          <div className="mb-6">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-yellow-400 mb-4">DEBATE: {currentTopic}</h2>
+
+              {/* Audio controls */}
+              <div className="flex justify-center space-x-4 mb-4">
+                {isPlaying ? (
+                  <>
+                    <button
+                      onClick={pauseAudio}
+                      className="px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+                      title="Pause"
+                    >
+                      ⏸ Pause
+                    </button>
+                    <button
+                      onClick={stopAudio}
+                      className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                      title="Stop"
+                    >
+                      ⏹ Stop
+                    </button>
+                  </>
+                ) : (
+                  currentAudioRef.current &&
+                  currentAudioRef.current.currentTime > 0 &&
+                  !currentAudioRef.current.ended && (
+                    <button
+                      onClick={resumeAudio}
+                      className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                      title="Resume"
+                    >
+                      ▶ Resume
+                    </button>
+                  )
+                )}
+
+                <button
+                  onClick={() => resetDebateState(true)}
+                  className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  End Debate
+                </button>
+              </div>
+            </div>
+
+            {/* Two-character debate interface */}
+            <div className="bg-gray-800 rounded-lg p-6">
+              <div className="grid grid-cols-2 gap-8">
+                {/* Character 1 */}
+                <div className="text-center">
+                  <div className="relative mb-4">
+                    <div
+                      className={`w-32 h-32 mx-auto rounded-full overflow-hidden transition-all duration-300 ${
+                        currentSpeaker === char1 && isPlaying
+                          ? "ring-4 ring-yellow-400 ring-opacity-75 shadow-lg shadow-yellow-400/50"
+                          : currentSpeaker === char1 && isLoadingAudio
+                            ? "ring-4 ring-blue-400 ring-opacity-75"
+                            : "ring-2 ring-gray-600"
+                      }`}
+                    >
+                      <img
+                        src={character1Obj.image || "/placeholder.svg"}
+                        alt={character1Obj.name}
+                        className={`w-full h-full object-cover transition-all duration-300 ${
+                          currentSpeaker === char1 && isPlaying
+                            ? "scale-110"
+                            : currentSpeaker === char1 && isLoadingAudio
+                              ? "opacity-75"
+                              : ""
+                        }`}
+                      />
+                      {currentSpeaker === char1 && isLoadingAudio && (
+                        <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
+                          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      )}
+                      {currentSpeaker === char1 && isPlaying && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500 to-orange-400 opacity-10 animate-pulse"></div>
+                      )}
+                    </div>
+
+                    {/* Pulsing ring animation when speaking */}
+                    {currentSpeaker === char1 && isPlaying && (
+                      <div className="absolute inset-0 rounded-full border-4 border-yellow-400 animate-ping opacity-75"></div>
+                    )}
+                  </div>
+
+                  <h3
+                    className={`text-lg font-semibold mb-2 transition-colors duration-300 ${
+                      currentSpeaker === char1 && isPlaying
+                        ? "text-yellow-300"
+                        : currentSpeaker === char1
+                          ? "text-yellow-400"
+                          : "text-gray-300"
+                    }`}
+                  >
+                    {character1Obj.name}
+                  </h3>
+
+                  <p
+                    className={`text-sm mb-4 transition-colors duration-300 ${
+                      currentSpeaker === char1 && isLoadingAudio
+                        ? "text-blue-300"
+                        : currentSpeaker === char1 && isPlaying
+                          ? "text-yellow-200"
+                          : "text-gray-400"
+                    }`}
+                  >
+                    {char1Status}
+                  </p>
+
+                  {/* Enhanced sound wave animation */}
+                  <div className="h-6 flex items-center justify-center mb-4">
+                    {currentSpeaker === char1 && isPlaying && (
+                      <div className="flex space-x-1">
+                        {[...Array(7)].map((_, i) => (
+                          <div
+                            key={i}
+                            className="w-1 bg-gradient-to-t from-yellow-500 to-orange-400 rounded-full animate-pulse"
+                            style={{
+                              height: `${8 + (i % 4) * 4}px`,
+                              animationDelay: `${i * 0.1}s`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Character 2 */}
+                <div className="text-center">
+                  <div className="relative mb-4">
+                    <div
+                      className={`w-32 h-32 mx-auto rounded-full overflow-hidden transition-all duration-300 ${
+                        currentSpeaker === char2 && isPlaying
+                          ? "ring-4 ring-yellow-400 ring-opacity-75 shadow-lg shadow-yellow-400/50"
+                          : currentSpeaker === char2 && isLoadingAudio
+                            ? "ring-4 ring-blue-400 ring-opacity-75"
+                            : "ring-2 ring-gray-600"
+                      }`}
+                    >
+                      <img
+                        src={character2Obj.image || "/placeholder.svg"}
+                        alt={character2Obj.name}
+                        className={`w-full h-full object-cover transition-all duration-300 ${
+                          currentSpeaker === char2 && isPlaying
+                            ? "scale-110"
+                            : currentSpeaker === char2 && isLoadingAudio
+                              ? "opacity-75"
+                              : ""
+                        }`}
+                      />
+                      {currentSpeaker === char2 && isLoadingAudio && (
+                        <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
+                          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      )}
+                      {currentSpeaker === char2 && isPlaying && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-yellow-500 to-orange-400 opacity-10 animate-pulse"></div>
+                      )}
+                    </div>
+
+                    {/* Pulsing ring animation when speaking */}
+                    {currentSpeaker === char2 && isPlaying && (
+                      <div className="absolute inset-0 rounded-full border-4 border-yellow-400 animate-ping opacity-75"></div>
+                    )}
+                  </div>
+
+                  <h3
+                    className={`text-lg font-semibold mb-2 transition-colors duration-300 ${
+                      currentSpeaker === char2 && isPlaying
+                        ? "text-yellow-300"
+                        : currentSpeaker === char2
+                          ? "text-yellow-400"
+                          : "text-gray-300"
+                    }`}
+                  >
+                    {character2Obj.name}
+                  </h3>
+
+                  <p
+                    className={`text-sm mb-4 transition-colors duration-300 ${
+                      currentSpeaker === char2 && isLoadingAudio
+                        ? "text-blue-300"
+                        : currentSpeaker === char2 && isPlaying
+                          ? "text-yellow-200"
+                          : "text-gray-400"
+                    }`}
+                  >
+                    {char2Status}
+                  </p>
+
+                  {/* Enhanced sound wave animation */}
+                  <div className="h-6 flex items-center justify-center mb-4">
+                    {currentSpeaker === char2 && isPlaying && (
+                      <div className="flex space-x-1">
+                        {[...Array(7)].map((_, i) => (
+                          <div
+                            key={i}
+                            className="w-1 bg-gradient-to-t from-yellow-500 to-orange-400 rounded-full animate-pulse"
+                            style={{
+                              height: `${8 + (i % 4) * 4}px`,
+                              animationDelay: `${i * 0.1}s`,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
