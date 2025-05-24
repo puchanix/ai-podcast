@@ -669,6 +669,20 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     flexDirection: "column",
   }
 
+  const resetDebate = () => {
+    setIsDebating(false)
+    setCurrentTopic("")
+    setIsProcessing(false)
+    setAudioError(null)
+    setCurrentSpeaker(null)
+    setIsPlaying(false)
+
+    if (char1AudioRef.current) char1AudioRef.current.pause()
+    if (char2AudioRef.current) char2AudioRef.current.pause()
+
+    if (onDebateEnd) onDebateEnd()
+  }
+
   return (
     <div
       className={`${embedded ? "" : "container mx-auto py-8 px-4 max-w-6xl"} bg-gray-900 text-white`}
