@@ -35,7 +35,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [initialStateLoaded, setInitialStateLoaded] = useState(false)
   const [char1, setChar1] = useState("")
   const [char2, setChar2] = useState("")
-  const [isDebating, setIsDebating] = useState(isDebating)
+  const [isDebating, setIsDebating] = useState(false) // Fixed circular reference
   const [debateMessages, setDebateMessages] = useState([])
   const [currentTopic, setCurrentTopic] = useState("")
   const [exchangeCount, setExchangeCount] = useState(0)
@@ -79,7 +79,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [isAudioLoaded, setIsAudioLoaded] = useState(false)
   const [volume, setVolume] = useState(1.0)
   const [audioError, setAudioError] = useState(null)
-  const [isLoadingAudio, setIsLoadingAudio] = useState(isLoadingAudio)
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false) // Fixed circular reference
   const [audioInitialized, setAudioInitialized] = useState(false)
   const [isUnlockingAudio, setIsUnlockingAudio] = useState(false)
   const [isInitializing, setIsInitializing] = useState(true)
@@ -1014,25 +1014,10 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           </div>
         )}
 
-        {/* DEBUG INFO */}
-        <div className="mb-4 p-4 bg-purple-900 text-purple-100 rounded-lg">
-          <p>
-            <strong>Debug Info:</strong>
-          </p>
-          <p>isDebating: {isDebating ? "true" : "false"}</p>
-          <p>currentSpeaker: {currentSpeaker || "null"}</p>
-          <p>isPlaying: {isPlaying ? "true" : "false"}</p>
-          <p>isLoadingAudio: {isLoadingAudio ? "true" : "false"}</p>
-          <p>statusMessage: {statusMessage || "empty"}</p>
-          <p>
-            personas[currentSpeaker]?.name:{" "}
-            {currentSpeaker ? personas[currentSpeaker]?.name || "not found" : "no speaker"}
-          </p>
-        </div>
-
+        {/* Show all characters with greyed out non-debaters */}
         {isDebating && (
           <div className="mb-6">
-            <div className="bg-red-500 rounded-lg p-6 border-4 border-yellow-400">
+            <div className="bg-gray-800 rounded-lg p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-yellow-400">
                   🔥 DEBATE ACTIVE: {character1Obj?.name} vs {character2Obj?.name} 🔥
@@ -1047,83 +1032,176 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
               {currentTopic && <p className="text-gray-300 mb-4">Topic: {currentTopic}</p>}
 
-              <div className="flex items-center justify-between">
-                {currentSpeaker && (
-                  <div className="flex items-center space-x-3">
-                    <div className="relative">
-                      <div
-                        className={`w-16 h-16 rounded-full overflow-hidden transition-all duration-300 ${
-                          isPlaying
-                            ? "ring-4 ring-yellow-400 ring-opacity-75 shadow-lg shadow-yellow-400/50"
-                            : isLoadingAudio
-                              ? "ring-4 ring-blue-400 ring-opacity-75"
-                              : "ring-2 ring-gray-600"
-                        }`}
-                      >
-                        <img
-                          src={personas[currentSpeaker]?.image || "/placeholder.svg"}
-                          alt={personas[currentSpeaker]?.name}
-                          className={`w-full h-full object-cover transition-all duration-300 ${
-                            isPlaying ? "scale-110" : isLoadingAudio ? "opacity-75" : ""
+              {/* Show all characters */}
+              <div className="grid grid-cols-5 gap-4 mb-6">
+                {Object.keys(personas).map((characterId) => {
+                  const isDebater = characterId === char1 || characterId === char2
+                  const isCurrentSpeaker = characterId === currentSpeaker
+                  const character = personas[characterId]
+
+                  return (
+                    <div
+                      key={characterId}
+                      className={`text-center transition-all duration-300 ${
+                        isDebater ? "opacity-100" : "opacity-30 grayscale"
+                      }`}
+                    >
+                      <div className="relative">
+                        <div
+                          className={`w-16 h-16 mx-auto rounded-full overflow-hidden transition-all duration-300 ${
+                            isCurrentSpeaker && isPlaying
+                              ? "ring-4 ring-yellow-400 ring-opacity-75 shadow-lg shadow-yellow-400/50"
+                              : isCurrentSpeaker && isLoadingAudio
+                                ? "ring-4 ring-blue-400 ring-opacity-75"
+                                : isDebater
+                                  ? "ring-2 ring-gray-600"
+                                  : "ring-1 ring-gray-700"
                           }`}
-                        />
-                        {isLoadingAudio && (
-                          <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
-                            <div className="w-8 h-8 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-                          </div>
-                        )}
-                        {isPlaying && (
-                          <div className="absolute inset-0 bg-gradient-to-r from-yellow-500 to-orange-400 opacity-10 animate-pulse"></div>
+                        >
+                          <img
+                            src={character?.image || "/placeholder.svg"}
+                            alt={character?.name}
+                            className={`w-full h-full object-cover transition-all duration-300 ${
+                              isCurrentSpeaker && isPlaying
+                                ? "scale-110"
+                                : isCurrentSpeaker && isLoadingAudio
+                                  ? "opacity-75"
+                                  : ""
+                            }`}
+                          />
+                          {isCurrentSpeaker && isLoadingAudio && (
+                            <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
+                              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                          )}
+                          {isCurrentSpeaker && isPlaying && (
+                            <div className="absolute inset-0 bg-gradient-to-r from-yellow-500 to-orange-400 opacity-10 animate-pulse"></div>
+                          )}
+                        </div>
+
+                        {/* Pulsing ring animation when speaking */}
+                        {isCurrentSpeaker && isPlaying && (
+                          <div className="absolute inset-0 rounded-full border-4 border-yellow-400 animate-ping opacity-75"></div>
                         )}
                       </div>
 
-                      {/* Pulsing ring animation when speaking */}
-                      {isPlaying && (
-                        <div className="absolute inset-0 rounded-full border-4 border-yellow-400 animate-ping opacity-75"></div>
-                      )}
-                    </div>
+                      <p
+                        className={`text-xs mt-2 transition-colors duration-300 ${
+                          isCurrentSpeaker && isPlaying
+                            ? "text-yellow-300 font-bold"
+                            : isDebater
+                              ? "text-yellow-400"
+                              : "text-gray-500"
+                        }`}
+                      >
+                        {character?.name}
+                      </p>
 
-                    <div className="flex-1">
-                      <p
-                        className={`text-lg font-bold transition-colors duration-300 ${
-                          isPlaying ? "text-yellow-300" : "text-yellow-400"
-                        }`}
-                      >
-                        {personas[currentSpeaker]?.name}
-                      </p>
-                      <p
-                        className={`text-sm transition-colors duration-300 ${
-                          isLoadingAudio ? "text-blue-300" : isPlaying ? "text-yellow-200" : "text-gray-400"
-                        }`}
-                      >
-                        {statusMessage || (isLoadingAudio ? "Thinking..." : isPlaying ? "Speaking..." : "Ready")}
-                      </p>
+                      {isCurrentSpeaker && (
+                        <p
+                          className={`text-xs transition-colors duration-300 ${
+                            isLoadingAudio ? "text-blue-300" : isPlaying ? "text-yellow-200" : "text-gray-400"
+                          }`}
+                        >
+                          {statusMessage || (isLoadingAudio ? "Thinking..." : isPlaying ? "Speaking..." : "Ready")}
+                        </p>
+                      )}
 
                       {/* Enhanced sound wave animation */}
-                      <div className="h-6 flex items-center mt-2">
-                        {isPlaying && (
-                          <div className="flex space-x-1">
-                            {[...Array(8)].map((_, i) => (
-                              <div
-                                key={i}
-                                className={`w-1 bg-gradient-to-t from-yellow-500 to-orange-400 rounded-full animate-[soundwave_${0.4 + i * 0.1}s_ease-in-out_infinite_${i * 0.05}s]`}
-                                style={{
-                                  height: `${8 + (i % 3) * 4}px`,
-                                  animationDelay: `${i * 0.1}s`,
-                                }}
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      {isCurrentSpeaker && (
+                        <div className="h-4 flex items-center justify-center mt-1">
+                          {isPlaying && (
+                            <div className="flex space-x-1">
+                              {[...Array(5)].map((_, i) => (
+                                <div
+                                  key={i}
+                                  className={`w-0.5 bg-gradient-to-t from-yellow-500 to-orange-400 rounded-full animate-[soundwave_${0.4 + i * 0.1}s_ease-in-out_infinite_${i * 0.05}s]`}
+                                  style={{
+                                    height: `${4 + (i % 3) * 2}px`,
+                                    animationDelay: `${i * 0.1}s`,
+                                  }}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
+                  )
+                })}
               </div>
             </div>
           </div>
         )}
+
+        {!isDebating && !isIntroPlaying && !embedded && dependenciesLoaded && (
+          <div className="mb-8">
+            <EmbeddedTopicSelector onSelectTopic={startDebate} character1={char1} character2={char2} />
+          </div>
+        )}
+
+        {(isSettingUp || isPreparing) && !embedded && (
+          <div className="flex justify-center items-center mb-8">
+            <div className="text-center">
+              <div className="inline-block animate-spin h-10 w-10 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
+              <p className="text-yellow-400 text-lg">
+                {isSettingUp
+                  ? "Setting up the debate..."
+                  : isPreparing
+                    ? "Preparing next response..."
+                    : "Processing..."}
+              </p>
+              {statusMessage && <p className="text-yellow-300 text-sm mt-2">{statusMessage}</p>}
+            </div>
+          </div>
+        )}
+
+        {embedded && isDebating && (
+          <div className="mb-8 flex justify-center">
+            <VoiceInput onSubmit={submitCustomQuestion} buttonText="Ask Custom Question" />
+          </div>
+        )}
+
+        {!embedded && (
+          <div className="mt-auto mb-4 text-center">
+            <a href="/" className="inline-block bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-full">
+              Return to Home
+            </a>
+          </div>
+        )}
       </div>
+
+      <audio ref={silentAudioRef} preload="auto" className="hidden" />
+      <audio ref={introAudioRef} preload="auto" className="hidden" />
+      <audio ref={char1AudioRef} preload="auto" className="hidden" />
+      <audio ref={char2AudioRef} preload="auto" className="hidden" />
+
+      <style jsx global>{`
+        @keyframes soundwave {
+          0%,
+          100% {
+            height: 4px;
+          }
+          50% {
+            height: 16px;
+          }
+        }
+        
+        @keyframes micPass {
+          0% {
+            transform: translateX(-50px) rotate(-30deg);
+            opacity: 0;
+          }
+          50% {
+            transform: translateX(0) rotate(0deg);
+            opacity: 1;
+          }
+          100% {
+            transform: translateX(50px) rotate(30deg);
+            opacity: 0;
+          }
+        }
+      `}</style>
     </div>
   )
 }
