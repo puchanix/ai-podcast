@@ -19,6 +19,10 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
 
+  // Custom topic recording state
+  const [isRecordingCustomTopic, setIsRecordingCustomTopic] = useState(false)
+  const [isProcessingCustomTopic, setIsProcessingCustomTopic] = useState(false)
+
   // Debate state
   const [isDebating, setIsDebating] = useState(false)
   const [debateTopic, setDebateTopic] = useState("")
@@ -38,6 +42,11 @@ export default function Home() {
   const currentAudioRef = useRef(null)
   const debateMessagesRef = useRef([])
   const debateRoundRef = useRef(0)
+
+  // Custom topic recording refs
+  const customTopicMediaRecorderRef = useRef(null)
+  const customTopicAudioChunksRef = useRef([])
+  const customTopicStreamRef = useRef(null)
 
   // ADD TOPIC REF - This is the key fix!
   const debateTopicRef = useRef("")
@@ -280,6 +289,94 @@ export default function Home() {
         track.stop()
       })
       streamRef.current = null
+    }
+  }, [])
+
+  // Custom topic recording functions
+  const startCustomTopicRecording = useCallback(async () => {
+    try {
+      setAudioError(null)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: 16000,
+        },
+      })
+      customTopicStreamRef.current = stream
+
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: "audio/webm;codecs=opus",
+      })
+      customTopicMediaRecorderRef.current = mediaRecorder
+      customTopicAudioChunksRef.current = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          customTopicAudioChunksRef.current.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(customTopicAudioChunksRef.current, { type: "audio/webm" })
+        await processCustomTopicAudio(audioBlob)
+      }
+
+      mediaRecorder.start(1000)
+      setIsRecordingCustomTopic(true)
+    } catch (error) {
+      console.error("Error accessing microphone for custom topic:", error)
+      setAudioError("Could not access microphone. Please check permissions.")
+    }
+  }, [])
+
+  const stopCustomTopicRecording = useCallback(() => {
+    if (customTopicMediaRecorderRef.current && customTopicMediaRecorderRef.current.state === "recording") {
+      customTopicMediaRecorderRef.current.stop()
+      setIsRecordingCustomTopic(false)
+    }
+
+    if (customTopicStreamRef.current) {
+      customTopicStreamRef.current.getTracks().forEach((track) => {
+        track.stop()
+      })
+      customTopicStreamRef.current = null
+    }
+  }, [])
+
+  const processCustomTopicAudio = useCallback(async (audioBlob) => {
+    setIsProcessingCustomTopic(true)
+    setAudioError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append("audio", audioBlob, "custom-topic.webm")
+
+      const transcriptionResponse = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!transcriptionResponse.ok) {
+        const errorText = await transcriptionResponse.text()
+        throw new Error("Failed to transcribe audio: " + errorText)
+      }
+
+      const { text } = await transcriptionResponse.json()
+
+      if (!text || text.trim().length === 0) {
+        throw new Error("No speech detected. Please try again.")
+      }
+
+      // Start debate with the custom topic
+      setShowTopicSelector(false)
+      startDebate(text.trim())
+    } catch (error) {
+      console.error("Error processing custom topic audio:", error)
+      setAudioError(`Error: ${error.message}`)
+    } finally {
+      setIsProcessingCustomTopic(false)
     }
   }, [])
 
@@ -685,6 +782,8 @@ export default function Home() {
     setSpeakerStatus(null)
     setDebateRound(0)
     setIsPaused(false)
+    setIsRecordingCustomTopic(false)
+    setIsProcessingCustomTopic(false)
     // DON'T reset voiceIds - keep them loaded!
   }
 
@@ -720,6 +819,14 @@ export default function Home() {
     },
     [selectedCharacters],
   )
+
+  const handleCustomTopicClick = useCallback(() => {
+    if (isRecordingCustomTopic) {
+      stopCustomTopicRecording()
+    } else if (!isProcessingCustomTopic) {
+      startCustomTopicRecording()
+    }
+  }, [isRecordingCustomTopic, isProcessingCustomTopic, startCustomTopicRecording, stopCustomTopicRecording])
 
   // Small microphone icon component
   const SmallMicIcon = ({ isActive }) => (
@@ -988,23 +1095,68 @@ export default function Home() {
                     <span className="text-gray-300">Generating topics...</span>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {topics.map((topic) => (
-                      <div
-                        key={topic.id}
-                        onClick={() => handleTopicSelect(topic)}
-                        className="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 cursor-pointer transition-all duration-300 hover:scale-105 border border-gray-600 hover:border-yellow-400"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <h3 className="text-lg font-semibold text-yellow-400 flex-1">{topic.title}</h3>
-                          <span className="text-xs bg-yellow-500 text-black px-2 py-1 rounded-full ml-2">
-                            {topic.category}
-                          </span>
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      {topics.map((topic) => (
+                        <div
+                          key={topic.id}
+                          onClick={() => handleTopicSelect(topic)}
+                          className="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 cursor-pointer transition-all duration-300 hover:scale-105 border border-gray-600 hover:border-yellow-400"
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <h3 className="text-lg font-semibold text-yellow-400 flex-1">{topic.title}</h3>
+                            <span className="text-xs bg-yellow-500 text-black px-2 py-1 rounded-full ml-2">
+                              {topic.category}
+                            </span>
+                          </div>
+                          <p className="text-gray-300 text-sm">{topic.description}</p>
                         </div>
-                        <p className="text-gray-300 text-sm">{topic.description}</p>
+                      ))}
+                    </div>
+
+                    {/* Custom Topic Button */}
+                    <div className="border-t border-gray-700 pt-6">
+                      <h3 className="text-lg font-semibold text-yellow-400 mb-4 text-center">
+                        Or create your own topic
+                      </h3>
+                      <div className="flex justify-center">
+                        <button
+                          onClick={handleCustomTopicClick}
+                          disabled={isProcessingCustomTopic}
+                          className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 flex items-center space-x-2 ${
+                            isRecordingCustomTopic
+                              ? "bg-red-600 hover:bg-red-700 text-white animate-pulse"
+                              : isProcessingCustomTopic
+                                ? "bg-blue-600 text-white cursor-not-allowed"
+                                : "bg-purple-600 hover:bg-purple-700 text-white"
+                          }`}
+                        >
+                          <SmallMicIcon isActive={isRecordingCustomTopic} />
+                          <span>
+                            {isRecordingCustomTopic
+                              ? "Stop Recording"
+                              : isProcessingCustomTopic
+                                ? "Processing..."
+                                : "Record Custom Topic"}
+                          </span>
+                        </button>
                       </div>
-                    ))}
-                  </div>
+                      {isRecordingCustomTopic && (
+                        <div className="mt-4 text-center">
+                          <div className="flex justify-center mt-2 mb-2">
+                            <div className="flex space-x-1">
+                              <div className="w-1 h-4 bg-blue-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
+                              <div className="w-1 h-6 bg-yellow-500 rounded-full animate-[soundwave_0.7s_ease-in-out_infinite_0.1s]"></div>
+                              <div className="w-1 h-3 bg-green-500 rounded-full animate-[soundwave_0.4s_ease-in-out_infinite_0.2s]"></div>
+                              <div className="w-1 h-5 bg-red-500 rounded-full animate-[soundwave_0.6s_ease-in-out_infinite_0.3s]"></div>
+                              <div className="w-1 h-2 bg-purple-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite_0.4s]"></div>
+                            </div>
+                          </div>
+                          <p className="text-gray-300">Speak your debate topic...</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
