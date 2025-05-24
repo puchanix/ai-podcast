@@ -100,7 +100,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   const [currentAudioUrls, setCurrentAudioUrls] = useState({ char1: "", char2: "" })
 
-  // DEBUG: Track render count and state changes
+  // DEBUG: Track render count and state changes (with proper dependencies)
   useEffect(() => {
     setDebugInfo((prev) => ({
       ...prev,
@@ -108,7 +108,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       lastUpdate: new Date().toISOString(),
     }))
     console.log("🔍 DebateInterface render #", debugInfo.renderCount + 1)
-  })
+  }, [dependenciesLoaded, isDebating, currentSpeaker]) // Only update on meaningful changes
 
   // DEBUG: Log all state changes
   useEffect(() => {
@@ -134,7 +134,10 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   const updateIsDebating = (debating) => {
     console.log("🔍 updateIsDebating called with:", debating)
-    setIsDebating(debating)
+    setIsDebating((prev) => {
+      console.log("🔍 isDebating state changing from", prev, "to", debating)
+      return debating
+    })
     isDebatingRef.current = debating
     if (!embedded && debateState) debateState.saveIsDebating(debating)
   }
@@ -929,7 +932,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         startDebateMain(currentTopic)
       }, 100)
     }
-  }, [dependenciesLoaded, initialStateLoaded, currentTopic, isDebating, isStarting])
+  }, [dependenciesLoaded, initialStateLoaded, currentTopic, isDebating, isStarting, char1, char2])
 
   // DEBUG: Check visual rendering conditions
   const shouldShowVisuals = isDebating
