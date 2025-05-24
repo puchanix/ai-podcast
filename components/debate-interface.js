@@ -518,9 +518,12 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   useEffect(() => {
     if (dependenciesLoaded && initialStateLoaded && currentTopic && !isDebating && !isStarting) {
       console.log("Auto-starting debate with topic:", currentTopic)
-      startDebateMain(currentTopic)
+      // Use setTimeout to avoid circular dependency
+      setTimeout(() => {
+        startDebateMain(currentTopic)
+      }, 100)
     }
-  }, [dependenciesLoaded, initialStateLoaded, currentTopic, isDebating, isStarting, startDebateMain])
+  }, [dependenciesLoaded, initialStateLoaded, currentTopic, isDebating, isStarting])
 
   // Get the appropriate voice for a character
   const getVoiceForCharacter = useCallback(
@@ -856,9 +859,11 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
       console.log("Starting debate immediately...")
       // Skip introduction for faster start
-      startDebateMain(topic)
+      setTimeout(() => {
+        startDebateMain(topic)
+      }, 100)
     },
-    [startDebateMain, dependenciesLoaded, initialStateLoaded, char1, char2, isDebating, isStarting],
+    [dependenciesLoaded, initialStateLoaded, char1, char2, isDebating, isStarting, startDebateMain],
   )
 
   // Add this function to toggle auto-play
@@ -1044,7 +1049,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         setIsProcessing(false)
       }
     },
-    [char1, char2, debateFormat, historicalContext, isProcessing],
+    [char1, char2, debateFormat, historicalContext, isProcessing, playDebateAudio],
   )
 
   // Function to prepare next exchange during playback
@@ -1295,7 +1300,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     } finally {
       setIsProcessing(false)
     }
-  }, [char1, char2, debateFormat, historicalContext, isProcessing, retryCount])
+  }, [char1, char2, debateFormat, historicalContext, isProcessing, retryCount, playDebateAudio])
 
   // Function to manually force continue the debate
   const forceNextExchange = useCallback(async () => {
@@ -1485,7 +1490,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         startDebateAfterIntro(topic)
       }
     },
-    [char1, char2, debateFormat, historicalContext],
+    [char1, char2, debateFormat, historicalContext, continueWithPreparedDebate, startDebateAfterIntro],
   )
 
   // Add a new function to continue with prepared debate data
@@ -1522,13 +1527,16 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
       // Play the first character's audio and preload the second character's audio
       playDebateAudio(messages[0], messages, 0)
     },
-    [char1, char2, resetDebateState],
+    [char1, char2, resetDebateState, playDebateAudio],
   )
 
   // Start debate after introduction
-  const startDebateAfterIntro = useCallback((topic) => {
-    startDebateMain(topic)
-  }, [])
+  const startDebateAfterIntro = useCallback(
+    (topic) => {
+      startDebateMain(topic)
+    },
+    [startDebateMain],
+  )
 
   // Fixed height container for the entire interface
   const containerStyle = {
@@ -1736,7 +1744,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           {/* Voice Input for Custom Questions */}
           {embedded && isDebating && (
             <div className="mb-8 flex justify-center">
-              <VoiceInput onSubmit={() => {}} buttonText="Ask Custom Question" />
+              <VoiceInput onSubmit={submitCustomQuestion} buttonText="Ask Custom Question" />
             </div>
           )}
 
