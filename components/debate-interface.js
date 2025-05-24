@@ -1032,187 +1032,82 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
               {currentTopic && <p className="text-gray-300 mb-4">Topic: {currentTopic}</p>}
 
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  {currentSpeaker && (
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-yellow-400">
-                        {isLoadingAudio || isPreparing ? (
-                          <div className="relative w-full h-full">
-                            <img
-                              src={personas[currentSpeaker]?.image || "/placeholder.svg"}
-                              alt={personas[currentSpeaker]?.name}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-gray-800 opacity-50 flex items-center justify-center">
-                              <div className="h-6 w-6 text-yellow-400 animate-spin">
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <circle cx="12" cy="12" r="10"></circle>
-                                  <path d="M12 6v6l4 2"></path>
-                                </svg>
-                              </div>
-                            </div>
+                {currentSpeaker && (
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      <div
+                        className={`w-16 h-16 rounded-full overflow-hidden transition-all duration-300 ${
+                          isPlaying
+                            ? "ring-4 ring-yellow-400 ring-opacity-75 shadow-lg shadow-yellow-400/50"
+                            : isLoadingAudio
+                              ? "ring-4 ring-blue-400 ring-opacity-75"
+                              : "ring-2 ring-gray-600"
+                        }`}
+                      >
+                        <img
+                          src={personas[currentSpeaker]?.image || "/placeholder.svg"}
+                          alt={personas[currentSpeaker]?.name}
+                          className={`w-full h-full object-cover transition-all duration-300 ${
+                            isPlaying ? "scale-110" : isLoadingAudio ? "opacity-75" : ""
+                          }`}
+                        />
+                        {isLoadingAudio && (
+                          <div className="absolute inset-0 bg-blue-500 bg-opacity-20 flex items-center justify-center">
+                            <div className="w-8 h-8 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
                           </div>
-                        ) : isPlaying ? (
-                          <div className="relative w-full h-full">
-                            <img
-                              src={personas[currentSpeaker]?.image || "/placeholder.svg"}
-                              alt={personas[currentSpeaker]?.name}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 opacity-20 animate-pulse"></div>
-                          </div>
-                        ) : (
-                          <img
-                            src={personas[currentSpeaker]?.image || "/placeholder.svg"}
-                            alt={personas[currentSpeaker]?.name}
-                            className="w-full h-full object-cover"
-                          />
+                        )}
+                        {isPlaying && (
+                          <div className="absolute inset-0 bg-gradient-to-r from-yellow-500 to-orange-400 opacity-10 animate-pulse"></div>
                         )}
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-yellow-400">{personas[currentSpeaker]?.name}</p>
-                        <p className="text-xs text-gray-400">
-                          {statusMessage || (isLoadingAudio ? "Thinking..." : isPlaying ? "Speaking..." : "Ready")}
-                        </p>
-                        {/* Sound wave animation */}
-                        <div className="h-4 flex items-center mt-1">
-                          {isPlaying && (
-                            <div className="flex space-x-1">
-                              <div className="w-1 h-2 bg-blue-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
-                              <div className="w-1 h-3 bg-yellow-500 rounded-full animate-[soundwave_0.7s_ease-in-out_infinite_0.1s]"></div>
-                              <div className="w-1 h-2 bg-green-500 rounded-full animate-[soundwave_0.4s_ease-in-out_infinite_0.2s]"></div>
-                              <div className="w-1 h-3 bg-red-500 rounded-full animate-[soundwave_0.6s_ease-in-out_infinite_0.3s]"></div>
-                              <div className="w-1 h-1 bg-purple-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite_0.4s]"></div>
-                            </div>
-                          )}
-                        </div>
+
+                      {/* Pulsing ring animation when speaking */}
+                      {isPlaying && (
+                        <div className="absolute inset-0 rounded-full border-4 border-yellow-400 animate-ping opacity-75"></div>
+                      )}
+                    </div>
+
+                    <div className="flex-1">
+                      <p
+                        className={`text-lg font-bold transition-colors duration-300 ${
+                          isPlaying ? "text-yellow-300" : "text-yellow-400"
+                        }`}
+                      >
+                        {personas[currentSpeaker]?.name}
+                      </p>
+                      <p
+                        className={`text-sm transition-colors duration-300 ${
+                          isLoadingAudio ? "text-blue-300" : isPlaying ? "text-yellow-200" : "text-gray-400"
+                        }`}
+                      >
+                        {statusMessage || (isLoadingAudio ? "Thinking..." : isPlaying ? "Speaking..." : "Ready")}
+                      </p>
+
+                      {/* Enhanced sound wave animation */}
+                      <div className="h-6 flex items-center mt-2">
+                        {isPlaying && (
+                          <div className="flex space-x-1">
+                            {[...Array(8)].map((_, i) => (
+                              <div
+                                key={i}
+                                className={`w-1 bg-gradient-to-t from-yellow-500 to-orange-400 rounded-full animate-[soundwave_${0.4 + i * 0.1}s_ease-in-out_infinite_${i * 0.05}s]`}
+                                style={{
+                                  height: `${8 + (i % 3) * 4}px`,
+                                  animationDelay: `${i * 0.1}s`,
+                                }}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
-                  )}
-
-                  {nextSpeaker && nextSpeaker !== currentSpeaker && (
-                    <div className="flex items-center space-x-2 opacity-60">
-                      <span className="text-xs text-gray-500">Next:</span>
-                      <div className="w-8 h-8 rounded-full overflow-hidden">
-                        <img
-                          src={personas[nextSpeaker]?.image || "/placeholder.svg"}
-                          alt={personas[nextSpeaker]?.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <span className="text-xs text-gray-500">{personas[nextSpeaker]?.name}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <button
-                    onClick={toggleAutoplay}
-                    className={`px-3 py-1 rounded text-sm ${
-                      isAutoplaying ? "bg-green-600 hover:bg-green-700" : "bg-gray-600 hover:bg-gray-700"
-                    } text-white`}
-                  >
-                    {isAutoplaying ? "Auto" : "Manual"}
-                  </button>
-
-                  {exchangeCount > 0 && (
-                    <span className="text-sm text-gray-400">
-                      Exchange {exchangeCount}/{maxExchanges}
-                    </span>
-                  )}
-
-                  {(isSettingUp || isPreparing) && (
-                    <div className="flex items-center space-x-2">
-                      <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
-                      <span className="text-xs text-yellow-400">
-                        {isSettingUp ? "Setting up..." : isPreparing ? "Preparing..." : "Processing..."}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
-
-        {!isDebating && !isIntroPlaying && !embedded && dependenciesLoaded && (
-          <div className="mb-8">
-            <EmbeddedTopicSelector onSelectTopic={startDebate} character1={char1} character2={char2} />
-          </div>
-        )}
-
-        {(isSettingUp || isPreparing) && !embedded && (
-          <div className="flex justify-center items-center mb-8">
-            <div className="text-center">
-              <div className="inline-block animate-spin h-10 w-10 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
-              <p className="text-yellow-400 text-lg">
-                {isSettingUp
-                  ? "Setting up the debate..."
-                  : isPreparing
-                    ? "Preparing next response..."
-                    : "Processing..."}
-              </p>
-              {statusMessage && <p className="text-yellow-300 text-sm mt-2">{statusMessage}</p>}
-            </div>
-          </div>
-        )}
-
-        {embedded && isDebating && (
-          <div className="mb-8 flex justify-center">
-            <VoiceInput onSubmit={submitCustomQuestion} buttonText="Ask Custom Question" />
-          </div>
-        )}
-
-        {!embedded && (
-          <div className="mt-auto mb-4 text-center">
-            <a href="/" className="inline-block bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-full">
-              Return to Home
-            </a>
-          </div>
-        )}
       </div>
-
-      <audio ref={silentAudioRef} preload="auto" className="hidden" />
-      <audio ref={introAudioRef} preload="auto" className="hidden" />
-      <audio ref={char1AudioRef} preload="auto" className="hidden" />
-      <audio ref={char2AudioRef} preload="auto" className="hidden" />
-
-      <style jsx global>{`
-        @keyframes soundwave {
-          0%,
-          100% {
-            height: 4px;
-          }
-          50% {
-            height: 16px;
-          }
-        }
-        
-        @keyframes micPass {
-          0% {
-            transform: translateX(-50px) rotate(-30deg);
-            opacity: 0;
-          }
-          50% {
-            transform: translateX(0) rotate(0deg);
-            opacity: 1;
-          }
-          100% {
-            transform: translateX(50px) rotate(30deg);
-            opacity: 0;
-          }
-        }
-      `}</style>
     </div>
   )
 }
-
-export default DebateInterface
