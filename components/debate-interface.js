@@ -271,8 +271,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
           character2: char2,
           currentMessages: debateMessagesRef.current,
           topic: currentTopic,
-          format: "pointCounterpoint",
-          historicalContext: true,
         }),
       })
 
