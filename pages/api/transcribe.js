@@ -1,67 +1,119 @@
-import OpenAI from "openai"
-import formidable from "formidable"
-import fs from "fs"
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+import Busboy from "busboy"
+import FormData from "form-data"
+import axios from "axios"
 
 export const config = {
   api: {
     bodyParser: false,
+    responseLimit: false,
   },
 }
 
 export default async function handler(req, res) {
-  // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*")
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS")
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type")
-    return res.status(200).end()
-  }
-
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" })
   }
 
-  console.log("🔍 [TRANSCRIBE API] Request received:", req.method)
-  console.log("🔍 [TRANSCRIBE API] Headers:", req.headers)
+  let fileBuffer = null
+  let safeFilename = ""
 
   try {
-    const form = formidable({})
-    const [fields, files] = await form.parse(req)
-    console.log("🔍 [TRANSCRIBE API] Files received:", Object.keys(files))
-    console.log("🔍 [TRANSCRIBE API] Audio file details:", files.audio?.[0])
-
-    const audioFile = files.audio?.[0]
-    if (!audioFile) {
-      console.error("🔍 [TRANSCRIBE API] No audio file in request")
-      return res.status(400).json({ error: "No audio file provided" })
+    // Check if we have the OpenAI API key
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OpenAI API key not configured" })
     }
 
-    if (!audioFile.filepath) {
-      console.error("🔍 [TRANSCRIBE API] Audio file has no filepath")
-      return res.status(400).json({ error: "Invalid audio file" })
+    // Parse the form data
+    const { buffer, filename } = await parseFormData(req)
+    fileBuffer = buffer
+    safeFilename = filename
+
+    if (!fileBuffer || fileBuffer.length < 1000) {
+      return res.status(400).json({ error: "Audio file too small or missing" })
     }
 
-    console.log("🔍 [TRANSCRIBE API] Audio file path:", audioFile.filepath)
-    console.log("🔍 [TRANSCRIBE API] Audio file size:", audioFile.size)
+    // Determine the correct content type and filename for Whisper API
+    const apiFilename = safeFilename
+    let contentType = "audio/webm"
 
-    try {
-      console.log("🔍 [TRANSCRIBE API] Calling OpenAI Whisper API...")
-      const transcription = await openai.audio.transcriptions.create({
-        file: fs.createReadStream(audioFile.filepath),
-        model: "whisper-1",
-      })
-      console.log("🔍 [TRANSCRIBE API] Transcription successful:", transcription.text)
-      res.status(200).json({ text: transcription.text })
-    } catch (openaiError) {
-      console.error("🔍 [TRANSCRIBE API] OpenAI error:", openaiError)
-      res.status(500).json({ error: "OpenAI transcription failed", details: openaiError.message })
+    if (apiFilename.endsWith(".mp3")) {
+      contentType = "audio/mpeg"
+    } else if (apiFilename.endsWith(".m4a")) {
+      contentType = "audio/mp4"
+    } else if (apiFilename.endsWith(".wav")) {
+      contentType = "audio/wav"
     }
-  } catch (error) {
-    console.error("Transcribe API error:", error)
-    res.status(500).json({ error: "Failed to transcribe audio" })
+
+    const form = new FormData()
+    form.append("file", fileBuffer, {
+      filename: apiFilename,
+      contentType: contentType,
+    })
+
+    form.append("model", "whisper-1")
+    form.append("response_format", "json")
+    form.append("language", "en")
+    form.append("temperature", "0.0")
+
+    const response = await axios.post("https://api.openai.com/v1/audio/transcriptions", form, {
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        ...form.getHeaders(),
+      },
+      timeout: 60000,
+    })
+
+    if (!response.data || !response.data.text) {
+      return res.status(500).json({ error: "No transcript in response" })
+    }
+
+    const fullTranscript = response.data.text.trim()
+
+    res.status(200).json({ text: fullTranscript })
+  } catch (err) {
+    console.error("Transcription error:", err.response?.data || err.message)
+
+    const errorDetails = err.response?.data || {}
+    const errorMessage = errorDetails.error?.message || err.message || "Unknown error"
+
+    res.status(500).json({
+      error: "Failed to transcribe audio",
+      message: errorMessage,
+    })
   }
+}
+
+// Helper function to parse form data
+async function parseFormData(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = []
+    let filename = "recording.webm"
+
+    const busboy = Busboy({
+      headers: req.headers,
+      limits: {
+        fileSize: 25 * 1024 * 1024, // 25MB max file size
+      },
+    })
+
+    busboy.on("file", (fieldname, file, info) => {
+      const { filename: originalFilename } = info
+      filename = originalFilename || "recording.webm"
+
+      file.on("data", (chunk) => {
+        chunks.push(chunk)
+      })
+    })
+
+    busboy.on("finish", () => {
+      const buffer = Buffer.concat(chunks)
+      resolve({ buffer, filename })
+    })
+
+    busboy.on("error", (err) => {
+      reject(err)
+    })
+
+    req.pipe(busboy)
+  })
 }

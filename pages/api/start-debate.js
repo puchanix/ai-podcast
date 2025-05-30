@@ -1,174 +1,132 @@
-import OpenAI from "openai"
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
-
-function getVoiceForCharacter(character) {
-  const voiceMap = {
-    daVinci: "echo",
-    socrates: "echo",
-    frida: "nova",
-    shakespeare: "echo",
-    mozart: "echo",
+// Define personas directly to avoid import issues
+const personas = {
+    daVinci: {
+      name: "Leonardo da Vinci",
+      prompt:
+        "You are Leonardo da Vinci, the Renaissance polymath. You speak with curiosity about art, science, and invention. You often reference your observations of nature and your artistic works.",
+    },
+    socrates: {
+      name: "Socrates",
+      prompt:
+        "You are Socrates, the classical Greek philosopher. You speak through questioning, seeking wisdom through dialogue. You often say you know nothing and guide others to discover truth.",
+    },
+    frida: {
+      name: "Frida Kahlo",
+      prompt:
+        "You are Frida Kahlo, the passionate Mexican artist. You speak with intensity about art, pain, love, and Mexican culture. You are direct and emotionally expressive.",
+    },
+    shakespeare: {
+      name: "William Shakespeare",
+      prompt:
+        "You are William Shakespeare, the greatest playwright in English literature. You speak in eloquent, poetic language with wit and wisdom about human nature and the human condition.",
+    },
+    mozart: {
+      name: "Wolfgang Amadeus Mozart",
+      prompt:
+        "You are Wolfgang Amadeus Mozart, the musical genius. You speak with passion about music, composition, and the divine nature of musical harmony. You are playful yet profound.",
+    },
   }
-  return voiceMap[character] || "echo"
-}
-
-// Character definitions
-const characters = {
-  daVinci: {
-    name: "Leonardo da Vinci",
-    systemPrompt:
-      "You are Leonardo da Vinci, the great Renaissance polymath. Speak with curiosity about art, science, and invention. Keep responses concise but thoughtful.",
-    voice: "echo",
-  },
-  socrates: {
-    name: "Socrates",
-    systemPrompt:
-      "You are Socrates, the ancient Greek philosopher. Use the Socratic method, asking probing questions. Be wise but humble.",
-    voice: "echo",
-  },
-  frida: {
-    name: "Frida Kahlo",
-    systemPrompt:
-      "You are Frida Kahlo, the passionate Mexican artist. Speak with intensity about art, pain, love, and identity.",
-    voice: "nova",
-  },
-  shakespeare: {
-    name: "William Shakespeare",
-    systemPrompt:
-      "You are William Shakespeare, the Bard of Avon. Speak poetically but accessibly about human nature, love, and drama.",
-    voice: "echo",
-  },
-  mozart: {
-    name: "Wolfgang Amadeus Mozart",
-    systemPrompt:
-      "You are Wolfgang Amadeus Mozart, the classical composer. Speak passionately about music, creativity, and artistic expression.",
-    voice: "echo",
-  },
-}
-
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" })
-  }
-
-  try {
-    const { character1, character2, topic } = req.body
-
-    if (!character1 || !character2 || !topic) {
-      return res.status(400).json({ error: "Missing required fields" })
+  
+  export default async function handler(req, res) {
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" })
     }
-
-    if (!characters[character1] || !characters[character2]) {
-      return res.status(400).json({ error: "Invalid characters" })
-    }
-
-    const char1Data = characters[character1]
-    const char2Data = characters[character2]
-
-    // Generate opening statements
-    const opening1Promise = openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: `${char1Data.systemPrompt} You are about to debate the topic: "${topic}". Give a compelling opening statement that establishes your position. Keep it to 2-3 sentences.`,
-        },
-        {
-          role: "user",
-          content: `Give your opening statement on the debate topic: "${topic}"`,
-        },
-      ],
-      max_tokens: 200,
-      temperature: 0.7,
-    })
-
-    const opening2Promise = openai.chat.completions.create({
-      model: "gpt-4",
-      messages: [
-        {
-          role: "system",
-          content: `${char2Data.systemPrompt} You are about to debate the topic: "${topic}". Give a compelling opening statement that establishes your position. Keep it to 2-3 sentences.`,
-        },
-        {
-          role: "user",
-          content: `Give your opening statement on the debate topic: "${topic}"`,
-        },
-      ],
-      max_tokens: 200,
-      temperature: 0.7,
-    })
-
-    const [completion1, completion2] = await Promise.all([opening1Promise, opening2Promise])
-
-    const opening1 = completion1.choices[0].message.content
-    const opening2 = completion2.choices[0].message.content
-
-    console.log("🔍 [START DEBATE API] Generated openings successfully")
-    console.log("🔍 [START DEBATE API] Opening 1:", opening1.substring(0, 50) + "...")
-    console.log("🔍 [START DEBATE API] Opening 2:", opening2.substring(0, 50) + "...")
-
-    // Generate audio for the openings (your frontend expects audioUrl1 and audioUrl2)
+  
     try {
-      const audioPromises = [
-        fetch("/api/speak", {
+      console.log("🔍 [START DEBATE API] Received request")
+      const { character1, character2, topic } = req.body
+  
+      console.log("🔍 [START DEBATE API] Parameters:")
+      console.log("🔍 [START DEBATE API] - character1:", character1)
+      console.log("🔍 [START DEBATE API] - character2:", character2)
+      console.log("🔍 [START DEBATE API] - topic:", topic)
+  
+      if (!character1 || !character2 || !topic) {
+        return res.status(400).json({ error: "Missing required parameters" })
+      }
+  
+      const persona1 = personas[character1]
+      const persona2 = personas[character2]
+  
+      if (!persona1 || !persona2) {
+        return res.status(400).json({ error: "Invalid characters" })
+      }
+  
+      console.log("🔍 [START DEBATE API] Generating opening statements...")
+  
+      // Generate opening statements in parallel but with shorter, simpler prompts
+      const [opening1Response, opening2Response] = await Promise.all([
+        fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
           body: JSON.stringify({
-            text: opening1,
-            voice: getVoiceForCharacter(character1),
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: `${persona1.prompt} You are starting a debate about "${topic}". Give a brief opening statement (2-3 sentences max). Be authentic to your character.`,
+              },
+              {
+                role: "user",
+                content: `Give your opening statement on the topic: "${topic}"`,
+              },
+            ],
+            max_tokens: 150,
+            temperature: 0.8,
           }),
         }),
-        fetch("/api/speak", {
+        fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          },
           body: JSON.stringify({
-            text: opening2,
-            voice: getVoiceForCharacter(character2),
+            model: "gpt-4o-mini",
+            messages: [
+              {
+                role: "system",
+                content: `${persona2.prompt} You are starting a debate about "${topic}". Give a brief opening statement (2-3 sentences max). Be authentic to your character.`,
+              },
+              {
+                role: "user",
+                content: `Give your opening statement on the topic: "${topic}"`,
+              },
+            ],
+            max_tokens: 150,
+            temperature: 0.8,
           }),
         }),
-      ]
-
-      const [audioResponse1, audioResponse2] = await Promise.all(audioPromises)
-
-      let audioUrl1 = null
-      let audioUrl2 = null
-
-      if (audioResponse1.ok) {
-        const audioData1 = await audioResponse1.json()
-        audioUrl1 = audioData1.audioUrl
+      ])
+  
+      if (!opening1Response.ok || !opening2Response.ok) {
+        console.error("🔍 [START DEBATE API] OpenAI API error")
+        throw new Error("Failed to generate opening statements")
       }
-
-      if (audioResponse2.ok) {
-        const audioData2 = await audioResponse2.json()
-        audioUrl2 = audioData2.audioUrl
-      }
-
+  
+      const [data1, data2] = await Promise.all([opening1Response.json(), opening2Response.json()])
+  
+      const opening1 = data1.choices[0]?.message?.content || "I'm ready to discuss this topic."
+      const opening2 = data2.choices[0]?.message?.content || "I look forward to this debate."
+  
+      console.log("🔍 [START DEBATE API] Generated openings successfully")
+      console.log("🔍 [START DEBATE API] Opening 1:", opening1.substring(0, 50) + "...")
+      console.log("🔍 [START DEBATE API] Opening 2:", opening2.substring(0, 50) + "...")
+  
       return res.status(200).json({
         success: true,
         opening1,
         opening2,
-        audioUrl1,
-        audioUrl2,
         character1,
         character2,
         topic,
       })
-    } catch (audioError) {
-      console.log("🔍 [START DEBATE API] Audio generation failed, returning without audio")
-      return res.status(200).json({
-        success: true,
-        opening1,
-        opening2,
-        character1,
-        character2,
-        topic,
-      })
+    } catch (error) {
+      console.error("🔍 [START DEBATE API] Error:", error)
+      return res.status(500).json({ error: "Failed to start debate", details: error.message })
     }
-  } catch (error) {
-    console.error("Start debate API error:", error)
-    res.status(500).json({ error: "Failed to start debate" })
   }
-}
+  
