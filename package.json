@@ -1,37 +1,29 @@
 {
-  "name": "heroes-of-history",
-  "version": "0.1.0",
-  "private": true,
+  "name": "ai-podcast-tailwind-fixed",
+  "version": "1.0.0",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "vercel-build": "next build"
   },
   "dependencies": {
-    "@fortawesome/fontawesome-svg-core": "^6.7.2",
-    "@fortawesome/free-solid-svg-icons": "^6.7.2",
-    "@fortawesome/react-fontawesome": "^0.2.2",
-    "autoprefixer": "^10.4.21",
+    "@vercel/kv": "^3.0.0",
     "axios": "^1.9.0",
     "busboy": "^1.6.0",
     "form-data": "^4.0.2",
     "formidable": "^3.5.4",
-    "next": "^15.3.2",
-    "openai": "^4.103.0",
-    "postcss": "^8.5.4",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "redis": "^5.1.1",
-    "tailwindcss": "^4.1.8",
-    "tailwindcss-animate": "^1.0.7"
+    "next": "latest",
+    "node-fetch": "^3.3.2",
+    "openai": "^4.100.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "redis": "^5.0.1",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "eslint": "^8",
-    "eslint-config-next": "latest",
-    "typescript": "^5"
+    "autoprefixer": "^10.4.14",
+    "postcss": "^8.4.21",
+    "tailwindcss": "^3.3.2"
   }
 }

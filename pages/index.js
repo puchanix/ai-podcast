@@ -1,1555 +1,1010 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
-import Layout from "../components/layout"
+import React, { useState, useEffect, useRef, Suspense, useCallback } from "react"
+import Head from "next/head"
+import styles from "../styles/Home.module.css"
+import {
+  generateDebateTopics,
+  generateOpeningStatements,
+  generateArguments,
+  generateRebuttals,
+  generateClosingStatements,
+  generateDebateSummary,
+} from "../utils/api"
+import { useSpeechSynthesis, useSpeechRecognition } from "react-speech-kit"
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
+import {
+  faPlay,
+  faPause,
+  faRedo,
+  faMicrophone,
+  faStop,
+  faCog,
+  faQuestionCircle,
+  faExclamationTriangle,
+} from "@fortawesome/free-solid-svg-icons"
+import { useHotkeys } from "react-hotkeys-hook"
+import { useIdleTimer } from "react-idle-timer"
+import { Toaster, toast } from "react-hot-toast"
+import { useSearchParams } from "next/navigation"
+
+const CharacterSelect = React.lazy(() => import("../components/CharacterSelect"))
+const SettingsModal = React.lazy(() => import("../components/SettingsModal"))
+const HelpModal = React.lazy(() => import("../components/HelpModal"))
+const ErrorModal = React.lazy(() => import("../components/ErrorModal"))
 
 export default function Home() {
-  const [selectedPersona, setSelectedPersona] = useState("")
-  const [isListening, setIsListening] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [debateTopic, setDebateTopic] = useState("")
+  const [character1, setCharacter1] = useState("Elon Musk")
+  const [character2, setCharacter2] = useState("Donald Trump")
+  const [debateStage, setDebateStage] = useState("topic") // topic, opening, argument1, rebuttal1, argument2, rebuttal2, closing, summary
+  const [speechText, setSpeechText] = useState("")
+  const [isSpeaking, setIsSpeaking] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [speakerStatus, setSpeakerStatus] = useState("waiting") // waiting, speaking, done
+  const [currentSpeaker, setCurrentSpeaker] = useState(1)
   const [audioError, setAudioError] = useState(null)
-  const [mode, setMode] = useState("question") // 'question' or 'debate'
-  const [selectedCharacters, setSelectedCharacters] = useState([])
-  const [isLoadingVoices, setIsLoadingVoices] = useState(true)
-  const [voiceIds, setVoiceIds] = useState({})
-  const [thinkingMessage, setThinkingMessage] = useState("")
-  const [personas, setPersonas] = useState({})
-  const [showTopicSelector, setShowTopicSelector] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isPaused, setIsPaused] = useState(false)
-  const [isDebatePaused, setIsDebatePaused] = useState(false)
+  const [requiresUserInteraction, setRequiresUserInteraction] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
+  const [isErrorOpen, setIsErrorOpen] = useState(false)
+  const [volume, setVolume] = useState(0.5)
+  const [speechRate, setSpeechRate] = useState(1)
+  const [speechPitch, setSpeechPitch] = useState(1)
+  const [isMuted, setIsMuted] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [transcription, setTranscription] = useState("")
+  const [showTranscription, setShowTranscription] = useState(false)
+  const [transcriptionCharacter, setTranscriptionCharacter] = useState(1)
+  const [transcriptionDebateStage, setTranscriptionDebateStage] = useState("opening")
+  const [transcriptionHistory, setTranscriptionHistory] = useState([])
+  const [isIdle, setIsIdle] = useState(false)
+  const [idleTimeout, setIdleTimeout] = useState(600000) // 10 minutes
+  const [isFirstDebate, setIsFirstDebate] = useState(true)
   const [isDebating, setIsDebating] = useState(false)
 
-  // Custom topic recording state
-  const [isRecordingCustomTopic, setIsRecordingCustomTopic] = useState(false)
-  const [isProcessingCustomTopic, setIsProcessingCustomTopic] = useState(false)
-
-  // Debate state
-  const [debateTopic, setDebateTopic] = useState("")
-  const [topics, setTopics] = useState([])
-  const [loadingTopics, setLoadingTopics] = useState(false)
-  const [debateMessages, setDebateMessages] = useState([])
-  const [currentSpeaker, setCurrentSpeaker] = useState(null)
-  const [speakerStatus, setSpeakerStatus] = useState(null) // 'thinking', 'speaking', 'waiting'
-  const [debateRound, setDebateRound] = useState(0) // Track debate rounds
-
-  // Audio refs
-  const audioRef = useRef(null)
-  const mediaRecorderRef = useRef(null)
-  const audioChunksRef = useRef([])
-  const streamRef = useRef(null)
-  const currentPersonaRef = useRef("") // Use ref to track current persona
   const currentAudioRef = useRef(null)
-  const debateMessagesRef = useRef([])
-  const debateRoundRef = useRef(0)
-
-  // Custom topic recording refs
-  const customTopicMediaRecorderRef = useRef(null)
-  const customTopicAudioChunksRef = useRef([])
-  const customTopicStreamRef = useRef(null)
-
-  // ADD TOPIC REF - This is the key fix!
   const debateTopicRef = useRef("")
+  const character1Ref = useRef(character1)
+  const character2Ref = useRef(character2)
+  const debateStageRef = useRef(debateStage)
+  const speechTextRef = useRef(speechText)
+  const volumeRef = useRef(volume)
+  const speechRateRef = useRef(speechRate)
+  const speechPitchRef = useRef(speechPitch)
+  const debateMessagesRef = useRef([])
 
-  // ADD VOICE IDS REF - Fix for voice persistence!
-  const voiceIdsRef = useRef({})
+  const searchParams = useSearchParams()
+  const initialTopic = searchParams.get("topic")
 
-  // ADD SELECTED CHARACTERS REF - Fix for character persistence!
-  const selectedCharactersRef = useRef([])
+  const { speak, cancel, speaking, supported, voices } = useSpeechSynthesis()
+  const { listen, listening, stop, finalTranscript, resetTranscript, browserSupportsSpeechRecognition } =
+    useSpeechRecognition()
 
-  // Thinking messages for dynamic display
-  const thinkingMessages = [
-    "Thinking...",
-    "Pondering your question...",
-    "Reflecting on this matter...",
-    "Considering the depths of this inquiry...",
-    "Gathering thoughts...",
-    "Contemplating...",
-    "Preparing a response...",
-    "Delving into wisdom...",
-    "Searching through memories...",
-    "Formulating thoughts...",
-  ]
+  // Function to handle idle state
+  const handleOnIdle = () => {
+    console.log("user is idle")
+    setIsIdle(true)
+    cancelSpeech()
+    stopAudio()
+    stopRecording()
+  }
 
-  // Load voice IDs when component mounts - PERSIST ACROSS MODE CHANGES
-  useEffect(() => {
-    async function loadVoiceIds() {
-      try {
-        const response = await fetch("/api/get-voice-ids")
-        if (response.ok) {
-          const data = await response.json()
-          setVoiceIds(data)
-          voiceIdsRef.current = data // ALSO SET THE REF!
-        }
-      } catch (error) {
-        console.error("Error loading voice IDs:", error)
-      } finally {
-        setIsLoadingVoices(false)
-      }
-    }
+  const handleOnActive = () => {
+    console.log("user is active")
+    setIsIdle(false)
+  }
 
-    loadVoiceIds()
-  }, []) // Only run once on mount, don't depend on mode
+  const idleTimer = useIdleTimer({
+    timeout: idleTimeout,
+    onIdle: handleOnIdle,
+    onActive: handleOnActive,
+    debounce: 500,
+  })
 
-  // Load personas when component mounts
-  useEffect(() => {
-    async function loadPersonas() {
-      try {
-        const personasModule = await import("../lib/personas")
-        setPersonas(personasModule.personas)
-      } catch (error) {
-        console.error("Error loading personas:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
+  // Hotkey bindings
+  useHotkeys("space", () => handlePlayPause(), {
+    enableOnTags: ["TEXTAREA", "INPUT"],
+    preventDefault: true,
+  })
+  useHotkeys("ctrl+space", () => handlePlayPause(), {
+    enableOnTags: ["TEXTAREA", "INPUT"],
+    preventDefault: true,
+  })
+  useHotkeys("shift+space", () => handlePlayPause(), {
+    enableOnTags: ["TEXTAREA", "INPUT"],
+    preventDefault: true,
+  })
+  useHotkeys("r", () => handleRestart(), {
+    enableOnTags: ["TEXTAREA", "INPUT"],
+    preventDefault: true,
+  })
+  useHotkeys("m", () => handleToggleMute(), {
+    enableOnTags: ["TEXTAREA", "INPUT"],
+    preventDefault: true,
+  })
+  useHotkeys("t", () => toggleTranscription(), {
+    enableOnTags: ["TEXTAREA", "INPUT"],
+    preventDefault: true,
+  })
 
-    loadPersonas()
-  }, [])
-
-  // Load topics when two characters are selected
-  useEffect(() => {
-    async function fetchTopics() {
-      if (selectedCharacters.length === 2) {
-        setLoadingTopics(true)
-        try {
-          const response = await fetch("/api/generate-character-topics", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              character1: selectedCharacters[0],
-              character2: selectedCharacters[1],
-            }),
-          })
-
-          if (response.ok) {
-            const data = await response.json()
-            setTopics(data.topics || [])
-          } else {
-            setTopics([
-              {
-                id: "fallback-1",
-                title: "Philosophy and Wisdom",
-                description: "The nature of knowledge and understanding",
-                category: "philosophy",
-              },
-              {
-                id: "fallback-2",
-                title: "Art and Expression",
-                description: "The role of creativity in human experience",
-                category: "arts",
-              },
-            ])
-          }
-        } catch (error) {
-          setTopics([
-            {
-              id: "fallback-1",
-              title: "Philosophy and Wisdom",
-              description: "The nature of knowledge and understanding",
-              category: "philosophy",
-            },
-          ])
-        } finally {
-          setLoadingTopics(false)
-        }
-      }
-    }
-
-    fetchTopics()
-  }, [selectedCharacters])
-
-  // Update ref when selectedPersona changes
-  useEffect(() => {
-    currentPersonaRef.current = selectedPersona
-  }, [selectedPersona])
-
-  // Update refs for debate state
-  useEffect(() => {
-    debateMessagesRef.current = debateMessages
-  }, [debateMessages])
-
-  useEffect(() => {
-    debateRoundRef.current = debateRound
-  }, [debateRound])
-
-  // UPDATE TOPIC REF when debateTopic changes
+  // Update refs when state changes
   useEffect(() => {
     debateTopicRef.current = debateTopic
-  }, [debateTopic])
+    character1Ref.current = character1
+    character2Ref.current = character2
+    debateStageRef.current = debateStage
+    speechTextRef.current = speechText
+    volumeRef.current = volume
+    speechRateRef.current = speechRate
+    speechPitchRef.current = speechPitch
+  }, [debateTopic, character1, character2, debateStage, speechText, volume, speechRate, speechPitch])
 
-  // UPDATE VOICE IDS REF when voiceIds changes
+  // Initialize debate topic from URL params
   useEffect(() => {
-    voiceIdsRef.current = voiceIds
-  }, [voiceIds])
+    if (initialTopic) {
+      setDebateTopic(initialTopic)
+    }
+  }, [initialTopic])
 
-  // UPDATE SELECTED CHARACTERS REF when selectedCharacters changes
+  // Detect mobile
   useEffect(() => {
-    selectedCharactersRef.current = selectedCharacters
-  }, [selectedCharacters])
+    setIsMobile(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent))
+  }, [])
 
-  // Thinking message rotation effect
+  // Handle transcription
   useEffect(() => {
-    let interval
-    if (isProcessing) {
-      let messageIndex = 0
-      setThinkingMessage(thinkingMessages[0])
+    if (listening) {
+      toast.success("Transcription started", {
+        position: "bottom-center",
+        duration: 2000,
+      })
+    } else {
+      toast.success("Transcription stopped", {
+        position: "bottom-center",
+        duration: 2000,
+      })
+    }
+  }, [listening])
 
-      interval = setInterval(() => {
-        messageIndex = (messageIndex + 1) % thinkingMessages.length
-        setThinkingMessage(thinkingMessages[messageIndex])
-      }, 2000)
+  useEffect(() => {
+    if (finalTranscript) {
+      setTranscription(finalTranscript)
+    }
+  }, [finalTranscript])
+
+  // Function to start recording
+  const startRecording = () => {
+    console.log("startRecording")
+    setIsRecording(true)
+    setTranscription("")
+    resetTranscript()
+    listen()
+  }
+
+  // Function to stop recording
+  const stopRecording = () => {
+    console.log("stopRecording")
+    setIsRecording(false)
+    stop()
+    handleSaveTranscription()
+  }
+
+  // Function to toggle transcription
+  const toggleTranscription = () => {
+    if (isRecording) {
+      stopRecording()
+    } else {
+      startRecording()
+    }
+  }
+
+  // Function to handle saving transcription
+  const handleSaveTranscription = () => {
+    console.log("handleSaveTranscription")
+    const newTranscription = {
+      character: transcriptionCharacter,
+      debateStage: transcriptionDebateStage,
+      text: transcription,
     }
 
-    return () => {
-      if (interval) clearInterval(interval)
-    }
-  }, [isProcessing])
+    setTranscriptionHistory((prevHistory) => [...prevHistory, newTranscription])
+    setShowTranscription(true)
+  }
 
-  // Test API connectivity on component mount
-  useEffect(() => {
-    async function testAPIConnectivity() {
-      try {
-        console.log("🔍 [API TEST] Testing API connectivity...")
-
-        // Test if transcribe endpoint exists
-        const testResponse = await fetch("/api/transcribe", {
-          method: "OPTIONS",
-        })
-
-        console.log("🔍 [API TEST] Transcribe API status:", testResponse.status)
-
-        // Test if other APIs exist
-        const chatResponse = await fetch("/api/chat-streaming", {
-          method: "OPTIONS",
-        })
-
-        console.log("🔍 [API TEST] Chat API status:", chatResponse.status)
-      } catch (error) {
-        console.error("🔍 [API TEST] API connectivity test failed:", error)
-        setAudioError("API endpoints not accessible. Please check your setup.")
-      }
-    }
-
-    if (!isLoading) {
-      testAPIConnectivity()
-    }
-  }, [isLoading])
-
-  const handleCharacterSelect = useCallback(
-    async (characterId) => {
-      if (mode === "question") {
-        setSelectedPersona(characterId)
-        currentPersonaRef.current = characterId
-        setSelectedCharacters([characterId])
-        await startListening()
-      } else if (mode === "debate") {
-        setSelectedCharacters((prev) => {
-          const isSelected = prev.includes(characterId)
-          let newSelection
-
-          if (isSelected) {
-            newSelection = prev.filter((key) => key !== characterId)
-          } else if (prev.length < 2) {
-            newSelection = [...prev, characterId]
-          } else {
-            newSelection = [prev[1], characterId]
-          }
-
-          if (newSelection.length === 2) {
-            setShowTopicSelector(true)
-          } else {
-            setShowTopicSelector(false)
-            setIsDebating(false)
-            setDebateTopic("")
-            debateTopicRef.current = "" // Clear topic ref too
-            setDebateMessages([])
-            setCurrentSpeaker(null)
-            setSpeakerStatus(null)
-            setDebateRound(0)
-          }
-
-          return newSelection
-        })
-      }
-    },
-    [mode],
-  )
-
-  const startListening = useCallback(async () => {
+  // Function to handle generating a new debate
+  const handleGenerateDebate = async () => {
     try {
+      cancelSpeech()
+      stopAudio()
+      stopRecording()
+      setIsFirstDebate(false)
+      setIsDebating(true)
+      setDebateStage("topic")
+      setSpeakerStatus("waiting")
+      setCurrentSpeaker(1)
       setAudioError(null)
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000,
-        },
-      })
-      streamRef.current = stream
+      setRequiresUserInteraction(false)
+      setTranscriptionHistory([])
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm;codecs=opus",
-      })
-      mediaRecorderRef.current = mediaRecorder
-      audioChunksRef.current = []
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data)
-        }
-      }
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
-        await processAudioQuestion(audioBlob)
-      }
-
-      mediaRecorder.start(1000)
-      setIsListening(true)
-    } catch (error) {
-      console.error("Error accessing microphone:", error)
-      setAudioError("Could not access microphone. Please check permissions.")
-    }
-  }, [])
-
-  const stopListening = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop()
-      setIsListening(false)
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => {
-        track.stop()
-      })
-      streamRef.current = null
-    }
-  }, [])
-
-  // Custom topic recording functions
-  const startCustomTopicRecording = useCallback(async () => {
-    try {
-      console.log("🎤 [CUSTOM TOPIC] Starting custom topic recording...")
-      setAudioError(null)
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000,
-        },
-      })
-      customTopicStreamRef.current = stream
-      console.log("🎤 [CUSTOM TOPIC] Got media stream")
-
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm;codecs=opus",
-      })
-      customTopicMediaRecorderRef.current = mediaRecorder
-      customTopicAudioChunksRef.current = []
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          customTopicAudioChunksRef.current.push(event.data)
-          console.log("🎤 [CUSTOM TOPIC] Audio chunk received, size:", event.data.size)
-        }
-      }
-
-      mediaRecorder.onstop = async () => {
-        console.log("🎤 [CUSTOM TOPIC] Recording stopped, processing...")
-        const audioBlob = new Blob(customTopicAudioChunksRef.current, { type: "audio/webm" })
-        console.log("🎤 [CUSTOM TOPIC] Audio blob created, size:", audioBlob.size)
-        await processCustomTopicAudio(audioBlob)
-      }
-
-      mediaRecorder.start(1000)
-      setIsRecordingCustomTopic(true)
-      console.log("🎤 [CUSTOM TOPIC] Recording started")
-    } catch (error) {
-      console.error("🎤 [CUSTOM TOPIC] Error accessing microphone:", error)
-      setAudioError("Could not access microphone. Please check permissions.")
-    }
-  }, [])
-
-  const stopCustomTopicRecording = useCallback(() => {
-    console.log("🎤 [CUSTOM TOPIC] Stopping custom topic recording...")
-    if (customTopicMediaRecorderRef.current && customTopicMediaRecorderRef.current.state === "recording") {
-      customTopicMediaRecorderRef.current.stop()
-      setIsRecordingCustomTopic(false)
-      console.log("🎤 [CUSTOM TOPIC] MediaRecorder stopped")
-    }
-
-    if (customTopicStreamRef.current) {
-      customTopicStreamRef.current.getTracks().forEach((track) => {
-        track.stop()
-        console.log("🎤 [CUSTOM TOPIC] Track stopped:", track.kind)
-      })
-      customTopicStreamRef.current = null
-    }
-  }, [])
-
-  const processCustomTopicAudio = useCallback(
-    async (audioBlob) => {
-      console.log("🎤 [CUSTOM TOPIC] Processing custom topic audio...")
-      console.log("🎤 [CUSTOM TOPIC] Audio blob size:", audioBlob.size)
-      setIsProcessingCustomTopic(true)
-      setAudioError(null)
-
-      try {
-        const formData = new FormData()
-        formData.append("audio", audioBlob, "custom-topic.webm")
-        console.log("🎤 [CUSTOM TOPIC] Sending to transcription API...")
-
-        // Add timeout to the transcription request
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => {
-          console.log("🎤 [CUSTOM TOPIC] Request timed out after 30 seconds")
-          controller.abort()
-        }, 30000) // 30 second timeout
-
-        const transcriptionResponse = await fetch("/api/transcribe", {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-        })
-
-        clearTimeout(timeoutId)
-        console.log("🎤 [CUSTOM TOPIC] Transcription response status:", transcriptionResponse.status)
-
-        if (!transcriptionResponse.ok) {
-          const errorText = await transcriptionResponse.text()
-          console.error("🎤 [CUSTOM TOPIC] Transcription error:", errorText)
-          throw new Error("Failed to transcribe audio: " + errorText)
-        }
-
-        const { text } = await transcriptionResponse.json()
-        console.log("🎤 [CUSTOM TOPIC] Transcribed text:", text)
-
-        if (!text || text.trim().length === 0) {
-          throw new Error("No speech detected. Please try again.")
-        }
-
-        // Use ref instead of state for characters
-        const currentCharacters = selectedCharactersRef.current
-        console.log("🎤 [CUSTOM TOPIC] Using characters from ref:", currentCharacters)
-
-        // Validate we have characters before proceeding
-        if (!currentCharacters || currentCharacters.length !== 2) {
-          console.error("🎤 [CUSTOM TOPIC] No characters selected, cannot start debate")
-          throw new Error("Please select two characters first")
-        }
-
-        // Start debate with the custom topic
-        console.log("🎤 [CUSTOM TOPIC] Starting debate with custom topic:", text.trim())
-        console.log("🎤 [CUSTOM TOPIC] Using characters:", currentCharacters)
-        setShowTopicSelector(false)
-        startDebateWithCharacters(text.trim(), currentCharacters)
-      } catch (error) {
-        console.error("🎤 [CUSTOM TOPIC] Error processing custom topic audio:", error)
-
-        if (error.name === "AbortError") {
-          setAudioError("Request timed out. Please try again with a shorter recording.")
-        } else if (error.message.includes("Failed to fetch")) {
-          setAudioError("Network error. Please check your connection and try again.")
-        } else {
-          setAudioError(`Error: ${error.message}`)
-        }
-      } finally {
-        setIsProcessingCustomTopic(false)
-      }
-    },
-    [], // Remove selectedCharacters dependency since we're using ref
-  )
-
-  const pauseAudio = useCallback(() => {
-    if (audioRef.current && !audioRef.current.paused) {
-      audioRef.current.pause()
-      setIsPaused(true)
-      // Don't set setIsPlaying(false) here!
-    }
-  }, [])
-
-  const resumeAudio = useCallback(() => {
-    if (audioRef.current && audioRef.current.paused) {
-      audioRef.current.play()
-      setIsPaused(false)
-    }
-  }, [])
-
-  const stopAudio = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.currentTime = 0
-      setIsPlaying(false)
-      setIsPaused(false)
-    }
-  }, [])
-
-  const pauseDebateAudio = useCallback(() => {
-    if (currentAudioRef.current && !currentAudioRef.current.paused) {
-      currentAudioRef.current.pause()
-      setIsDebatePaused(true)
-    }
-  }, [])
-
-  const resumeDebateAudio = useCallback(() => {
-    if (currentAudioRef.current && currentAudioRef.current.paused && isDebatePaused) {
-      currentAudioRef.current.play()
-      setIsDebatePaused(false)
-    }
-  }, [isDebatePaused])
-
-  const processAudioQuestion = useCallback(async (audioBlob) => {
-    const currentPersona = currentPersonaRef.current
-
-    if (!currentPersona) {
-      setAudioError("Please select a character first")
-      return
-    }
-
-    setIsProcessing(true)
-    setAudioError(null)
-
-    try {
-      const formData = new FormData()
-      formData.append("audio", audioBlob, "question.webm")
-
-      console.log("🎤 [TRANSCRIBE] Starting transcription request...")
-      console.log("🎤 [TRANSCRIBE] Audio blob size:", audioBlob.size)
-
-      // Add timeout to the transcription request
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => {
-        console.log("🎤 [TRANSCRIBE] Request timed out after 30 seconds")
-        controller.abort()
-      }, 30000) // 30 second timeout
-
-      const transcriptionResponse = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-        signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
-      console.log("🎤 [TRANSCRIBE] Response status:", transcriptionResponse.status)
-
-      if (!transcriptionResponse.ok) {
-        const errorText = await transcriptionResponse.text()
-        console.error("🎤 [TRANSCRIBE] Error response:", errorText)
-        throw new Error("Failed to transcribe audio: " + errorText)
-      }
-
-      const { text } = await transcriptionResponse.json()
-      console.log("🎤 [TRANSCRIBE] Transcribed text:", text)
-
-      if (!text || text.trim().length === 0) {
-        throw new Error("No speech detected. Please try again.")
-      }
-
-      await processQuestionWithStreaming(text, currentPersona)
-    } catch (error) {
-      console.error("🎤 [TRANSCRIBE] Error processing audio question:", error)
-
-      if (error.name === "AbortError") {
-        setAudioError("Request timed out. Please try again with a shorter recording.")
-      } else if (error.message.includes("Failed to fetch")) {
-        setAudioError("Network error. Please check your connection and try again.")
-      } else {
-        setAudioError(`Error: ${error.message}`)
-      }
-    } finally {
-      setIsProcessing(false)
-      setThinkingMessage("")
-    }
-  }, [])
-
-  const processQuestionWithStreaming = async (question, persona) => {
-    try {
-      console.log("⏱️ [STREAMING] Starting real-time streaming at:", Date.now())
-      setIsPlaying(true)
-
-      const response = await fetch("/api/chat-streaming", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: question }],
-          character: persona,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to start streaming")
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-
-      let accumulatedText = ""
-      const audioQueue = []
-      const audioPromises = [] // Track parallel audio generation
-      let isFirstChunk = true
-      let currentAudioIndex = 0
-      let isPlaying = false
-      let chunkIndex = 0
-
-      const playNextAudio = async () => {
-        if (currentAudioIndex < audioQueue.length && audioQueue[currentAudioIndex]) {
-          const audioUrl = audioQueue[currentAudioIndex]
-          const audio = new Audio(audioUrl)
-          audioRef.current = audio
-
-          audio.onended = () => {
-            currentAudioIndex++
-            playNextAudio()
-          }
-
-          audio.onerror = () => {
-            currentAudioIndex++
-            playNextAudio()
-          }
-
-          await audio.play()
-          isPlaying = true
-        } else {
-          // Check if streaming is complete and all audio is ready
-          setTimeout(() => {
-            if (currentAudioIndex >= audioQueue.length && audioPromises.length === 0) {
-              setIsPlaying(false)
-              setIsPaused(false)
-            } else {
-              playNextAudio()
-            }
-          }, 100)
-        }
-      }
-
-      // Function to generate audio in parallel (back to regular generation)
-      const generateAudioParallel = async (text, index) => {
-        const chunkStartTime = Date.now()
-        console.log(`⏱️ [PARALLEL] Starting audio generation for chunk ${index}:`, text.substring(0, 30) + "...")
-
-        try {
-          const audioResponse = await fetch("/api/speak-fast", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              text: text,
-              voice: getVoiceForPersona(persona),
-            }),
-          })
-
-          if (audioResponse.ok) {
-            const { audioUrl } = await audioResponse.json()
-            const chunkTime = Date.now() - chunkStartTime
-            console.log(`⏱️ [PARALLEL] Chunk ${index} audio generated in: ${chunkTime}ms`)
-
-            // Insert audio at correct position in queue
-            audioQueue[index] = audioUrl
-
-            // Start playing if this is the first chunk and it's ready
-            if (index === 0 && isFirstChunk) {
-              isFirstChunk = false
-              const firstAudioTime = Date.now() - chunkStartTime
-              console.log("⏱️ [PARALLEL] FIRST AUDIO READY IN:", firstAudioTime + "ms")
-              playNextAudio()
-            }
-
-            return audioUrl
-          } else {
-            console.error(`Audio generation failed for chunk ${index}`)
-            return null
-          }
-        } catch (audioError) {
-          console.error(`Audio generation error for chunk ${index}:`, audioError)
-          return null
-        } finally {
-          // Remove this promise from tracking
-          const promiseIndex = audioPromises.findIndex((p) => p.index === index)
-          if (promiseIndex > -1) {
-            audioPromises.splice(promiseIndex, 1)
-          }
-        }
-      }
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        const chunk = decoder.decode(value)
-        const lines = chunk.split("\n").filter((line) => line.trim())
-
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line)
-
-            if (data.type === "chunk" && data.content) {
-              accumulatedText += data.content
-              console.log("⏱️ [PARALLEL] Received chunk:", data.content.substring(0, 30) + "...")
-
-              // Start parallel audio generation immediately
-              const currentChunkIndex = chunkIndex++
-              const audioPromise = generateAudioParallel(data.content, currentChunkIndex)
-              audioPromises.push({ promise: audioPromise, index: currentChunkIndex })
-
-              // Don't wait for audio generation to complete before processing next chunk
-            } else if (data.type === "complete") {
-              console.log("⏱️ [PARALLEL] Streaming complete")
-              break
-            } else if (data.type === "error") {
-              throw new Error(data.content)
-            }
-          } catch (parseError) {
-            console.error("Parse error:", parseError)
-          }
-        }
-      }
-
-      // Wait for any remaining audio generation to complete
-      if (audioPromises.length > 0) {
-        console.log(`⏱️ [PARALLEL] Waiting for ${audioPromises.length} remaining audio generations...`)
-        await Promise.all(audioPromises.map((p) => p.promise))
-      }
-    } catch (error) {
-      console.error("Error in streaming:", error)
-      setAudioError(`Error: ${error.message}`)
-      setIsPlaying(false)
-    }
-  }
-
-  const getVoiceForPersona = (persona) => {
-    const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
-    const currentVoiceIds = voiceIdsRef.current
-    return currentVoiceIds[voiceKey] || "echo"
-  }
-
-  const generateAudioResponse = async (text, persona) => {
-    try {
-      const audioStartTime = Date.now()
-      console.log("🎵 [AUDIO TIMING] Starting audio generation at:", audioStartTime)
-      console.log("🎵 [AUDIO TIMING] Text to convert:", text.substring(0, 100) + "...")
-
-      const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
-      const currentVoiceIds = voiceIdsRef.current
-      let voice = currentVoiceIds[voiceKey]
-
-      if (voice && voice.length > 10) {
-        console.log("🎵 [AUDIO TIMING] Using custom voice:", voiceKey)
-      } else {
-        voice = "echo"
-        console.log("🎵 [AUDIO TIMING] Using default voice: echo")
-      }
-
-      // Start audio generation immediately
-      const response = await fetch("/api/speak", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: text,
-          voice: voice,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Audio generation failed: ${response.status} - ${errorText}`)
-      }
-
-      const { audioUrl } = await response.json()
-      const audioGenerationTime = Date.now() - audioStartTime
-      console.log("🎵 [AUDIO TIMING] Audio generated in:", audioGenerationTime + "ms")
-
-      const audio = new Audio(audioUrl)
-      audioRef.current = audio
-
-      audio.onended = () => {
-        setIsPlaying(false)
-        setIsPaused(false)
-      }
-
-      audio.onerror = (e) => {
-        console.error("Audio playback error:", e)
-        setAudioError("Audio playback failed")
-        setIsPlaying(false)
-        setIsPaused(false)
-      }
-
-      const playStartTime = Date.now()
-      await audio.play()
-      const totalTime = playStartTime - audioStartTime
-      console.log("🎵 [AUDIO TIMING] Audio started playing after:", totalTime + "ms total")
-      console.log("🎵 [AUDIO TIMING] TOTAL RESPONSE TIME:", totalTime + "ms")
-    } catch (error) {
-      console.error("Error in audio generation:", error)
-      setAudioError(`Audio error: ${error.message}`)
-      setIsPlaying(false)
-    }
-  }
-
-  // Start debate function with explicit characters
-  const startDebateWithCharacters = async (topic, characters) => {
-    console.log("🎯 [START DEBATE WITH CHARS] Function called with topic:", topic)
-    console.log("🎯 [START DEBATE WITH CHARS] Using characters:", characters)
-
-    if (!characters || characters.length !== 2) {
-      console.error("🎯 [START DEBATE WITH CHARS] Invalid characters - returning early")
-      setAudioError("Please select exactly two characters to start a debate")
-      return
-    }
-
-    // Extract topic string if it's an object
-    const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
-    console.log("🎯 [START DEBATE WITH CHARS] Topic string extracted:", topicString)
-
-    console.log("🎯 [START DEBATE WITH CHARS] Setting debate state...")
-    setIsDebating(true)
-    setDebateTopic(topicString)
-    debateTopicRef.current = topicString
-    setCurrentSpeaker(characters[0])
-    setSpeakerStatus("thinking")
-    setDebateMessages([])
-    setDebateRound(0)
-    console.log("🎯 [START DEBATE WITH CHARS] Debate state set, making API call...")
-
-    try {
-      const response = await fetch("/api/start-debate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          character1: characters[0],
-          character2: characters[1],
-          topic: topicString,
-        }),
-      })
-
-      console.log("🎯 [START DEBATE WITH CHARS] API response status:", response.status)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("🎯 [START DEBATE WITH CHARS] API error:", errorText)
-        throw new Error(`Failed to start debate: ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("🎯 [START DEBATE WITH CHARS] API response data:", data)
-
-      const messages = [
-        {
-          character: characters[0],
-          content: data.opening1,
-          timestamp: Date.now(),
-        },
-        {
-          character: characters[1],
-          content: data.opening2,
-          timestamp: Date.now() + 100,
-        },
-      ]
-
-      console.log("🎯 [START DEBATE WITH CHARS] Messages created:", messages)
-      setDebateMessages(messages)
-
-      // Start playing first message
-      console.log("🎯 [START DEBATE WITH CHARS] Starting audio playback...")
-      playDebateAudio(messages[0], messages, 0)
-    } catch (error) {
-      console.error("🎯 [START DEBATE WITH CHARS] Error starting debate:", error)
-      setAudioError(`Failed to start debate: ${error.message}`)
-      setIsDebating(false)
-      setSpeakerStatus(null)
-      setCurrentSpeaker(null)
-    }
-  }
-
-  // Start debate function
-  const startDebate = async (topic) => {
-    console.log("🎯 [START DEBATE] Function called with topic:", topic)
-    console.log("🎯 [START DEBATE] Selected characters:", selectedCharacters)
-    console.log("🎯 [START DEBATE] Selected characters length:", selectedCharacters?.length)
-    console.log("🎯 [START DEBATE] Current mode:", mode)
-    console.log("🎯 [START DEBATE] Show topic selector:", showTopicSelector)
-
-    if (!selectedCharacters || selectedCharacters.length !== 2) {
-      console.error("🎯 [START DEBATE] Invalid characters - returning early")
-      console.error("🎯 [START DEBATE] Characters state:", selectedCharacters)
-      setAudioError("Please select exactly two characters to start a debate")
-      return
-    }
-
-    // Extract topic string if it's an object
-    const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
-    console.log("🎯 [START DEBATE] Topic string extracted:", topicString)
-
-    console.log("🎯 [START DEBATE] Setting debate state...")
-    setIsDebating(true)
-    setDebateTopic(topicString) // Set state
-    debateTopicRef.current = topicString // Set ref immediately - THIS IS THE KEY FIX!
-    setCurrentSpeaker(selectedCharacters[0])
-    setSpeakerStatus("thinking")
-    setDebateMessages([])
-    setDebateRound(0)
-    console.log("🎯 [START DEBATE] Debate state set, making API call...")
-
-    try {
-      const response = await fetch("/api/start-debate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          character1: selectedCharacters[0],
-          character2: selectedCharacters[1],
-          topic: topicString, // Use the extracted string
-        }),
-      })
-
-      console.log("🎯 [START DEBATE] API response status:", response.status)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("🎯 [START DEBATE] API error:", errorText)
-        throw new Error(`Failed to start debate: ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("🎯 [START DEBATE] API response data:", data)
-
-      const messages = [
-        {
-          character: selectedCharacters[0],
-          content: data.opening1,
-          timestamp: Date.now(),
-        },
-        {
-          character: selectedCharacters[1],
-          content: data.opening2,
-          timestamp: Date.now() + 100,
-        },
-      ]
-
-      console.log("🎯 [START DEBATE] Messages created:", messages)
-      setDebateMessages(messages)
-
-      // Start playing first message
-      console.log("🎯 [START DEBATE] Starting audio playback...")
-      playDebateAudio(messages[0], messages, 0)
-    } catch (error) {
-      console.error("🎯 [START DEBATE] Error starting debate:", error)
-      setAudioError(`Failed to start debate: ${error.message}`)
-      setIsDebating(false)
-      setSpeakerStatus(null)
-      setCurrentSpeaker(null)
-    }
-  }
-
-  // Continue debate with next round
-  const continueDebate = async () => {
-    // Use the ref instead of state - THIS IS THE KEY FIX!
-    const currentTopic = debateTopicRef.current
-
-    // Validate we have a topic
-    if (!currentTopic || currentTopic.trim() === "") {
-      setAudioError("Debate topic is missing. Cannot continue.")
-      return
-    }
-
-    try {
-      setSpeakerStatus("thinking")
-      setCurrentSpeaker(selectedCharacters[0]) // Reset to first character for new round
-
-      const requestBody = {
-        character1: selectedCharacters[0],
-        character2: selectedCharacters[1],
-        currentMessages: debateMessagesRef.current,
-        topic: currentTopic.trim(), // Use topic from ref
-      }
-
-      const response = await fetch("/api/auto-continue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Failed to continue debate: ${response.status} - ${errorText}`)
-      }
-
-      const data = await response.json()
-
-      const newMessages = [
-        {
-          character: selectedCharacters[0],
-          content: data.response1,
-          timestamp: Date.now(),
-        },
-        {
-          character: selectedCharacters[1],
-          content: data.response2,
-          timestamp: Date.now() + 100,
-        },
-      ]
-
-      const allMessages = [...debateMessagesRef.current, ...newMessages]
-      setDebateMessages(allMessages)
-      setDebateRound((prev) => prev + 1)
-
-      // Start playing the new messages
-      playDebateAudio(newMessages[0], allMessages, debateMessagesRef.current.length)
-    } catch (error) {
-      console.error("Error continuing debate:", error)
-      setAudioError(`Failed to continue debate: ${error.message}`)
-    }
-  }
-
-  // Play debate audio with retry logic
-  const playDebateAudio = async (message, allMessages, currentIndex, retryCount = 0) => {
-    const { character, content } = message
-
-    setCurrentSpeaker(character)
-    setSpeakerStatus("speaking")
-
-    try {
-      const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
-      const currentVoiceIds = voiceIdsRef.current // Use ref for voice IDs
-      const voice = currentVoiceIds[voiceKey] || "echo"
-
-      // Add timeout to the fetch request
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
-
-      const response = await fetch("/api/speak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: content, voice }),
-        signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        throw new Error(`Audio API returned ${response.status}`)
-      }
-
-      const data = await response.json()
-      const audio = new Audio(data.audioUrl)
-      currentAudioRef.current = audio
-
-      audio.onended = () => {
+      if (!debateTopic) {
         setSpeakerStatus("waiting")
-
-        // Auto-continue to next message
-        const nextIndex = currentIndex + 1
-        if (nextIndex < allMessages.length) {
-          setTimeout(() => {
-            playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-          }, 1000)
-        } else {
-          // Check if we should continue with more rounds
-          const currentRound = debateRoundRef.current
-
-          // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
-          if (allMessages.length < 8) {
-            setTimeout(() => {
-              continueDebate()
-            }, 2000)
-          } else {
-            // Debate finished
-            setTimeout(() => {
-              endDebate()
-            }, 3000)
-          }
-        }
-      }
-
-      audio.onerror = (e) => {
-        throw new Error(`Audio playback failed: ${e.message}`)
-      }
-
-      await audio.play()
-    } catch (error) {
-      console.error(`Error playing audio for ${character}:`, error)
-
-      // Retry logic for network timeouts
-      if ((error.name === "AbortError" || error.message.includes("Failed to fetch")) && retryCount < 2) {
-        setSpeakerStatus("thinking")
-        setTimeout(() => {
-          playDebateAudio(message, allMessages, currentIndex, retryCount + 1)
-        }, 3000)
-        return
-      }
-
-      setAudioError(`Audio failed for ${character}: ${error.message}`)
-      setSpeakerStatus(null)
-
-      // Continue to next speaker even if current one fails
-      const nextIndex = currentIndex + 1
-      if (nextIndex < allMessages.length) {
-        setTimeout(() => {
-          playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-        }, 2000)
+        setSpeechText("Generating debate topics...")
+        setDebateStage("topic")
+        const topics = await generateDebateTopics()
+        const randomTopic = topics[Math.floor(Math.random() * topics.length)]
+        setDebateTopic(randomTopic)
+        setSpeechText(`The debate topic is: ${randomTopic}`)
+        setCurrentSpeaker(1)
+        setDebateStage("opening")
+        setSpeakerStatus("done")
       } else {
-        setTimeout(() => {
-          endDebate()
-        }, 2000)
+        setSpeakerStatus("waiting")
+        setSpeechText("Generating opening statements...")
+        setDebateStage("opening")
+        const openingStatements = await generateOpeningStatements(debateTopic, character1, character2)
+        debateMessagesRef.current = [
+          { character: 1, debateStage: "opening", text: openingStatements.character1 },
+          { character: 2, debateStage: "opening", text: openingStatements.character2 },
+        ]
+        setSpeechText(openingStatements.character1)
+        setCurrentSpeaker(1)
+        setDebateStage("argument1")
+        setSpeakerStatus("done")
       }
+    } catch (error) {
+      console.error("Error generating debate:", error)
+      setAudioError("Failed to generate debate. Please check your internet connection and try again.")
+      setIsErrorOpen(true)
     }
   }
 
-  const endDebate = () => {
-    setIsDebating(false)
-    setDebateTopic("")
-    debateTopicRef.current = "" // Clear topic ref too
-    setSelectedCharacters([])
-    setShowTopicSelector(false)
-    setTopics([])
-    setDebateMessages([])
-    setCurrentSpeaker(null)
-    setSpeakerStatus(null)
-    setDebateRound(0)
-    setIsDebatePaused(false)
+  // Function to handle advancing to the next stage of the debate
+  const handleNextStage = async () => {
+    try {
+      cancelSpeech()
+      stopAudio()
+      stopRecording()
+      setSpeakerStatus("waiting")
+      setAudioError(null)
+      setRequiresUserInteraction(false)
 
+      let nextDebateStage = ""
+      let nextSpeechText = ""
+      const nextSpeaker = currentSpeaker === 1 ? 2 : 1
+
+      switch (debateStage) {
+        case "topic":
+          nextDebateStage = "opening"
+          nextSpeechText = "Generating opening statements..."
+          break
+        case "opening":
+          nextDebateStage = "argument1"
+          nextSpeechText = "Generating first arguments..."
+          break
+        case "argument1":
+          nextDebateStage = "rebuttal1"
+          nextSpeechText = "Generating first rebuttals..."
+          break
+        case "rebuttal1":
+          nextDebateStage = "argument2"
+          nextSpeechText = "Generating second arguments..."
+          break
+        case "argument2":
+          nextDebateStage = "rebuttal2"
+          nextSpeechText = "Generating second rebuttals..."
+          break
+        case "rebuttal2":
+          nextDebateStage = "closing"
+          nextSpeechText = "Generating closing statements..."
+          break
+        case "closing":
+          nextDebateStage = "summary"
+          nextSpeechText = "Generating debate summary..."
+          break
+        case "summary":
+          nextDebateStage = "topic"
+          nextSpeechText = "Debate finished. Generating new debate topic..."
+          break
+        default:
+          nextDebateStage = "topic"
+          nextSpeechText = "Generating new debate topic..."
+      }
+
+      setDebateStage(nextDebateStage)
+      setSpeechText(nextSpeechText)
+      setCurrentSpeaker(nextSpeaker)
+
+      switch (nextDebateStage) {
+        case "opening":
+          const openingStatements = await generateOpeningStatements(debateTopic, character1, character2)
+          nextSpeechText = nextSpeaker === 1 ? openingStatements.character1 : openingStatements.character2
+          break
+        case "argument1":
+          const firstArguments = await generateArguments(debateTopic, character1, character2)
+          nextSpeechText = nextSpeaker === 1 ? firstArguments.character1 : firstArguments.character2
+          break
+        case "rebuttal1":
+          const firstRebuttals = await generateRebuttals(debateTopic, character1, character2)
+          nextSpeechText = nextSpeaker === 1 ? firstRebuttals.character1 : firstRebuttals.character2
+          break
+        case "argument2":
+          const secondArguments = await generateArguments(debateTopic, character1, character2)
+          nextSpeechText = nextSpeaker === 1 ? secondArguments.character1 : secondArguments.character2
+          break
+        case "rebuttal2":
+          const secondRebuttals = await generateRebuttals(debateTopic, character1, character2)
+          nextSpeechText = nextSpeaker === 1 ? secondRebuttals.character1 : secondRebuttals.character2
+          break
+        case "closing":
+          const closingStatements = await generateClosingStatements(debateTopic, character1, character2)
+          nextSpeechText = nextSpeaker === 1 ? closingStatements.character1 : closingStatements.character2
+          break
+        case "summary":
+          const debateSummary = await generateDebateSummary(debateTopic, character1, character2)
+          nextSpeechText = debateSummary.summary
+          break
+        case "topic":
+          const topics = await generateDebateTopics()
+          const randomTopic = topics[Math.floor(Math.random() * topics.length)]
+          setDebateTopic(randomTopic)
+          nextSpeechText = `The debate topic is: ${randomTopic}`
+          break
+        default:
+          break
+      }
+
+      setSpeechText(nextSpeechText)
+      setSpeakerStatus("done")
+    } catch (error) {
+      console.error("Error advancing to next stage:", error)
+      setAudioError("Failed to generate next stage. Please check your internet connection and try again.")
+      setIsErrorOpen(true)
+    }
+  }
+
+  // Function to handle playing the speech text
+  const handlePlaySpeech = () => {
+    console.log("handlePlaySpeech")
+    if (!speechText) return
+
+    cancelSpeech()
+    stopAudio()
+
+    const character = currentSpeaker === 1 ? character1 : character2
+    setSpeakerStatus("speaking")
+    setIsPlaying(true)
+
+    const utterThis = new SpeechSynthesisUtterance(speechText)
+    utterThis.onend = () => {
+      console.log("SpeechSynthesisUtterance.onend")
+      setSpeakerStatus("done")
+      setIsPlaying(false)
+    }
+    utterThis.onerror = (event) => {
+      console.error("SpeechSynthesisUtterance.onerror", event)
+      setAudioError("Text-to-speech error. Please try again.")
+      setIsErrorOpen(true)
+      setSpeakerStatus("waiting")
+      setIsPlaying(false)
+    }
+    utterThis.voice = voices.find((voice) => voice.name.includes(character)) || null
+    utterThis.pitch = speechPitchRef.current
+    utterThis.rate = speechRateRef.current
+    utterThis.volume = volumeRef.current
+    speak(utterThis)
+  }
+
+  // Function to handle playing the debate audio
+  const playDebateAudio = async () => {
+    console.log("playDebateAudio")
+    if (!speechText) return
+
+    cancelSpeech()
+    stopAudio()
+
+    const character = currentSpeaker === 1 ? character1 : character2
+    setSpeakerStatus("loading")
+    setIsPlaying(true)
+
+    const data = {
+      text: speechText,
+      voice: character,
+      model_id: "eleven_monolingual_v1",
+    }
+
+    try {
+      const response = await fetch("/api/elevenlabs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+
+      if (!isMobile) {
+        // Desktop audio handling
+        const audio = new Audio(url)
+        audio.volume = volumeRef.current
+        currentAudioRef.current = audio
+
+        audio.addEventListener("ended", () => {
+          console.log("🔊 Audio ended")
+          setSpeakerStatus("done")
+          setIsPlaying(false)
+        })
+
+        audio.addEventListener("error", (e) => {
+          console.error("🔊 Audio error:", e)
+          setAudioError("Audio playback error. Please try again.")
+          setIsErrorOpen(true)
+          setSpeakerStatus("waiting")
+          setIsPlaying(false)
+        })
+
+        audio.play().catch((e) => {
+          console.error("🔊 Audio play error:", e)
+          setAudioError("Audio playback failed. Please try again.")
+          setIsErrorOpen(true)
+          setSpeakerStatus("waiting")
+          setIsPlaying(false)
+        })
+      } else {
+        // Mobile audio handling - Enhanced version
+        console.log(`🔊 [MOBILE DEBUG] Creating audio element for ${character}`)
+
+        // Create audio element with mobile-friendly settings
+        const audio = new Audio()
+        audio.preload = "auto"
+        audio.crossOrigin = "anonymous"
+        currentAudioRef.current = audio
+
+        // Set up event listeners BEFORE setting src
+        audio.addEventListener("loadstart", () => {
+          console.log(`🔊 [MOBILE DEBUG] Audio loading started for ${character}`)
+        })
+
+        audio.addEventListener("canplay", () => {
+          console.log(`🔊 [MOBILE DEBUG] Audio can play for ${character}`)
+        })
+
+        audio.addEventListener("playing", () => {
+          console.log(`🔊 [MOBILE DEBUG] Audio started playing for ${character}`)
+          setSpeakerStatus("speaking")
+          setIsPlaying(true)
+          setAudioError(null)
+        })
+
+        audio.addEventListener("ended", () => {
+          console.log(`🔊 [MOBILE DEBUG] Audio ended for ${character}`)
+          setSpeakerStatus("waiting")
+          continueToNextSpeaker()
+        })
+
+        audio.addEventListener("error", (e) => {
+          console.error(`🔊 [MOBILE DEBUG] Audio error for ${character}:`, e)
+          console.error(`🔊 [MOBILE DEBUG] Audio error details:`, audio.error)
+
+          // Check if it's a user interaction issue
+          if (audio.error?.code === 4 || audio.error?.message?.includes("MEDIA_ELEMENT_ERROR")) {
+            console.log(`🔊 [MOBILE DEBUG] User interaction required - showing tap message`)
+            setAudioError("Tap anywhere on the screen to enable audio playback")
+            setSpeakerStatus("waiting")
+            return
+          }
+
+          // For other errors, try to continue
+          console.log(`🔊 [MOBILE DEBUG] Continuing to next speaker due to audio error`)
+          continueToNextSpeaker()
+        })
+
+        // Set the audio source
+        console.log(`🔊 [MOBILE DEBUG] Setting audio source for ${character}`)
+        audio.src = data.audioUrl
+        audio.load()
+
+        // Attempt to play with better error handling
+        console.log(`🔊 [MOBILE DEBUG] Attempting to play audio for ${character}`)
+        try {
+          const playPromise = audio.play()
+
+          if (playPromise !== undefined) {
+            await playPromise
+            console.log(`🔊 [MOBILE DEBUG] Audio.play() succeeded for ${character}`)
+          }
+        } catch (playError) {
+          console.error(`🔊 [MOBILE DEBUG] Audio.play() failed for ${character}:`, playError.message)
+
+          // Check if it's a user interaction issue
+          if (
+            playError.name === "NotAllowedError" ||
+            playError.message.includes("user agent") ||
+            playError.message.includes("autoplay") ||
+            playError.message.includes("not allowed") ||
+            playError.message.includes("gesture")
+          ) {
+            console.log(`🔊 [MOBILE DEBUG] User interaction required - showing tap message`)
+            setAudioError("Tap anywhere on the screen to enable audio playback")
+            setSpeakerStatus("waiting")
+
+            // Store the current state so we can resume after user interaction
+            return
+          }
+
+          // For other play errors, try to continue
+          console.log(`🔊 [MOBILE DEBUG] Continuing to next speaker due to play error`)
+          continueToNextSpeaker()
+        }
+      }
+    } catch (error) {
+      console.error("Error generating audio:", error)
+      setAudioError("Failed to generate audio. Please check your internet connection and try again.")
+      setIsErrorOpen(true)
+      setSpeakerStatus("waiting")
+      setIsPlaying(false)
+    }
+  }
+
+  // Function to handle stopping the speech
+  const cancelSpeech = () => {
+    console.log("cancelSpeech")
+    if (speaking) {
+      cancel()
+      setIsSpeaking(false)
+    }
+  }
+
+  // Function to handle stopping the audio
+  const stopAudio = () => {
+    console.log("stopAudio")
     if (currentAudioRef.current) {
       currentAudioRef.current.pause()
-      currentAudioRef.current = null
+      currentAudioRef.current.currentTime = 0
+      setIsPlaying(false)
     }
   }
 
-  const toggleMode = () => {
-    setMode(mode === "question" ? "debate" : "question")
-    setSelectedPersona("")
-    currentPersonaRef.current = ""
-    setSelectedCharacters([])
-    setIsListening(false)
-    setIsProcessing(false)
-    setIsPlaying(false)
-    setAudioError(null)
-    setThinkingMessage("")
-    setIsDebating(false)
-    setDebateTopic("")
-    debateTopicRef.current = "" // Clear topic ref too
-    setShowTopicSelector(false)
-    setTopics([])
-    setDebateMessages([])
-    setCurrentSpeaker(null)
-    setSpeakerStatus(null)
-    setDebateRound(0)
-    setIsPaused(false)
-    setIsDebatePaused(false)
-    setIsRecordingCustomTopic(false)
-    setIsProcessingCustomTopic(false)
-    // DON'T reset voiceIds - keep them loaded!
-  }
-
-  const handleRecordingButtonClick = useCallback(
-    async (characterId, e) => {
-      e.stopPropagation()
-
-      if (mode === "question") {
-        if (selectedPersona === characterId) {
-          if (isListening) {
-            stopListening()
-          } else if (!isProcessing && !isPlaying) {
-            await startListening()
-          }
-        } else {
-          setSelectedPersona(characterId)
-          currentPersonaRef.current = characterId
-          setSelectedCharacters([characterId])
-          await startListening()
+  // Function to handle playing or pausing the debate
+  const handlePlayPause = () => {
+    console.log("handlePlayPause")
+    if (speakerStatus === "speaking") {
+      if (!isMobile) {
+        if (speaking) {
+          cancelSpeech()
+          setSpeakerStatus("paused")
+          setIsPlaying(false)
+        } else if (currentAudioRef.current) {
+          currentAudioRef.current.pause()
+          setSpeakerStatus("paused")
+          setIsPlaying(false)
         }
-      }
-    },
-    [mode, selectedPersona, isListening, isProcessing, isPlaying, startListening, stopListening],
-  )
-
-  const handleTopicSelect = useCallback(
-    (topic) => {
-      // Extract topic string properly
-      const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
-
-      setShowTopicSelector(false)
-      startDebate(topicString)
-    },
-    [selectedCharacters],
-  )
-
-  const handleCustomTopicClick = useCallback(() => {
-    if (isRecordingCustomTopic) {
-      stopCustomTopicRecording()
-    } else if (!isProcessingCustomTopic) {
-      startCustomTopicRecording()
-    }
-  }, [isRecordingCustomTopic, isProcessingCustomTopic, startCustomTopicRecording, stopCustomTopicRecording])
-
-  // Small microphone icon component
-  const SmallMicIcon = ({ isActive }) => (
-    <svg
-      className={`w-4 h-4 ${isActive ? "text-orange-400 animate-pulse" : "text-gray-400"}`}
-      fill="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-      <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-    </svg>
-  )
-
-  // Get status text for button display
-  const getStatusText = (characterId) => {
-    if (mode === "debate") {
-      if (isDebating) {
-        if (characterId === currentSpeaker) {
-          return speakerStatus === "thinking"
-            ? "Thinking..."
-            : speakerStatus === "speaking"
-              ? "Speaking..."
-              : "Waiting..."
-        }
-        return selectedCharacters.includes(characterId) ? "Waiting turn" : "Watching"
       } else {
-        // When not debating but in debate mode, show "Select" for unselected characters
-        return selectedCharacters.includes(characterId) ? "Selected" : "Select"
+        if (currentAudioRef.current) {
+          currentAudioRef.current.pause()
+          setSpeakerStatus("paused")
+          setIsPlaying(false)
+        }
+      }
+    } else {
+      if (!isMobile) {
+        if (supported) {
+          handlePlaySpeech()
+        } else {
+          playDebateAudio()
+        }
+      } else {
+        playDebateAudio()
       }
     }
-
-    // Question mode logic remains the same
-    if (selectedPersona !== characterId) return "Ask Question"
-    if (isListening) return "Stop Recording"
-    if (isProcessing) return thinkingMessage || "Processing..."
-    if (isPlaying) return "Speaking..."
-    return "Ask Question"
   }
 
-  // Get button color based on status
-  const getButtonColor = (characterId) => {
-    if (mode === "debate" && isDebating) {
-      if (characterId === currentSpeaker) {
-        return speakerStatus === "thinking"
-          ? "bg-blue-500 text-white"
-          : speakerStatus === "speaking"
-            ? "bg-green-500 text-white"
-            : "bg-yellow-500 text-black"
+  // Function to handle restarting the current stage of the debate
+  const handleRestart = () => {
+    console.log("handleRestart")
+    cancelSpeech()
+    stopAudio()
+    stopRecording()
+    setSpeakerStatus("waiting")
+    setAudioError(null)
+    setRequiresUserInteraction(false)
+
+    if (debateStage === "topic") {
+      handleGenerateDebate()
+    } else {
+      switch (debateStage) {
+        case "opening":
+          generateOpeningStatements(debateTopic, character1, character2)
+            .then((openingStatements) => {
+              const nextSpeechText = currentSpeaker === 1 ? openingStatements.character1 : openingStatements.character2
+              setSpeechText(nextSpeechText)
+              setSpeakerStatus("done")
+            })
+            .catch((error) => {
+              console.error("Error generating opening statements:", error)
+              setAudioError(
+                "Failed to generate opening statements. Please check your internet connection and try again.",
+              )
+              setIsErrorOpen(true)
+            })
+          break
+        case "argument1":
+        case "argument2":
+          generateArguments(debateTopic, character1, character2)
+            .then((argumentsData) => {
+              const nextSpeechText = currentSpeaker === 1 ? argumentsData.character1 : argumentsData.character2
+              setSpeechText(nextSpeechText)
+              setSpeakerStatus("done")
+            })
+            .catch((error) => {
+              console.error("Error generating arguments:", error)
+              setAudioError("Failed to generate arguments. Please check your internet connection and try again.")
+              setIsErrorOpen(true)
+            })
+          break
+        case "rebuttal1":
+        case "rebuttal2":
+          generateRebuttals(debateTopic, character1, character2)
+            .then((rebuttalsData) => {
+              const nextSpeechText = currentSpeaker === 1 ? rebuttalsData.character1 : rebuttalsData.character2
+              setSpeechText(nextSpeechText)
+              setSpeakerStatus("done")
+            })
+            .catch((error) => {
+              console.error("Error generating rebuttals:", error)
+              setAudioError("Failed to generate rebuttals. Please check your internet connection and try again.")
+              setIsErrorOpen(true)
+            })
+          break
+        case "closing":
+          generateClosingStatements(debateTopic, character1, character2)
+            .then((closingStatements) => {
+              const nextSpeechText = currentSpeaker === 1 ? closingStatements.character1 : closingStatements.character2
+              setSpeechText(nextSpeechText)
+              setSpeakerStatus("done")
+            })
+            .catch((error) => {
+              console.error("Error generating closing statements:", error)
+              setAudioError(
+                "Failed to generate closing statements. Please check your internet connection and try again.",
+              )
+              setIsErrorOpen(true)
+            })
+          break
+        case "summary":
+          generateDebateSummary(debateTopic, character1, character2)
+            .then((debateSummary) => {
+              setSpeechText(debateSummary.summary)
+              setSpeakerStatus("done")
+            })
+            .catch((error) => {
+              console.error("Error generating debate summary:", error)
+              setAudioError("Failed to generate debate summary. Please check your internet connection and try again.")
+              setIsErrorOpen(true)
+            })
+          break
+        default:
+          break
       }
-      return selectedCharacters.includes(characterId) ? "bg-purple-600 text-white" : "bg-gray-600 text-gray-400"
     }
-
-    if (selectedPersona !== characterId) return "bg-gray-700 text-white hover:bg-gray-600"
-    if (isListening) return "bg-red-500 text-white"
-    if (isProcessing) return "bg-blue-500 text-white"
-    if (isPlaying) return "bg-green-500 text-white"
-    return "bg-yellow-500 text-black"
   }
 
-  // Determine if character should be grayed out
-  const shouldGrayOutCharacter = (characterId) => {
-    if (mode === "question") {
-      const isInteracting = isListening || isProcessing || isPlaying
-      return isInteracting && selectedPersona !== characterId
-    } else if (mode === "debate") {
-      if (isDebating) {
-        return !selectedCharacters.includes(characterId)
+  // Function to handle toggling mute
+  const handleToggleMute = () => {
+    console.log("handleToggleMute")
+    setIsMuted(!isMuted)
+    if (currentAudioRef.current) {
+      currentAudioRef.current.muted = !isMuted
+    }
+  }
+
+  // Function to handle volume change
+  const handleVolumeChange = (event) => {
+    console.log("handleVolumeChange")
+    const newVolume = Number.parseFloat(event.target.value)
+    setVolume(newVolume)
+    if (currentAudioRef.current) {
+      currentAudioRef.current.volume = newVolume
+    }
+  }
+
+  // Function to handle speech rate change
+  const handleSpeechRateChange = (event) => {
+    console.log("handleSpeechRateChange")
+    setSpeechRate(Number.parseFloat(event.target.value))
+  }
+
+  // Function to handle speech pitch change
+  const handleSpeechPitchChange = (event) => {
+    console.log("handleSpeechPitchChange")
+    setSpeechPitch(Number.parseFloat(event.target.value))
+  }
+
+  // Function to handle enabling audio on mobile
+  const handleEnableAudio = () => {
+    console.log("handleEnableAudio")
+    setRequiresUserInteraction(false)
+    setAudioError(null)
+    playDebateAudio()
+  }
+
+  const continueToNextSpeaker = () => {
+    console.log("continueToNextSpeaker")
+    stopAudio()
+    cancelSpeech()
+    const currentMessages = debateMessagesRef.current
+    const currentIndex = currentMessages.findIndex((msg) => msg.character === currentSpeaker)
+    if (currentIndex >= 0 && currentIndex + 1 < currentMessages.length) {
+      const nextMessage = currentMessages[currentIndex + 1]
+      setCurrentSpeaker(nextMessage.character)
+      setDebateStage(nextMessage.debateStage)
+      setSpeechText(nextMessage.text)
+      playDebateAudio()
+    } else {
+      console.log("Debate Finished")
+      setIsDebating(false)
+    }
+  }
+
+  // Add this new function after the other functions
+  const handleScreenTap = useCallback(async () => {
+    if (audioError?.includes("Tap anywhere") || audioError?.includes("tap the screen")) {
+      addDebugLog("User tapped screen - attempting to unlock audio")
+
+      // Try to unlock audio context first
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+        if (audioContext.state === "suspended") {
+          await audioContext.resume()
+          console.log("🔊 [MOBILE DEBUG] AudioContext resumed after tap")
+        }
+      } catch (contextError) {
+        console.log("🔊 [MOBILE DEBUG] AudioContext unlock failed:", contextError.message)
       }
-      return selectedCharacters.length === 2 && !selectedCharacters.includes(characterId)
-    }
-    return false
-  }
 
-  if (isLoading) {
-    return (
-      <Layout>
-        <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full mb-4"></div>
-            <p className="text-yellow-400">Loading personas...</p>
-          </div>
-        </div>
-      </Layout>
-    )
+      // Try to play the current audio
+      if (currentAudioRef.current) {
+        try {
+          await currentAudioRef.current.play()
+          setAudioError(null)
+          addDebugLog("Audio unlocked successfully after tap")
+        } catch (error) {
+          addDebugLog(`Audio unlock failed after tap: ${error.message}`)
+          // If still failing, try to continue to next speaker
+          if (isDebating) {
+            setTimeout(() => {
+              const currentMessages = debateMessagesRef.current
+              const currentIndex = currentMessages.findIndex((msg) => msg.character === currentSpeaker)
+              if (currentIndex >= 0 && currentIndex + 1 < currentMessages.length) {
+                playDebateAudio(currentMessages[currentIndex + 1], currentMessages, currentIndex + 1)
+              }
+            }, 1000)
+          }
+        }
+      }
+    }
+  }, [audioError, isDebating, currentSpeaker])
+
+  const addDebugLog = (logMessage) => {
+    console.log(`[DEBUG] ${logMessage}`)
   }
 
   return (
-    <Layout>
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white">
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
-          <div className="text-center mb-12">
-            <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-              Heroes of History
-            </h1>
-            <p className="text-xl text-gray-300 mb-8">
-              Engage in conversations and debates with history's greatest minds
-            </p>
+    <div className={styles.container} onClick={handleScreenTap}>
+      <Head>
+        <title>AI Debate Generator</title>
+        <meta name="description" content="Generate AI debates between famous people." />
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
 
-            {/* Mode Toggle */}
-            <div className="flex justify-center mb-8">
-              <div className="bg-gray-800 rounded-full p-1 flex">
-                <button
-                  onClick={toggleMode}
-                  className={`px-6 py-3 rounded-full transition-all duration-300 ${
-                    mode === "question" ? "bg-yellow-500 text-black font-semibold" : "text-gray-300 hover:text-white"
-                  }`}
-                >
-                  Ask Questions
-                </button>
-                <button
-                  onClick={toggleMode}
-                  className={`px-6 py-3 rounded-full transition-all duration-300 ${
-                    mode === "debate" ? "bg-yellow-500 text-black font-semibold" : "text-gray-300 hover:text-white"
-                  }`}
-                >
-                  Watch Debates
-                </button>
+      <Toaster />
+
+      <Suspense fallback={<div>Loading...</div>}>
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          volume={volume}
+          speechRate={speechRate}
+          speechPitch={speechPitch}
+          isMuted={isMuted}
+          onVolumeChange={handleVolumeChange}
+          onSpeechRateChange={handleSpeechRateChange}
+          onSpeechPitchChange={handleSpeechPitchChange}
+          onToggleMute={handleToggleMute}
+          idleTimeout={idleTimeout}
+          setIdleTimeout={setIdleTimeout}
+        />
+      </Suspense>
+
+      <Suspense fallback={<div>Loading...</div>}>
+        <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      </Suspense>
+
+      <Suspense fallback={<div>Loading...</div>}>
+        <ErrorModal isOpen={isErrorOpen} onClose={() => setIsErrorOpen(false)} errorMessage={audioError} />
+      </Suspense>
+
+      <header className={styles.header}>
+        <h1>AI Debate Generator</h1>
+
+        <div className={styles.buttonGroup}>
+          <button className={styles.iconButton} onClick={() => setIsSettingsOpen(true)} aria-label="Settings">
+            <FontAwesomeIcon icon={faCog} />
+          </button>
+
+          <button className={styles.iconButton} onClick={() => setIsHelpOpen(true)} aria-label="Help">
+            <FontAwesomeIcon icon={faQuestionCircle} />
+          </button>
+        </div>
+      </header>
+
+      <main className={styles.main}>
+        {isIdle && (
+          <div className={styles.idleOverlay}>
+            <FontAwesomeIcon icon={faExclamationTriangle} size="3x" />
+            <p>The debate has been paused due to inactivity. Please refresh the page to continue.</p>
+          </div>
+        )}
+
+        <div className={styles.debateSetup}>
+          <div className={styles.topicInput}>
+            <label htmlFor="debateTopic">Debate Topic:</label>
+            <input
+              type="text"
+              id="debateTopic"
+              value={debateTopic}
+              onChange={(e) => setDebateTopic(e.target.value)}
+              placeholder="Enter debate topic or leave blank for a random topic"
+            />
+          </div>
+
+          <div className={styles.characterSelect}>
+            <Suspense fallback={<div>Loading...</div>}>
+              <CharacterSelect character={character1} setCharacter={setCharacter1} label="Character 1:" />
+            </Suspense>
+
+            <Suspense fallback={<div>Loading...</div>}>
+              <CharacterSelect character={character2} setCharacter={setCharacter2} label="Character 2:" />
+            </Suspense>
+          </div>
+
+          <button className={styles.generateButton} onClick={handleGenerateDebate}>
+            {debateStage === "topic" ? "Generate Debate" : "Start Debate"}
+          </button>
+        </div>
+
+        <div className={styles.debateArea}>
+          <h2>{debateTopic ? debateTopic : "No topic generated yet. Click Generate Debate."}</h2>
+
+          {debateStage !== "topic" && (
+            <div className={styles.debateStage}>
+              <h3>{debateStage.charAt(0).toUpperCase() + debateStage.slice(1)}</h3>
+
+              <div className={styles.speechText}>
+                <p>{speakerStatus === "loading" ? <span className={styles.loading}>Loading...</span> : speechText}</p>
               </div>
-            </div>
-          </div>
 
-          {/* Instructions */}
-          <div className="text-center mb-8">
-            {mode === "debate" && selectedCharacters.length < 2 && !isDebating && (
-              <p className="text-lg text-gray-300">
-                Select two historical figures to watch them debate fascinating topics
-              </p>
-            )}
-          </div>
-
-          {/* Character Grid - SINGLE UNIFIED INTERFACE */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-12">
-            {Object.entries(personas).map(([key, persona]) => {
-              const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
-              const shouldGrayOut = shouldGrayOutCharacter(key)
-              const isCurrentDebateSpeaker = currentSpeaker === key
-
-              return (
-                <div
-                  key={key}
-                  className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
-                    isSelected ? "ring-4 ring-yellow-400" : ""
-                  } ${shouldGrayOut ? "opacity-30" : ""} ${isCurrentDebateSpeaker ? "ring-4 ring-green-400" : ""}`}
-                >
-                  <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl">
-                    {/* Image Section - Fixed Height */}
-                    <div className="h-48 relative">
-                      <img
-                        src={persona.image || "/placeholder.svg"}
-                        alt={persona.name}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
-
-                      {/* Speaking animation overlay */}
-                      {isCurrentDebateSpeaker && speakerStatus === "speaking" && (
-                        <div className="absolute inset-0 bg-green-500 bg-opacity-20 flex items-center justify-center">
-                          <div className="w-8 h-8 border-4 border-green-400 border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Content Section - Fixed Layout */}
-                    <div className="p-3 min-h-[120px] flex flex-col">
-                      {/* Character Name - Always at top */}
-                      <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
-
-                      {/* Pause/Resume/Stop buttons when playing */}
-                      {mode === "question" && selectedPersona === key && isPlaying && (
-                        <div className="flex space-x-1 mb-2">
-                          {!isPaused ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                pauseAudio()
-                              }}
-                              className="flex-1 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
-                              title="Pause"
-                            >
-                              ⏸ Pause
-                            </button>
-                          ) : (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                resumeAudio()
-                              }}
-                              className="flex-1 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                              title="Resume"
-                            >
-                              ▶ Resume
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              stopAudio()
-                            }}
-                            className="flex-1 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                            title="Stop"
-                          >
-                            ⏹ Stop
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Button Section - Always at bottom */}
-                      <div className="mt-auto flex space-x-1">
-                        {mode === "question" ? (
-                          <button
-                            onClick={(e) => handleRecordingButtonClick(key, e)}
-                            disabled={shouldGrayOut}
-                            className={`flex-1 py-2 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
-                              shouldGrayOut ? "bg-gray-600 text-gray-400 cursor-not-allowed" : ""
-                            }`}
-                          >
-                            <SmallMicIcon isActive={selectedPersona === key && isListening} />
-                            <span className="truncate">{getStatusText(key)}</span>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (!isDebating) {
-                                handleCharacterSelect(key)
-                              }
-                            }}
-                            className={`w-full py-2 px-2 rounded text-xs font-semibold transition-all duration-300 ${getButtonColor(key)}`}
-                            disabled={
-                              isDebating || (selectedCharacters.length >= 2 && !selectedCharacters.includes(key))
-                            }
-                          >
-                            <span className="truncate">{getStatusText(key)}</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Debate Topic Display - MOVED BELOW CHARACTERS */}
-          {isDebating && debateTopic && (
-            <div className="mb-8 text-center">
-              <div className="bg-gray-800 rounded-lg p-4 inline-block">
-                <h2 className="text-xl font-bold text-yellow-400 mb-2">Current Debate Topic</h2>
-                <p className="text-gray-300">{debateTopic}</p>
-                <p className="text-sm text-gray-400 mt-1">Round {debateRound + 1} of 4</p>
-                <div className="mt-4 flex justify-center space-x-3">
-                  {!isDebatePaused ? (
-                    <button
-                      onClick={pauseDebateAudio}
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded text-sm flex items-center space-x-2"
-                    >
-                      <span>⏸</span>
-                      <span>Pause Debate</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={resumeDebateAudio}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm flex items-center space-x-2"
-                    >
-                      <span>▶</span>
-                      <span>Resume Debate</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={endDebate}
-                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm"
-                  >
-                    End Debate
-                  </button>
-                </div>
+              <div className={styles.speakerInfo}>
+                <p>Speaker: {currentSpeaker === 1 ? character1 : character2}</p>
+                <p>Status: {speakerStatus}</p>
               </div>
-            </div>
-          )}
 
-          {/* Audio Error Display */}
-          {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
+              {requiresUserInteraction && (
+                <div className={styles.userInteraction}>
+                  <p className={styles.errorMessage}>{audioError}</p>
+                  <button onClick={handleEnableAudio}>Enable Audio</button>
+                </div>
+              )}
 
-          {/* Topic Selector - Inline */}
-          {showTopicSelector && selectedCharacters.length === 2 && !isDebating && (
-            <div className="w-full max-w-4xl mx-auto mb-8">
-              <div className="bg-gray-800 rounded-xl p-6">
-                <h2 className="text-2xl font-bold text-yellow-400 mb-6 text-center">Choose a Debate Topic</h2>
+              <div className={styles.controls}>
+                <button
+                  className={styles.controlButton}
+                  onClick={handlePlayPause}
+                  disabled={speakerStatus === "loading"}
+                  aria-label="Play/Pause"
+                >
+                  <FontAwesomeIcon icon={isPlaying ? faPause : faPlay} />
+                </button>
 
-                {loadingTopics ? (
-                  <div className="flex justify-center items-center py-8">
-                    <div className="inline-block animate-spin h-8 w-8 border-4 border-yellow-500 border-t-transparent rounded-full mr-3"></div>
-                    <span className="text-gray-300">Generating topics...</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                      {topics.map((topic) => (
-                        <div
-                          key={topic.id}
-                          onClick={() => handleTopicSelect(topic)}
-                          className="bg-gray-700 hover:bg-gray-600 rounded-lg p-4 cursor-pointer transition-all duration-300 hover:scale-105 border border-gray-600 hover:border-yellow-400"
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <h3 className="text-lg font-semibold text-yellow-400 flex-1">{topic.title}</h3>
-                            <span className="text-xs bg-yellow-500 text-black px-2 py-1 rounded-full ml-2">
-                              {topic.category}
-                            </span>
-                          </div>
-                          <p className="text-gray-300 text-sm">{topic.description}</p>
-                        </div>
-                      ))}
-                    </div>
+                <button
+                  className={styles.controlButton}
+                  onClick={handleRestart}
+                  disabled={speakerStatus === "loading"}
+                  aria-label="Restart"
+                >
+                  <FontAwesomeIcon icon={faRedo} />
+                </button>
 
-                    {/* Custom Topic Button */}
-                    <div className="border-t border-gray-700 pt-6">
-                      <h3 className="text-lg font-semibold text-yellow-400 mb-4 text-center">
-                        Or create your own topic
-                      </h3>
-                      <div className="flex justify-center">
-                        <button
-                          onClick={handleCustomTopicClick}
-                          disabled={isProcessingCustomTopic}
-                          className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 flex items-center space-x-2 ${
-                            isRecordingCustomTopic
-                              ? "bg-red-600 hover:bg-red-700 text-white animate-pulse"
-                              : isProcessingCustomTopic
-                                ? "bg-blue-600 text-white cursor-not-allowed"
-                                : "bg-purple-600 hover:bg-purple-700 text-white"
-                          }`}
-                        >
-                          <SmallMicIcon isActive={isRecordingCustomTopic} />
-                          <span>
-                            {isRecordingCustomTopic
-                              ? "Stop Recording"
-                              : isProcessingCustomTopic
-                                ? "Processing..."
-                                : "Record Custom Topic"}
-                          </span>
-                        </button>
-                      </div>
-                      {isRecordingCustomTopic && (
-                        <div className="mt-4 text-center">
-                          <div className="flex justify-center mt-2 mb-2">
-                            <div className="flex space-x-1">
-                              <div className="w-1 h-4 bg-blue-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite]"></div>
-                              <div className="w-1 h-6 bg-yellow-500 rounded-full animate-[soundwave_0.7s_ease-in-out_infinite_0.1s]"></div>
-                              <div className="w-1 h-3 bg-green-500 rounded-full animate-[soundwave_0.4s_ease-in-out_infinite_0.2s]"></div>
-                              <div className="w-1 h-5 bg-red-500 rounded-full animate-[soundwave_0.6s_ease-in-out_infinite_0.3s]"></div>
-                              <div className="w-1 h-2 bg-purple-500 rounded-full animate-[soundwave_0.5s_ease-in-out_infinite_0.4s]"></div>
-                            </div>
-                          </div>
-                          <p className="text-gray-300">Speak your debate topic...</p>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
+                <button
+                  className={styles.controlButton}
+                  onClick={handleNextStage}
+                  disabled={speakerStatus === "loading"}
+                  aria-label="Next Stage"
+                >
+                  Next
+                </button>
               </div>
             </div>
           )}
         </div>
-      </div>
-    </Layout>
+
+        {browserSupportsSpeechRecognition && (
+          <div className={styles.transcriptionArea}>
+            <div className={styles.transcriptionControls}>
+              <label htmlFor="transcriptionCharacter">Character:</label>
+              <select
+                id="transcriptionCharacter"
+                value={transcriptionCharacter}
+                onChange={(e) => setTranscriptionCharacter(Number.parseInt(e.target.value))}
+              >
+                <option value={1}>{character1}</option>
+                <option value={2}>{character2}</option>
+              </select>
+
+              <label htmlFor="transcriptionDebateStage">Debate Stage:</label>
+              <select
+                id="transcriptionDebateStage"
+                value={transcriptionDebateStage}
+                onChange={(e) => setTranscriptionDebateStage(e.target.value)}
+              >
+                <option value="opening">Opening</option>
+                <option value="argument1">Argument 1</option>
+                <option value="rebuttal1">Rebuttal 1</option>
+                <option value="argument2">Argument 2</option>
+                <option value="rebuttal2">Rebuttal 2</option>
+                <option value="closing">Closing</option>
+                <option value="summary">Summary</option>
+              </select>
+
+              <button
+                className={styles.transcriptionButton}
+                onClick={toggleTranscription}
+                aria-label="Start/Stop Transcription"
+              >
+                <FontAwesomeIcon icon={isRecording ? faStop : faMicrophone} />
+                {isRecording ? "Stop" : "Start"} Transcription
+              </button>
+            </div>
+
+            {transcription && (
+              <div className={styles.transcriptionText}>
+                <h4>Transcription:</h4>
+                <p>{transcription}</p>
+              </div>
+            )}
+
+            {transcriptionHistory.length > 0 && showTranscription && (
+              <div className={styles.transcriptionHistory}>
+                <h4>Transcription History:</h4>
+                {transcriptionHistory.map((item, index) => (
+                  <div key={index} className={styles.transcriptionItem}>
+                    <p>
+                      <strong>Character:</strong> {item.character === 1 ? character1 : character2}
+                    </p>
+                    <p>
+                      <strong>Debate Stage:</strong> {item.debateStage}
+                    </p>
+                    <p>
+                      <strong>Text:</strong> {item.text}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      <footer className={styles.footer}>
+        <p>&copy; {new Date().getFullYear()} AI Debate Generator. All rights reserved.</p>
+      </footer>
+    </div>
   )
 }
