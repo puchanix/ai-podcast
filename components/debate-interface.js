@@ -176,13 +176,13 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     return "echo"
   }
 
-  // Simple audio playback - FIXED status management
+  // Play audio for message
   const playAudio = async (message, allMessages, currentIndex) => {
     const { character, content } = message
     console.log(`🔍 Playing audio for ${character}`)
 
     setCurrentSpeaker(character)
-    setSpeakerStatus("thinking") // Always start with thinking
+    setSpeakerStatus("thinking")
 
     try {
       const voice = getVoiceForCharacter(character)
@@ -200,16 +200,14 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
       const data = await response.json()
 
-      // Create and setup audio
+      // Play audio
       const audio = new Audio(data.audioUrl)
       currentAudioRef.current = audio
 
-      // FIXED: Only change to speaking when audio actually starts
-      audio.addEventListener("playing", () => {
-        console.log(`🔍 Audio ACTUALLY started playing for ${character}`)
+      audio.oncanplaythrough = () => {
         setSpeakerStatus("speaking")
         setIsPlaying(true)
-      })
+      }
 
       audio.onended = () => {
         console.log(`🔍 ${character} finished speaking`)
@@ -243,7 +241,6 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         throw new Error(`Audio playback failed: ${e.message}`)
       }
 
-      // Start playing - but status won't change until 'playing' event fires
       await audio.play()
     } catch (error) {
       console.error(`🔍 Error playing audio for ${character}:`, error)
@@ -254,7 +251,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
   }
 
-  // Simple continue debate - no caching, no optimization
+  // Continue debate with next exchange
   const continueDebate = async () => {
     if (isProcessing) return
 
@@ -312,7 +309,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
   }
 
-  // Simple start debate
+  // Start debate
   const startDebate = async (topic) => {
     console.log("🔍 Starting debate with topic:", topic)
 

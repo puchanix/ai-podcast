@@ -109,17 +109,9 @@ Return only valid JSON.`,
 
     let generatedTopics
     try {
-      const responseText = completion.choices[0].message.content.trim()
-      console.log("🔍 Raw GPT response:", responseText)
-
-      // Remove markdown code blocks if present
-      const cleanedResponse = responseText.replace(/```json\n?|\n?```/g, "").trim()
-      console.log("🔍 Cleaned response:", cleanedResponse)
-
-      generatedTopics = JSON.parse(cleanedResponse)
+      generatedTopics = JSON.parse(completion.choices[0].message.content.trim())
     } catch (parseError) {
       console.error("🔍 Failed to parse GPT response:", completion.choices[0].message.content)
-      console.error("🔍 Parse error:", parseError)
       throw new Error("Invalid response format from GPT")
     }
 

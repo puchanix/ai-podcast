@@ -6,15 +6,15 @@ const openai = new OpenAI({
 
 const characters = {
   daVinci:
-    "You are Leonardo da Vinci, the great Renaissance polymath. Speak with curiosity about art, science, and invention. Be passionate but thoughtful. Keep responses concise and engaging.",
+    "You are Leonardo da Vinci, the great Renaissance polymath. Speak with curiosity about art, science, and invention. Be passionate but thoughtful.",
   socrates:
-    "You are Socrates, the ancient Greek philosopher. Use the Socratic method, asking probing questions. Be wise but humble. Keep responses concise and thought-provoking.",
+    "You are Socrates, the ancient Greek philosopher. Use the Socratic method, asking probing questions. Be wise but humble.",
   frida:
-    "You are Frida Kahlo, the passionate Mexican artist. Speak with intensity about art, pain, love, and identity. Be bold and emotional. Keep responses concise and powerful.",
+    "You are Frida Kahlo, the passionate Mexican artist. Speak with intensity about art, pain, love, and identity. Be bold and emotional.",
   shakespeare:
-    "You are William Shakespeare, the Bard of Avon. Speak poetically but accessibly about human nature, love, and drama. Be eloquent. Keep responses concise and memorable.",
+    "You are William Shakespeare, the Bard of Avon. Speak poetically but accessibly about human nature, love, and drama. Be eloquent.",
   mozart:
-    "You are Wolfgang Amadeus Mozart, the classical composer. Speak passionately about music, creativity, and artistic expression. Be energetic. Keep responses concise and inspiring.",
+    "You are Wolfgang Amadeus Mozart, the classical composer. Speak passionately about music, creativity, and artistic expression. Be energetic.",
 }
 
 export default async function handler(req, res) {
@@ -23,32 +23,53 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { message, persona } = req.body
+    console.log("🔍 [CHAT DEBUG] Chat API called with body:", req.body)
+    const { messages, character, message, persona } = req.body
 
-    if (!message || !persona) {
-      return res.status(400).json({ error: "Missing message or persona" })
+    // Handle both old and new API formats
+    const characterKey = character || persona
+    const userMessage = message || (messages && messages[0]?.content)
+
+    if (!characterKey || !userMessage) {
+      console.error("🔍 [CHAT DEBUG] Missing required parameters:", {
+        character: characterKey,
+        message: userMessage,
+      })
+      return res.status(400).json({ error: "Missing character or message" })
     }
 
-    const systemPrompt = characters[persona]
+    console.log("🔍 [CHAT DEBUG] Processing request for character:", characterKey)
+    console.log("🔍 [CHAT DEBUG] User message:", userMessage)
+
+    const systemPrompt = characters[characterKey]
     if (!systemPrompt) {
-      return res.status(400).json({ error: `Unknown character: ${persona}` })
+      console.error("🔍 [CHAT DEBUG] Unknown character:", characterKey)
+      return res.status(400).json({ error: `Unknown character: ${characterKey}` })
     }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: message },
+        { role: "user", content: userMessage },
       ],
-      max_tokens: 150,
-      temperature: 0.8,
+      max_tokens: 100, // Verify this is 100
+      temperature: 0.7,
     })
 
-    const response = completion.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response."
+    console.log("🔍 [CHAT DEBUG] Token limit used:", 100)
 
-    res.status(200).json({ response })
+    const response = completion.choices[0]?.message?.content || "I need to think more about this."
+    console.log("🔍 [CHAT DEBUG] Generated response:", response.substring(0, 100) + "...")
+    console.log("🔍 [CHAT DEBUG] Response length:", response.length, "characters")
+
+    // Return in both formats for compatibility
+    return res.status(200).json({
+      content: response, // New format
+      response: response, // Old format
+    })
   } catch (error) {
-    console.error("Chat API error:", error)
-    res.status(500).json({ error: "Failed to generate response", details: error.message })
+    console.error("🔍 [CHAT DEBUG] Chat API error:", error)
+    return res.status(500).json({ error: "Failed to generate response" })
   }
 }

@@ -163,7 +163,7 @@ Give your next response in 2-3 sentences. Stay true to your character, respond t
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt },
       ],
-      max_tokens: 80,
+      max_tokens: 200,
       temperature: 0.8,
     })
 
