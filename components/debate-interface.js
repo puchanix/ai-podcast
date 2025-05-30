@@ -33,6 +33,10 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
   const [debugInfo, setDebugInfo] = useState("")
   const [voiceIds, setVoiceIds] = useState({})
 
+  // Predictive response generation - simplified
+  const [nextExchangeReady, setNextExchangeReady] = useState(null)
+  const [isGeneratingNext, setIsGeneratingNext] = useState(false)
+
   // Refs
   const currentAudioRef = useRef(null)
   const isDebatingRef = useRef(false)
@@ -144,6 +148,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     setIsProcessing(false)
     setAudioError(null)
     setDebugInfo("")
+    setNextExchangeReady(null)
+    setIsGeneratingNext(false)
 
     if (currentAudioRef.current) {
       currentAudioRef.current.pause()
@@ -176,10 +182,10 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     return "echo"
   }
 
-  // Play audio for message
+  // Play audio for message with chunking and parallel processing
   const playAudio = async (message, allMessages, currentIndex) => {
     const { character, content } = message
-    console.log(`🔍 Playing audio for ${character}`)
+    console.log(`🔍 [DEBATE AUDIO] Playing audio for ${character}`)
 
     setCurrentSpeaker(character)
     setSpeakerStatus("thinking")
@@ -187,63 +193,126 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     try {
       const voice = getVoiceForCharacter(character)
 
-      // Generate audio
-      const response = await fetch("/api/speak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: content, voice }),
+      // Split content into chunks (8-10 words each)
+      const words = content.split(" ")
+      const chunks = []
+
+      for (let i = 0; i < words.length; i += 9) {
+        // 9 words per chunk on average
+        const chunk = words.slice(i, i + 9).join(" ")
+        if (chunk.trim()) {
+          chunks.push(chunk.trim())
+        }
+      }
+
+      console.log(`🔍 [DEBATE AUDIO] Split into ${chunks.length} chunks for ${character}`)
+
+      if (chunks.length === 0) return
+
+      // Start parallel audio generation for all chunks
+      const audioPromises = chunks.map(async (chunk, index) => {
+        console.log(`🔍 [DEBATE AUDIO] Generating chunk ${index}: ${chunk.substring(0, 30)}...`)
+
+        const response = await fetch("/api/speak-fast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: chunk, voice }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Audio API returned ${response.status} for chunk ${index}`)
+        }
+
+        const data = await response.json()
+        return { index, audioUrl: data.audioUrl, chunk }
       })
 
-      if (!response.ok) {
-        throw new Error(`Audio API returned ${response.status}`)
-      }
+      // Wait for first chunk to be ready
+      const firstChunk = await audioPromises[0]
+      console.log(`🔍 [DEBATE AUDIO] First chunk ready for ${character}`)
 
-      const data = await response.json()
+      // Start playing first chunk
+      const firstAudio = new Audio(firstChunk.audioUrl)
+      currentAudioRef.current = firstAudio
 
-      // Play audio
-      const audio = new Audio(data.audioUrl)
-      currentAudioRef.current = audio
+      setSpeakerStatus("speaking")
+      setIsPlaying(true)
 
-      audio.oncanplaythrough = () => {
-        setSpeakerStatus("speaking")
-        setIsPlaying(true)
-      }
+      // Queue for remaining chunks
+      let currentChunkIndex = 0
+      const audioQueue = [firstChunk]
 
-      audio.onended = () => {
-        console.log(`🔍 ${character} finished speaking`)
-        setIsPlaying(false)
-        setSpeakerStatus("waiting")
+      // Add remaining chunks as they complete
+      Promise.all(audioPromises.slice(1)).then((remainingChunks) => {
+        audioQueue.push(...remainingChunks.sort((a, b) => a.index - b.index))
+      })
 
-        // Auto-continue to next message
-        const nextIndex = currentIndex + 1
-        if (nextIndex < allMessages.length) {
-          setTimeout(() => {
-            playAudio(allMessages[nextIndex], allMessages, nextIndex)
-          }, 500) // Minimal delay
-        } else {
-          // Check if we need more exchanges
-          const currentExchange = Math.floor((currentIndex + 1) / 2)
-          if (currentExchange < 4) {
-            // Opening + 3 rounds = 4 total exchanges
-            setTimeout(() => {
-              continueDebate()
-            }, 1000)
+      // Play chunks sequentially
+      const playNextChunk = () => {
+        currentChunkIndex++
+
+        if (currentChunkIndex < audioQueue.length) {
+          const nextChunk = audioQueue[currentChunkIndex]
+          if (nextChunk) {
+            const nextAudio = new Audio(nextChunk.audioUrl)
+            currentAudioRef.current = nextAudio
+
+            nextAudio.onended = playNextChunk
+            nextAudio.onerror = (e) => {
+              console.error(`🔍 [DEBATE AUDIO] Error playing chunk ${currentChunkIndex}:`, e)
+              playNextChunk() // Skip to next chunk
+            }
+
+            nextAudio.play().catch((e) => {
+              console.error(`🔍 [DEBATE AUDIO] Failed to play chunk ${currentChunkIndex}:`, e)
+              playNextChunk()
+            })
           } else {
-            // Debate finished
+            // Wait for chunk to be ready
+            setTimeout(playNextChunk, 100)
+          }
+        } else {
+          // All chunks played - handle next action
+          console.log(`🔍 [DEBATE AUDIO] ${character} finished speaking`)
+          setIsPlaying(false)
+          setSpeakerStatus("waiting")
+
+          // Auto-continue to next message or generate next exchange
+          const nextIndex = currentIndex + 1
+          if (nextIndex < allMessages.length) {
+            // Play next message in current exchange
             setTimeout(() => {
-              resetDebate()
-            }, 2000)
+              playAudio(allMessages[nextIndex], allMessages, nextIndex)
+            }, 500)
+          } else {
+            // Need to continue to next exchange
+            const currentExchange = Math.floor((currentIndex + 1) / 2)
+            console.log(`🔍 [DEBATE FLOW] Finished exchange ${currentExchange}, total messages: ${allMessages.length}`)
+
+            if (currentExchange < 4) {
+              // 4 total exchanges (opening + 3 rounds)
+              setTimeout(() => {
+                continueDebate()
+              }, 500) // Reduced delay
+            } else {
+              // Debate finished
+              console.log(`🔍 [DEBATE FLOW] Debate complete after ${currentExchange} exchanges`)
+              setTimeout(() => {
+                resetDebate()
+              }, 2000)
+            }
           }
         }
       }
 
-      audio.onerror = (e) => {
+      firstAudio.onended = playNextChunk
+      firstAudio.onerror = (e) => {
         throw new Error(`Audio playback failed: ${e.message}`)
       }
 
-      await audio.play()
+      await firstAudio.play()
     } catch (error) {
-      console.error(`🔍 Error playing audio for ${character}:`, error)
+      console.error(`🔍 [DEBATE AUDIO] Error playing audio for ${character}:`, error)
       setAudioError(`Audio failed for ${character}: ${error.message}`)
       setDebugInfo(`Character: ${character}, Voice: ${getVoiceForCharacter(character)}, Error: ${error.message}`)
       setIsProcessing(false)
@@ -251,13 +320,12 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     }
   }
 
-  // Continue debate with next exchange
-  const continueDebate = async () => {
-    if (isProcessing) return
+  // Generate next exchange in background
+  const generateNextExchange = async () => {
+    if (isGeneratingNext || nextExchangeReady) return
 
-    console.log("🔍 Continuing debate...")
-    setIsProcessing(true)
-    setSpeakerStatus("thinking")
+    console.log(`🔍 [PREDICTIVE] Generating next exchange in background`)
+    setIsGeneratingNext(true)
 
     try {
       const response = await fetch("/api/auto-continue", {
@@ -273,22 +341,76 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
         }),
       })
 
-      if (!response.ok) {
+      if (response.ok) {
+        const data = await response.json()
+        setNextExchangeReady({
+          response1: data.response1,
+          response2: data.response2,
+        })
+        console.log(`🔍 [PREDICTIVE] Next exchange ready and cached!`)
+      } else {
+        console.error(`🔍 [PREDICTIVE] API error:`, response.status)
         const errorText = await response.text()
-        throw new Error(`API returned ${response.status}: ${errorText}`)
+        console.error(`🔍 [PREDICTIVE] Error details:`, errorText)
       }
+    } catch (error) {
+      console.error(`🔍 [PREDICTIVE] Error generating next exchange:`, error)
+    } finally {
+      setIsGeneratingNext(false)
+    }
+  }
 
-      const data = await response.json()
+  // Continue debate with next exchange (optimized with caching)
+  const continueDebate = async () => {
+    if (isProcessing) return
+
+    console.log("🔍 [DEBATE FLOW] Continuing debate...")
+    setIsProcessing(true)
+
+    try {
+      let response1, response2
+
+      if (nextExchangeReady) {
+        console.log("🔍 [CACHE] Using cached exchange - INSTANT!")
+        response1 = nextExchangeReady.response1
+        response2 = nextExchangeReady.response2
+        setNextExchangeReady(null) // Clear cache
+      } else {
+        console.log("🔍 [CACHE] No cache found, generating fresh responses")
+        setSpeakerStatus("thinking")
+
+        const response = await fetch("/api/auto-continue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            character1: char1,
+            character2: char2,
+            currentMessages: debateMessagesRef.current,
+            topic: currentTopic,
+            format: "pointCounterpoint",
+            historicalContext: true,
+          }),
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`API returned ${response.status}: ${errorText}`)
+        }
+
+        const data = await response.json()
+        response1 = data.response1
+        response2 = data.response2
+      }
 
       const newMessages = [
         {
           character: char1,
-          content: data.response1,
+          content: response1,
           timestamp: Date.now(),
         },
         {
           character: char2,
-          content: data.response2,
+          content: response2,
           timestamp: Date.now() + 100,
         },
       ]
@@ -298,10 +420,18 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
       setIsProcessing(false)
 
-      // Start playing the first new message
+      // Start playing the first new message immediately
       playAudio(newMessages[0], allMessages, debateMessagesRef.current.length)
+
+      // Generate next exchange while this one plays (if not near end)
+      if (allMessages.length < 8) {
+        // Don't generate if we're at the end
+        setTimeout(() => {
+          generateNextExchange()
+        }, 1000) // Start generating after 1 second
+      }
     } catch (error) {
-      console.error("🔍 Error continuing debate:", error)
+      console.error("🔍 [DEBATE FLOW] Error continuing debate:", error)
       setAudioError(`Failed to continue debate: ${error.message}`)
       setDebugInfo(`Topic: ${currentTopic}, Characters: ${char1} vs ${char2}, Error: ${error.message}`)
       setIsProcessing(false)
@@ -311,7 +441,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
   // Start debate
   const startDebate = async (topic) => {
-    console.log("🔍 Starting debate with topic:", topic)
+    console.log("🔍 [DEBATE FLOW] Starting debate with topic:", topic)
 
     if (isProcessing || isDebating) return
 
@@ -322,6 +452,8 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
     setDebugInfo("")
     setCurrentSpeaker(char1)
     setSpeakerStatus("thinking")
+    setNextExchangeReady(null) // Clear any cached responses
+    setIsGeneratingNext(false)
 
     try {
       const response = await fetch("/api/start-debate", {
@@ -361,8 +493,13 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
 
       // Start playing first message
       playAudio(messages[0], messages, 0)
+
+      // Generate first round responses while opening statements play
+      setTimeout(() => {
+        generateNextExchange()
+      }, 2000) // Start generating after 2 seconds
     } catch (error) {
-      console.error("🔍 Error starting debate:", error)
+      console.error("🔍 [DEBATE FLOW] Error starting debate:", error)
       setAudioError(`Failed to start debate: ${error.message}`)
       setDebugInfo(`Topic: ${topic}, Characters: ${char1} vs ${char2}, Error: ${error.message}`)
       updateDebateState({ isDebating: false })
@@ -522,7 +659,9 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
                             ? "Speaking..."
                             : "Waiting..."
                         : isDebating
-                          ? "Waiting turn"
+                          ? nextExchangeReady && !isCurrentSpeaker
+                            ? "Ready!"
+                            : "Waiting turn"
                           : "Ready"}
                     </p>
                   )}
@@ -567,6 +706,7 @@ export function DebateInterface({ character1, character2, initialTopic, onDebate
               </button>
             </div>
             {isProcessing && <p className="text-yellow-300 text-sm mt-2">Preparing next exchange...</p>}
+            {nextExchangeReady && <p className="text-green-300 text-sm mt-2">Next exchange ready!</p>}
           </div>
         </div>
       )}

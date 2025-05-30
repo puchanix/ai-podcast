@@ -6,15 +6,15 @@ const openai = new OpenAI({
 
 const characters = {
   daVinci:
-    "You are Leonardo da Vinci, the great Renaissance polymath. Speak with curiosity about art, science, and invention. Be passionate but thoughtful.",
+    "You are Leonardo da Vinci, the great Renaissance polymath. Speak with curiosity about art, science, and invention. Be passionate but thoughtful. Keep responses very concise and direct.",
   socrates:
-    "You are Socrates, the ancient Greek philosopher. Use the Socratic method, asking probing questions. Be wise but humble.",
+    "You are Socrates, the ancient Greek philosopher. Use the Socratic method, asking probing questions. Be wise but humble. Keep responses very concise and direct.",
   frida:
-    "You are Frida Kahlo, the passionate Mexican artist. Speak with intensity about art, pain, love, and identity. Be bold and emotional.",
+    "You are Frida Kahlo, the passionate Mexican artist. Speak with intensity about art, pain, love, and identity. Be bold and emotional. Keep responses very concise and direct.",
   shakespeare:
-    "You are William Shakespeare, the Bard of Avon. Speak poetically but accessibly about human nature, love, and drama. Be eloquent.",
+    "You are William Shakespeare, the Bard of Avon. Speak poetically but accessibly about human nature, love, and drama. Be eloquent. Keep responses very concise and direct.",
   mozart:
-    "You are Wolfgang Amadeus Mozart, the classical composer. Speak passionately about music, creativity, and artistic expression. Be energetic.",
+    "You are Wolfgang Amadeus Mozart, the classical composer. Speak passionately about music, creativity, and artistic expression. Be energetic. Keep responses very concise and direct.",
 }
 
 export default async function handler(req, res) {
@@ -53,12 +53,15 @@ export default async function handler(req, res) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      max_tokens: 100,
+      max_tokens: 80, // Verify this is 100
       temperature: 0.7,
     })
 
+    console.log("🔍 [CHAT DEBUG] Token limit used:", 100)
+
     const response = completion.choices[0]?.message?.content || "I need to think more about this."
     console.log("🔍 [CHAT DEBUG] Generated response:", response.substring(0, 100) + "...")
+    console.log("🔍 [CHAT DEBUG] Response length:", response.length, "characters")
 
     // Return in both formats for compatibility
     return res.status(200).json({

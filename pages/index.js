@@ -19,13 +19,13 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
   const [isDebatePaused, setIsDebatePaused] = useState(false)
+  const [isDebating, setIsDebating] = useState(false)
 
   // Custom topic recording state
   const [isRecordingCustomTopic, setIsRecordingCustomTopic] = useState(false)
   const [isProcessingCustomTopic, setIsProcessingCustomTopic] = useState(false)
 
   // Debate state
-  const [isDebating, setIsDebating] = useState(false)
   const [debateTopic, setDebateTopic] = useState("")
   const [topics, setTopics] = useState([])
   const [loadingTopics, setLoadingTopics] = useState(false)
@@ -209,6 +209,36 @@ export default function Home() {
     }
   }, [isProcessing])
 
+  // Test API connectivity on component mount
+  useEffect(() => {
+    async function testAPIConnectivity() {
+      try {
+        console.log("🔍 [API TEST] Testing API connectivity...")
+
+        // Test if transcribe endpoint exists
+        const testResponse = await fetch("/api/transcribe", {
+          method: "OPTIONS",
+        })
+
+        console.log("🔍 [API TEST] Transcribe API status:", testResponse.status)
+
+        // Test if other APIs exist
+        const chatResponse = await fetch("/api/chat-streaming", {
+          method: "OPTIONS",
+        })
+
+        console.log("🔍 [API TEST] Chat API status:", chatResponse.status)
+      } catch (error) {
+        console.error("🔍 [API TEST] API connectivity test failed:", error)
+        setAudioError("API endpoints not accessible. Please check your setup.")
+      }
+    }
+
+    if (!isLoading) {
+      testAPIConnectivity()
+    }
+  }, [isLoading])
+
   const handleCharacterSelect = useCallback(
     async (characterId) => {
       if (mode === "question") {
@@ -366,8 +396,7 @@ export default function Home() {
   const processCustomTopicAudio = useCallback(
     async (audioBlob) => {
       console.log("🎤 [CUSTOM TOPIC] Processing custom topic audio...")
-      console.log("🎤 [CUSTOM TOPIC] Current selectedCharacters state:", selectedCharacters)
-      console.log("🎤 [CUSTOM TOPIC] Current selectedCharacters ref:", selectedCharactersRef.current)
+      console.log("🎤 [CUSTOM TOPIC] Audio blob size:", audioBlob.size)
       setIsProcessingCustomTopic(true)
       setAudioError(null)
 
@@ -376,11 +405,20 @@ export default function Home() {
         formData.append("audio", audioBlob, "custom-topic.webm")
         console.log("🎤 [CUSTOM TOPIC] Sending to transcription API...")
 
+        // Add timeout to the transcription request
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => {
+          console.log("🎤 [CUSTOM TOPIC] Request timed out after 30 seconds")
+          controller.abort()
+        }, 30000) // 30 second timeout
+
         const transcriptionResponse = await fetch("/api/transcribe", {
           method: "POST",
           body: formData,
+          signal: controller.signal,
         })
 
+        clearTimeout(timeoutId)
         console.log("🎤 [CUSTOM TOPIC] Transcription response status:", transcriptionResponse.status)
 
         if (!transcriptionResponse.ok) {
@@ -413,7 +451,14 @@ export default function Home() {
         startDebateWithCharacters(text.trim(), currentCharacters)
       } catch (error) {
         console.error("🎤 [CUSTOM TOPIC] Error processing custom topic audio:", error)
-        setAudioError(`Error: ${error.message}`)
+
+        if (error.name === "AbortError") {
+          setAudioError("Request timed out. Please try again with a shorter recording.")
+        } else if (error.message.includes("Failed to fetch")) {
+          setAudioError("Network error. Please check your connection and try again.")
+        } else {
+          setAudioError(`Error: ${error.message}`)
+        }
       } finally {
         setIsProcessingCustomTopic(false)
       }
@@ -474,17 +519,33 @@ export default function Home() {
       const formData = new FormData()
       formData.append("audio", audioBlob, "question.webm")
 
+      console.log("🎤 [TRANSCRIBE] Starting transcription request...")
+      console.log("🎤 [TRANSCRIBE] Audio blob size:", audioBlob.size)
+
+      // Add timeout to the transcription request
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => {
+        console.log("🎤 [TRANSCRIBE] Request timed out after 30 seconds")
+        controller.abort()
+      }, 30000) // 30 second timeout
+
       const transcriptionResponse = await fetch("/api/transcribe", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       })
+
+      clearTimeout(timeoutId)
+      console.log("🎤 [TRANSCRIBE] Response status:", transcriptionResponse.status)
 
       if (!transcriptionResponse.ok) {
         const errorText = await transcriptionResponse.text()
+        console.error("🎤 [TRANSCRIBE] Error response:", errorText)
         throw new Error("Failed to transcribe audio: " + errorText)
       }
 
       const { text } = await transcriptionResponse.json()
+      console.log("🎤 [TRANSCRIBE] Transcribed text:", text)
 
       if (!text || text.trim().length === 0) {
         throw new Error("No speech detected. Please try again.")
@@ -492,8 +553,15 @@ export default function Home() {
 
       await processQuestionWithStreaming(text, currentPersona)
     } catch (error) {
-      console.error("Error processing audio question:", error)
-      setAudioError(`Error: ${error.message}`)
+      console.error("🎤 [TRANSCRIBE] Error processing audio question:", error)
+
+      if (error.name === "AbortError") {
+        setAudioError("Request timed out. Please try again with a shorter recording.")
+      } else if (error.message.includes("Failed to fetch")) {
+        setAudioError("Network error. Please check your connection and try again.")
+      } else {
+        setAudioError(`Error: ${error.message}`)
+      }
     } finally {
       setIsProcessing(false)
       setThinkingMessage("")
@@ -502,10 +570,10 @@ export default function Home() {
 
   const processQuestionWithStreaming = async (question, persona) => {
     try {
+      console.log("⏱️ [STREAMING] Starting real-time streaming at:", Date.now())
       setIsPlaying(true)
 
-      // Start text generation
-      const textResponse = await fetch("/api/chat", {
+      const response = await fetch("/api/chat-streaming", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -516,40 +584,171 @@ export default function Home() {
         }),
       })
 
-      if (!textResponse.ok) {
-        throw new Error("Failed to generate response")
+      if (!response.ok) {
+        throw new Error("Failed to start streaming")
       }
 
-      const { content: responseText } = await textResponse.json()
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
 
-      // Start audio generation immediately (parallel processing)
-      await generateAudioResponse(responseText, persona)
+      let accumulatedText = ""
+      const audioQueue = []
+      const audioPromises = [] // Track parallel audio generation
+      let isFirstChunk = true
+      let currentAudioIndex = 0
+      let isPlaying = false
+      let chunkIndex = 0
+
+      const playNextAudio = async () => {
+        if (currentAudioIndex < audioQueue.length && audioQueue[currentAudioIndex]) {
+          const audioUrl = audioQueue[currentAudioIndex]
+          const audio = new Audio(audioUrl)
+          audioRef.current = audio
+
+          audio.onended = () => {
+            currentAudioIndex++
+            playNextAudio()
+          }
+
+          audio.onerror = () => {
+            currentAudioIndex++
+            playNextAudio()
+          }
+
+          await audio.play()
+          isPlaying = true
+        } else {
+          // Check if streaming is complete and all audio is ready
+          setTimeout(() => {
+            if (currentAudioIndex >= audioQueue.length && audioPromises.length === 0) {
+              setIsPlaying(false)
+              setIsPaused(false)
+            } else {
+              playNextAudio()
+            }
+          }, 100)
+        }
+      }
+
+      // Function to generate audio in parallel (back to regular generation)
+      const generateAudioParallel = async (text, index) => {
+        const chunkStartTime = Date.now()
+        console.log(`⏱️ [PARALLEL] Starting audio generation for chunk ${index}:`, text.substring(0, 30) + "...")
+
+        try {
+          const audioResponse = await fetch("/api/speak-fast", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              text: text,
+              voice: getVoiceForPersona(persona),
+            }),
+          })
+
+          if (audioResponse.ok) {
+            const { audioUrl } = await audioResponse.json()
+            const chunkTime = Date.now() - chunkStartTime
+            console.log(`⏱️ [PARALLEL] Chunk ${index} audio generated in: ${chunkTime}ms`)
+
+            // Insert audio at correct position in queue
+            audioQueue[index] = audioUrl
+
+            // Start playing if this is the first chunk and it's ready
+            if (index === 0 && isFirstChunk) {
+              isFirstChunk = false
+              const firstAudioTime = Date.now() - chunkStartTime
+              console.log("⏱️ [PARALLEL] FIRST AUDIO READY IN:", firstAudioTime + "ms")
+              playNextAudio()
+            }
+
+            return audioUrl
+          } else {
+            console.error(`Audio generation failed for chunk ${index}`)
+            return null
+          }
+        } catch (audioError) {
+          console.error(`Audio generation error for chunk ${index}:`, audioError)
+          return null
+        } finally {
+          // Remove this promise from tracking
+          const promiseIndex = audioPromises.findIndex((p) => p.index === index)
+          if (promiseIndex > -1) {
+            audioPromises.splice(promiseIndex, 1)
+          }
+        }
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split("\n").filter((line) => line.trim())
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line)
+
+            if (data.type === "chunk" && data.content) {
+              accumulatedText += data.content
+              console.log("⏱️ [PARALLEL] Received chunk:", data.content.substring(0, 30) + "...")
+
+              // Start parallel audio generation immediately
+              const currentChunkIndex = chunkIndex++
+              const audioPromise = generateAudioParallel(data.content, currentChunkIndex)
+              audioPromises.push({ promise: audioPromise, index: currentChunkIndex })
+
+              // Don't wait for audio generation to complete before processing next chunk
+            } else if (data.type === "complete") {
+              console.log("⏱️ [PARALLEL] Streaming complete")
+              break
+            } else if (data.type === "error") {
+              throw new Error(data.content)
+            }
+          } catch (parseError) {
+            console.error("Parse error:", parseError)
+          }
+        }
+      }
+
+      // Wait for any remaining audio generation to complete
+      if (audioPromises.length > 0) {
+        console.log(`⏱️ [PARALLEL] Waiting for ${audioPromises.length} remaining audio generations...`)
+        await Promise.all(audioPromises.map((p) => p.promise))
+      }
     } catch (error) {
-      console.error("Error in parallel processing:", error)
+      console.error("Error in streaming:", error)
       setAudioError(`Error: ${error.message}`)
       setIsPlaying(false)
     }
   }
 
+  const getVoiceForPersona = (persona) => {
+    const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
+    const currentVoiceIds = voiceIdsRef.current
+    return currentVoiceIds[voiceKey] || "echo"
+  }
+
   const generateAudioResponse = async (text, persona) => {
     try {
-      console.log("🎵 [AUDIO] Starting audio generation for:", text.substring(0, 50) + "...")
+      const audioStartTime = Date.now()
+      console.log("🎵 [AUDIO TIMING] Starting audio generation at:", audioStartTime)
+      console.log("🎵 [AUDIO TIMING] Text to convert:", text.substring(0, 100) + "...")
 
       const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
-
-      // USE REF INSTEAD OF STATE for voice IDs!
       const currentVoiceIds = voiceIdsRef.current
-
       let voice = currentVoiceIds[voiceKey]
 
       if (voice && voice.length > 10) {
-        // Use custom voice ID
+        console.log("🎵 [AUDIO TIMING] Using custom voice:", voiceKey)
       } else {
         voice = "echo"
+        console.log("🎵 [AUDIO TIMING] Using default voice: echo")
       }
 
       // Start audio generation immediately
-      const audioStartTime = Date.now()
       const response = await fetch("/api/speak", {
         method: "POST",
         headers: {
@@ -568,7 +767,7 @@ export default function Home() {
 
       const { audioUrl } = await response.json()
       const audioGenerationTime = Date.now() - audioStartTime
-      console.log("🎵 [AUDIO] Audio generated in:", audioGenerationTime + "ms")
+      console.log("🎵 [AUDIO TIMING] Audio generated in:", audioGenerationTime + "ms")
 
       const audio = new Audio(audioUrl)
       audioRef.current = audio
@@ -587,7 +786,9 @@ export default function Home() {
 
       const playStartTime = Date.now()
       await audio.play()
-      console.log("🎵 [AUDIO] Audio started playing after:", playStartTime - audioStartTime + "ms total")
+      const totalTime = playStartTime - audioStartTime
+      console.log("🎵 [AUDIO TIMING] Audio started playing after:", totalTime + "ms total")
+      console.log("🎵 [AUDIO TIMING] TOTAL RESPONSE TIME:", totalTime + "ms")
     } catch (error) {
       console.error("Error in audio generation:", error)
       setAudioError(`Audio error: ${error.message}`)
@@ -1154,7 +1355,7 @@ export default function Home() {
                       {/* Character Name - Always at top */}
                       <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
 
-                      {/* Pause/Resume/Stop buttons when playing - MOVED HERE */}
+                      {/* Pause/Resume/Stop buttons when playing */}
                       {mode === "question" && selectedPersona === key && isPlaying && (
                         <div className="flex space-x-1 mb-2">
                           {!isPaused ? (
