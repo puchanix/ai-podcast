@@ -151,7 +151,7 @@ ${stagePrompt}
 Previous conversation:
 ${context}
 
-Give your next response in 1 sentence. Stay true to your character, respond to the previous points made, and advance the debate. Be engaging and passionate about your position.`
+Give your next response in 2-3 sentences. Stay true to your character, respond to the previous points made, and advance the debate. Be engaging and passionate about your position.`
 
   console.log(`🔍 [AUTO-CONTINUE API] Generated prompt for ${character}:`, prompt.substring(0, 200) + "...")
 
@@ -163,7 +163,7 @@ Give your next response in 1 sentence. Stay true to your character, respond to t
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt },
       ],
-      max_tokens: 30, // Reduced from 50 to 30 for easier testing
+      max_tokens: 50, // Changed from 30 to 50
       temperature: 0.8,
     })
 
