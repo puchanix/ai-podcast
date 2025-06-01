@@ -916,6 +916,78 @@ export default function Home() {
     return audioUrl
   }
 
+  // Generate a single debate response (optimized for just-in-time generation)
+  const generateSingleDebateResponse = async (character, characters, topic, currentMessages, targetIndex) => {
+    if (isGeneratingNextRef.current) {
+      console.log("🎯 [SINGLE GEN] Already generating, skipping...")
+      return
+    }
+
+    isGeneratingNextRef.current = true
+
+    try {
+      console.log(`🎯 [SINGLE GEN] Generating response for ${character} at index ${targetIndex}`)
+
+      let responseData
+      if (currentMessages.length < 2) {
+        // Still in opening statements
+        responseData = await generateDebateResponse(
+          character,
+          characters[(characters.indexOf(character) + 1) % 2],
+          topic,
+          currentMessages,
+          currentMessages.length,
+          true,
+        )
+      } else {
+        // Generate continuation using auto-continue API
+        const response = await fetch("/api/auto-continue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            character1: characters[0],
+            character2: characters[1],
+            currentMessages: currentMessages,
+            topic: debateTopicRef.current,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Failed to continue debate: ${response.status}`)
+        }
+
+        const data = await response.json()
+        const responseText = character === characters[0] ? data.response1 : data.response2
+
+        // Generate audio for this text
+        const audioUrl = await generateDebateAudio(responseText, character)
+        responseData = { text: responseText, audioUrl }
+      }
+
+      const newMessage = {
+        character: character,
+        content: responseData.text,
+        timestamp: Date.now(),
+      }
+
+      // Add to messages state
+      setDebateMessages((prev) => [...prev, newMessage])
+
+      // Add to queue at the correct index
+      debateQueueRef.current[targetIndex] = {
+        message: newMessage,
+        audioUrl: responseData.audioUrl,
+        index: targetIndex,
+      }
+
+      console.log(`🎯 [SINGLE GEN] Added response for ${character} to queue at index ${targetIndex}`)
+    } catch (error) {
+      console.error(`🎯 [SINGLE GEN] Error generating response for ${character}:`, error)
+    } finally {
+      isGeneratingNextRef.current = false
+    }
+  }
+
   // Play audio from the debate queue
   const playDebateAudioFromQueue = (index, characters, topic) => {
     const queueItem = debateQueueRef.current[index]
@@ -935,45 +1007,48 @@ export default function Home() {
     const audio = new Audio(queueItem.audioUrl)
     currentAudioRef.current = audio
 
+    // IMMEDIATELY start generating the next speaker while this one is talking
+    const nextIndex = index + 1
+    if (nextIndex < 8) {
+      // Only generate if we haven't reached the end
+      // Determine what to generate next
+      const currentMessages = debateMessagesRef.current
+
+      if (nextIndex < debateQueueRef.current.length) {
+        // Next audio already exists, no need to generate
+        console.log(`🎯 [DEBATE QUEUE] Next audio (${nextIndex}) already in queue`)
+      } else if (currentMessages.length % 2 === 1) {
+        // We have odd number of messages, need the second speaker of current round
+        const nextCharacter = characters[currentMessages.length % 2]
+        console.log(`🎯 [DEBATE QUEUE] Generating second speaker of current round: ${nextCharacter}`)
+        generateSingleDebateResponse(nextCharacter, characters, topic, currentMessages, nextIndex)
+      } else {
+        // We have even number of messages, need first speaker of next round
+        const nextCharacter = characters[0] // Always start new round with first character
+        console.log(`🎯 [DEBATE QUEUE] Generating first speaker of next round: ${nextCharacter}`)
+        generateSingleDebateResponse(nextCharacter, characters, topic, currentMessages, nextIndex)
+      }
+    }
+
     audio.onended = () => {
       console.log(`🎯 [DEBATE QUEUE] Audio ended for ${queueItem.message.character}`)
       setSpeakerStatus("waiting")
 
-      // Move to next audio
-      const nextIndex = index + 1
       currentDebateIndexRef.current = nextIndex
 
       // Check if we have more audio to play
       if (nextIndex < debateQueueRef.current.length) {
-        // Play next audio immediately
+        // Play next audio immediately - should be ready!
         console.log(`🎯 [DEBATE QUEUE] Playing next audio at index ${nextIndex}`)
         playDebateAudioFromQueue(nextIndex, characters, topic)
+      } else if (nextIndex >= 8) {
+        // End debate
+        console.log("🎯 [DEBATE QUEUE] Debate completed")
+        endDebate()
       } else {
-        // Check if we need to generate more rounds
-        const currentMessages = debateMessagesRef.current
-        console.log(`🎯 [DEBATE QUEUE] No more audio in queue. Current messages: ${currentMessages.length}`)
-
-        if (currentMessages.length < 8) {
-          // Generate next round
-          console.log("🎯 [DEBATE QUEUE] Generating next round...")
-          generateNextRound(characters, topic, currentMessages)
-            .then(() => {
-              // After generating next round, check if we have new audio to play
-              console.log(`🎯 [DEBATE QUEUE] Next round generated. Queue length: ${debateQueueRef.current.length}`)
-              if (nextIndex < debateQueueRef.current.length) {
-                console.log(`🎯 [DEBATE QUEUE] Playing newly generated audio at index ${nextIndex}`)
-                playDebateAudioFromQueue(nextIndex, characters, topic)
-              }
-            })
-            .catch((error) => {
-              console.error("🎯 [DEBATE QUEUE] Error generating next round:", error)
-              setAudioError(`Failed to continue debate: ${error.message}`)
-            })
-        } else {
-          // End debate
-          console.log("🎯 [DEBATE QUEUE] Debate completed")
-          endDebate()
-        }
+        // Wait a bit for next audio to be generated
+        console.log(`🎯 [DEBATE QUEUE] Waiting for next audio to be generated...`)
+        setTimeout(() => playDebateAudioFromQueue(nextIndex, characters, topic), 500)
       }
     }
 
@@ -982,7 +1057,6 @@ export default function Home() {
       setAudioError(`Audio playback failed for ${queueItem.message.character}`)
 
       // Try to continue to next audio
-      const nextIndex = index + 1
       if (nextIndex < debateQueueRef.current.length) {
         setTimeout(() => playDebateAudioFromQueue(nextIndex, characters, topic), 1000)
       }
@@ -995,136 +1069,10 @@ export default function Home() {
     })
   }
 
-  // Generate next debate response in background
+  // Generate next debate response in background (simplified)
   const generateNextDebateResponse = async (characters, topic, currentMessages, nextIndex) => {
-    if (isGeneratingNextRef.current) {
-      console.log("🎯 [DEBATE NEXT] Already generating next response, skipping...")
-      return
-    }
-
-    isGeneratingNextRef.current = true
-
-    try {
-      const nextCharacter = characters[nextIndex % 2]
-      const opponent = characters[(nextIndex + 1) % 2]
-
-      console.log(`🎯 [DEBATE NEXT] Generating next response for ${nextCharacter}`)
-
-      let responseData
-      if (currentMessages.length < 2) {
-        // Still in opening statements
-        responseData = await generateDebateResponse(
-          nextCharacter,
-          opponent,
-          topic,
-          currentMessages,
-          currentMessages.length,
-          true,
-        )
-      } else {
-        // Generate continuation
-        responseData = await generateDebateResponse(
-          nextCharacter,
-          opponent,
-          topic,
-          currentMessages,
-          currentMessages.length,
-          false,
-        )
-      }
-
-      const newMessage = {
-        character: nextCharacter,
-        content: responseData.text,
-        timestamp: Date.now(),
-      }
-
-      // Add to messages state
-      setDebateMessages((prev) => [...prev, newMessage])
-
-      // Add to queue
-      debateQueueRef.current.push({
-        message: newMessage,
-        audioUrl: responseData.audioUrl,
-        index: nextIndex,
-      })
-
-      console.log(`🎯 [DEBATE NEXT] Added response for ${nextCharacter} to queue at index ${nextIndex}`)
-    } catch (error) {
-      console.error("🎯 [DEBATE NEXT] Error generating next response:", error)
-    } finally {
-      isGeneratingNextRef.current = false
-    }
-  }
-
-  // Generate next round of debate
-  const generateNextRound = async (characters, topic, currentMessages) => {
-    try {
-      console.log("🎯 [DEBATE ROUND] Generating next round...")
-      setDebateRound((prev) => prev + 1)
-
-      // Generate both responses for the next round
-      const response = await fetch("/api/auto-continue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          character1: characters[0],
-          character2: characters[1],
-          currentMessages: currentMessages,
-          topic: debateTopicRef.current,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to continue debate: ${response.status}`)
-      }
-
-      const data = await response.json()
-
-      // Generate audio for both responses in parallel
-      const [audio1, audio2] = await Promise.all([
-        generateDebateAudio(data.response1, characters[0]),
-        generateDebateAudio(data.response2, characters[1]),
-      ])
-
-      const newMessages = [
-        {
-          character: characters[0],
-          content: data.response1,
-          timestamp: Date.now(),
-        },
-        {
-          character: characters[1],
-          content: data.response2,
-          timestamp: Date.now() + 100,
-        },
-      ]
-
-      // Add to messages state
-      setDebateMessages((prev) => [...prev, ...newMessages])
-
-      // Add to queue
-      const currentQueueLength = debateQueueRef.current.length
-      debateQueueRef.current.push(
-        {
-          message: newMessages[0],
-          audioUrl: audio1,
-          index: currentQueueLength,
-        },
-        {
-          message: newMessages[1],
-          audioUrl: audio2,
-          index: currentQueueLength + 1,
-        },
-      )
-
-      console.log("🎯 [DEBATE ROUND] Next round added to queue")
-      return Promise.resolve() // Explicitly return resolved promise
-    } catch (error) {
-      console.error("🎯 [DEBATE ROUND] Error generating next round:", error)
-      setAudioError(`Failed to continue debate: ${error.message}`)
-      return Promise.reject(error)
-    }
+    const nextCharacter = characters[nextIndex % 2]
+    await generateSingleDebateResponse(nextCharacter, characters, topic, currentMessages, nextIndex)
   }
 
   // Start debate function with explicit characters
