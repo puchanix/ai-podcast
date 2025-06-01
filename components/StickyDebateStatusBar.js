@@ -1,7 +1,5 @@
 "use client"
 
-import { useCallback } from "react"
-
 export default function StickyDebateStatusBar({
   isDebating,
   debateTopic,
@@ -20,6 +18,13 @@ export default function StickyDebateStatusBar({
   const character1 = personas[selectedCharacters[0]]
   const character2 = personas[selectedCharacters[1]]
   const currentSpeakerData = personas[currentSpeaker]
+
+  // Helper function to get round display text
+  const getRoundDisplayText = () => {
+    if (debateRound === 1) return "Opening Statements"
+    if (debateRound === 4) return "Closing Remarks"
+    return `Round ${debateRound} of 4`
+  }
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-gray-900 border-b border-gray-700 shadow-lg">
@@ -49,7 +54,7 @@ export default function StickyDebateStatusBar({
                   {debateTopic.length > 30 ? debateTopic.substring(0, 30) + "..." : debateTopic}
                 </p>
                 <p className="text-xs text-gray-300">
-                  {currentSpeakerData?.name} • Round {debateRound + 1}/4
+                  {currentSpeakerData?.name} • {getRoundDisplayText()}
                 </p>
               </div>
             </div>
@@ -101,7 +106,7 @@ export default function StickyDebateStatusBar({
             <div>
               <p className="text-sm font-semibold text-yellow-400">{debateTopic}</p>
               <p className="text-xs text-gray-300">
-                {currentSpeakerData?.name} speaking • Round {debateRound + 1} of 4
+                {currentSpeakerData?.name} speaking • {getRoundDisplayText()}
               </p>
             </div>
           </div>
