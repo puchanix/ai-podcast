@@ -1,13 +1,12 @@
 "use client"
-
+import { useState, useEffect, useRef, useCallback } from "react"
 import MobileDebugMonitor from "../components/MobileDebugMonitor"
 import StickyDebateStatusBar from "../components/StickyDebateStatusBar"
 import useIsMobile from "../hooks/useIsMobile"
-import { useState, useEffect, useRef, useCallback } from "react"
 import Layout from "../components/layout"
 import { useMobileAudioUnlock } from "../hooks/useMobileAudioUnlock"
 
-export default function Home() {
+const Home = () => {
   const isMobile = useIsMobile()
   const [selectedPersona, setSelectedPersona] = useState("")
   const [isListening, setIsListening] = useState(false)
@@ -15,29 +14,38 @@ export default function Home() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioError, setAudioError] = useState(null)
   const [mode, setMode] = useState("question") // 'question' or 'debate'
+  const [characters, setCharacters] = useState([
+    { name: "Socrates", image: "/socrates.jpg" },
+    { name: "Marie Curie", image: "/marie_curie.jpg" },
+    { name: "Abraham Lincoln", image: "/abraham_lincoln.jpg" },
+    { name: "Cleopatra", image: "/cleopatra.jpg" },
+    { name: "Leonardo da Vinci", image: "/leonardo_da_vinci.jpg" },
+    { name: "Nelson Mandela", image: "/nelson_mandela.jpg" },
+  ])
   const [selectedCharacters, setSelectedCharacters] = useState([])
+  const [isDebating, setIsDebating] = useState(false)
+  const [currentDebateTurn, setCurrentDebateTurn] = useState(0)
+  const [debateTopic, setDebateTopic] = useState("The role of technology in society")
+  const [isDebatePaused, setIsDebatePaused] = useState(false)
+  const [debateRound, setDebateRound] = useState(0)
+  const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
   const [thinkingMessage, setThinkingMessage] = useState("")
-  const [personas, setPersonas] = useState({})
-  const [showTopicSelector, setShowTopicSelector] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [topics, setTopics] = useState([])
+  const [loadingTopics, setLoadingTopics] = useState(false)
+  const [showTopicSelector, setShowTopicSelector] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
-  const [isDebatePaused, setIsDebatePaused] = useState(false)
+  const [personas, setPersonas] = useState([])
 
   // Custom topic recording state
   const [isRecordingCustomTopic, setIsRecordingCustomTopic] = useState(false)
   const [isProcessingCustomTopic, setIsProcessingCustomTopic] = useState(false)
 
   // Debate state
-  const [isDebating, setIsDebating] = useState(false)
-  const [debateTopic, setDebateTopic] = useState("")
-  const [topics, setTopics] = useState([])
-  const [loadingTopics, setLoadingTopics] = useState(false)
   const [debateMessages, setDebateMessages] = useState([])
-  const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [speakerStatus, setSpeakerStatus] = useState(null) // 'thinking', 'speaking', 'waiting'
-  const [debateRound, setDebateRound] = useState(0) // Track debate rounds
 
   // Mobile audio unlock hook
   const { audioUnlocked, unlockAudio } = useMobileAudioUnlock()
@@ -106,6 +114,7 @@ export default function Home() {
       try {
         const personasModule = await import("../lib/personas")
         setPersonas(personasModule.personas)
+        setCharacters(Object.values(personasModule.personas))
       } catch (error) {
         console.error("Error loading personas:", error)
       } finally {
@@ -992,7 +1001,7 @@ export default function Home() {
     }
   }
 
-  // Play debate audio with retry logic
+  // Play debate audio with retry logic and comprehensive debugging
   const playDebateAudio = async (message, allMessages, currentIndex, retryCount = 0) => {
     const { character, content } = message
 
@@ -1000,31 +1009,31 @@ export default function Home() {
     setSpeakerStatus("speaking")
 
     try {
-  // Resume audio context before playing (mobile audio fix)
-if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
-  const AudioContextClass = AudioContext || window.webkitAudioContext
-  
-  // Always ensure we have an audio context
-  if (!window.audioContext) {
-    window.audioContext = new AudioContextClass()
-    console.log("🔊 [MOBILE AUDIO] Created new audio context for debate")
-  }
-  
-  // Resume if suspended
-  if (window.audioContext.state === "suspended") {
-    try {
-      await window.audioContext.resume()
-      console.log("🔊 [MOBILE AUDIO] Resumed audio context for debate")
-    } catch (error) {
-      console.error("🔊 [MOBILE AUDIO] Failed to resume audio context:", error)
-      // Try to create a new one
-      window.audioContext = new AudioContextClass()
-      console.log("🔊 [MOBILE AUDIO] Created fresh audio context after resume failure")
-    }
-  }
-  
-  console.log("🔊 [MOBILE AUDIO] Audio context state:", window.audioContext.state)
-}
+      // Resume audio context before playing (mobile audio fix)
+      if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
+        const AudioContextClass = AudioContext || window.webkitAudioContext
+
+        // Always ensure we have an audio context
+        if (!window.audioContext) {
+          window.audioContext = new AudioContextClass()
+          console.log("🔊 [MOBILE AUDIO] Created new audio context for debate")
+        }
+
+        // Resume if suspended
+        if (window.audioContext.state === "suspended") {
+          try {
+            await window.audioContext.resume()
+            console.log("🔊 [MOBILE AUDIO] Resumed audio context for debate")
+          } catch (error) {
+            console.error("🔊 [MOBILE AUDIO] Failed to resume audio context:", error)
+            // Try to create a new one
+            window.audioContext = new AudioContextClass()
+            console.log("🔊 [MOBILE AUDIO] Created fresh audio context after resume failure")
+          }
+        }
+
+        console.log("🔊 [MOBILE AUDIO] Audio context state:", window.audioContext.state)
+      }
 
       const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
       const currentVoiceIds = voiceIdsRef.current // Use ref for voice IDs
@@ -1049,65 +1058,109 @@ if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefi
 
       const data = await response.json()
       const audio = new Audio(data.audioUrl)
-currentAudioRef.current = audio
+      currentAudioRef.current = audio
 
-audio.onended = () => {
-  setSpeakerStatus("waiting")
+      // Add comprehensive debugging before play attempt
+      console.log(`🔍 [DEBUG] About to play audio for ${character}:`, {
+        audioContextState: window.audioContext?.state || "no context",
+        isUserActivation: navigator.userActivation?.isActive || "not supported",
+        hasUserGesture: document.hasStoredUserActivation || "not supported",
+        audioElement: audio ? "created" : "null",
+        currentTime: Date.now(),
+        fromUserGesture: document.hasStoredUserActivation || navigator.userActivation?.isActive || "unknown",
+        isMobile: isMobile,
+        currentIndex: currentIndex,
+        retryCount: retryCount,
+      })
 
-  // Auto-continue to next message
-  const nextIndex = currentIndex + 1
-  if (nextIndex < allMessages.length) {
-    // CRITICAL FIX: Chain audio playback without setTimeout on iOS
-    if (isMobile) {
-      // Play next audio immediately to maintain user gesture chain
-      playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-    } else {
-      // On desktop, we can still use setTimeout for better pacing
-      setTimeout(() => {
-        playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-      }, 1000)
-    }
-  } else {
-    // Check if we should continue with more rounds
-    const currentRound = debateRoundRef.current
+      // Define event handlers on currentAudioRef.current for consistency
+      currentAudioRef.current.onended = () => {
+        console.log(`🔍 [DEBUG] Audio ended for ${character}:`, {
+          nextIndex: currentIndex + 1,
+          totalMessages: allMessages.length,
+          audioContextState: window.audioContext?.state || "no context",
+          isUserActivation: navigator.userActivation?.isActive || "not supported",
+          hasUserGesture: document.hasStoredUserActivation || "not supported",
+          currentTime: Date.now(),
+          isMobile: isMobile,
+        })
 
-    // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
-    if (allMessages.length < 8) {
-      if (isMobile) {
-        // On mobile, start next round immediately to maintain user gesture chain
-        continueDebate()
-      } else {
-        setTimeout(() => {
-          continueDebate()
-        }, 2000)
+        setSpeakerStatus("waiting")
+
+        // Auto-continue to next message
+        const nextIndex = currentIndex + 1
+        if (nextIndex < allMessages.length) {
+          // CRITICAL FIX: Chain audio playback without setTimeout on iOS
+          if (isMobile) {
+            // Play next audio immediately to maintain user gesture chain
+            playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
+          } else {
+            // On desktop, we can still use setTimeout for better pacing
+            setTimeout(() => {
+              playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
+            }, 1000)
+          }
+        } else {
+          // Check if we should continue with more rounds
+          const currentRound = debateRoundRef.current
+
+          // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
+          if (allMessages.length < 8) {
+            if (isMobile) {
+              // On mobile, start next round immediately to maintain user gesture chain
+              continueDebate()
+            } else {
+              setTimeout(() => {
+                continueDebate()
+              }, 2000)
+            }
+          } else {
+            // Debate finished
+            if (isMobile) {
+              endDebate()
+            } else {
+              setTimeout(() => {
+                endDebate()
+              }, 3000)
+            }
+          }
+        }
       }
-    } else {
-      // Debate finished
-      if (isMobile) {
-        endDebate()
-      } else {
-        setTimeout(() => {
-          endDebate()
-        }, 3000)
+
+      currentAudioRef.current.onerror = (e) => {
+        console.log(`🔍 [DEBUG] Audio error for ${character}:`, {
+          error: e,
+          errorType: e.type,
+          audioContextState: window.audioContext?.state || "no context",
+          isUserActivation: navigator.userActivation?.isActive || "not supported",
+          currentTime: Date.now(),
+        })
+        throw new Error(`Audio playback failed: ${e.message}`)
       }
-    }
-  }
-}
 
-audio.onerror = (e) => {
-  throw new Error(`Audio playback failed: ${e.message}`)
-}
-
-await audio.play()
+      await currentAudioRef.current.play()
     } catch (error) {
       console.error(`Error playing audio for ${character}:`, error)
+
+      // Add detailed error logging
+      console.log(`🔍 [DEBUG] Failed audio details:`, {
+        errorName: error.name,
+        errorMessage: error.message,
+        audioContextState: window.audioContext?.state || "no context",
+        isUserActivation: navigator.userActivation?.isActive || "not supported",
+        hasUserGesture: document.hasStoredUserActivation || "not supported",
+        currentTime: Date.now(),
+        isMobile: isMobile,
+        currentIndex: currentIndex,
+        retryCount: retryCount,
+      })
 
       // Retry logic for network timeouts
       if ((error.name === "AbortError" || error.message.includes("Failed to fetch")) && retryCount < 2) {
         setSpeakerStatus("thinking")
         setTimeout(() => {
           playDebateAudio(message, allMessages, currentIndex, retryCount + 1)
-        }, 2000) // Reduced from 3000
+        }, 2000)
         return
       }
 
@@ -1119,11 +1172,11 @@ await audio.play()
       if (nextIndex < allMessages.length) {
         setTimeout(() => {
           playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-        }, 1000) // Reduced from 2000
+        }, 1000)
       } else {
         setTimeout(() => {
           endDebate()
-        }, 1000) // Reduced from 2000
+        }, 1000)
       }
     }
   }
@@ -1332,25 +1385,27 @@ await audio.play()
   }
 
   return (
-  <Layout>
-    <StickyDebateStatusBar
-      isDebating={isDebating}
-      debateTopic={debateTopic}
-      selectedCharacters={selectedCharacters}
-      currentSpeaker={currentSpeaker}
-      personas={personas}
-      debateRound={debateRound}
-      isDebatePaused={isDebatePaused}
-      pauseDebateAudio={pauseDebateAudio}
-      resumeDebateAudio={resumeDebateAudio}
-      endDebate={endDebate}
-    />
-    <div className={`min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white ${isDebating ? "pt-24" : ""}`}>
+    <Layout>
+      <StickyDebateStatusBar
+        isDebating={isDebating}
+        debateTopic={debateTopic}
+        selectedCharacters={selectedCharacters}
+        currentSpeaker={currentSpeaker}
+        personas={characters}
+        debateRound={debateRound}
+        isDebatePaused={isDebatePaused}
+        pauseDebateAudio={pauseDebateAudio}
+        resumeDebateAudio={resumeDebateAudio}
+        endDebate={endDebate}
+      />
+      <div
+        className={`min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white ${isDebating ? "pt-24" : ""}`}
+      >
         <div className="container mx-auto px-4 py-8 max-w-6xl">
           <div className="text-center mb-12">
             <h1 className="text-5xl font-bold mb-8 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-  AI Heroes of History
-</h1>
+              AI Heroes of History
+            </h1>
 
             {/* Mode Toggle */}
             <div className="flex justify-center mb-8">
@@ -1375,176 +1430,137 @@ await audio.play()
             </div>
           </div>
 
-       {/* Instructions */}
-<div className="text-center mb-8">
-  {mode === "question" && (
-    <p className="text-lg text-gray-300">
-      Ask a question to a hero of history
-    </p>
-  )}
-  {mode === "debate" && selectedCharacters.length < 2 && !isDebating && (
-    <p className="text-lg text-gray-300">
-      Select two historical figures to watch them debate fascinating topics
-    </p>
-  )}
-</div>
+          {/* Instructions */}
+          <div className="text-center mb-8">
+            {mode === "question" && <p className="text-lg text-gray-300">Ask a question to a hero of history</p>}
+            {mode === "debate" && selectedCharacters.length < 2 && !isDebating && (
+              <p className="text-lg text-gray-300">
+                Select two historical figures to watch them debate fascinating topics
+              </p>
+            )}
+          </div>
 
           {/* Character Grid - SINGLE UNIFIED INTERFACE */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-12">
-            {Object.entries(personas).map(([key, persona]) => {
-  const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
-  const shouldGrayOut = shouldGrayOutCharacter(key)
-  const isCurrentDebateSpeaker = currentSpeaker === key
+            {Object.entries(characters).map(([key, persona]) => {
+              const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
+              const shouldGrayOut = shouldGrayOutCharacter(key)
+              const isCurrentDebateSpeaker = currentSpeaker === key
 
-  // Hide non-participating characters on mobile when in debate mode and 2 characters selected
-  const shouldHideOnMobile = isMobile && mode === "debate" && selectedCharacters.length === 2 && !selectedCharacters.includes(key)
-  
-  if (shouldHideOnMobile) return null
+              // Hide non-participating characters on mobile when in debate mode and 2 characters selected
+              const shouldHideOnMobile =
+                isMobile && mode === "debate" && selectedCharacters.length === 2 && !selectedCharacters.includes(key)
 
-  return (
-    <div
-      key={key}
-      onClick={() => handleCharacterSelect(key)}
-      className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
-        isSelected ? "ring-4 ring-yellow-400" : ""
-      } ${shouldGrayOut ? "opacity-30" : ""} ${isCurrentDebateSpeaker ? "ring-4 ring-green-400" : ""}`}
-    >
-      <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl">
-        {/* Image Section - Fixed Height */}
-        <div className="h-48 relative">
-          <img
-            src={persona.image || "/placeholder.svg"}
-            alt={persona.name}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-          />
+              if (shouldHideOnMobile) return null
 
-          {/* Speaking animation overlay */}
-          {isCurrentDebateSpeaker && speakerStatus === "speaking" && (
-            <div className="absolute inset-0 bg-green-500 bg-opacity-20 flex items-center justify-center">
-              <div className="w-8 h-8 border-4 border-green-400 border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          )}
-        </div>
-
-        {/* Content Section - Fixed Layout */}
-        <div className="p-3 min-h-[120px] flex flex-col">
-          {/* Character Name - Always at top */}
-          <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
-
-          {/* Pause/Resume/Stop buttons when playing - MOVED HERE */}
-          {mode === "question" && selectedPersona === key && isPlaying && (
-            <div className="flex space-x-1 mb-2">
-              {!isPaused ? (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    pauseAudio()
-                  }}
-                  className="flex-1 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
-                  title="Pause"
+              return (
+                <div
+                  key={key}
+                  onClick={() => handleCharacterSelect(key)}
+                  className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
+                    isSelected ? "ring-4 ring-yellow-400" : ""
+                  } ${shouldGrayOut ? "opacity-30" : ""} ${isCurrentDebateSpeaker ? "ring-4 ring-green-400" : ""}`}
                 >
-                  ⏸ Pause
-                </button>
-              ) : (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    resumeAudio()
-                  }}
-                  className="flex-1 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                  title="Resume"
-                >
-                  ▶ Resume
-                </button>
-              )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  stopAudio()
-                }}
-                className="flex-1 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                title="Stop"
-              >
-                ⏹ Stop
-              </button>
-            </div>
-          )}
+                  <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl">
+                    {/* Image Section - Fixed Height */}
+                    <div className="h-48 relative">
+                      <img
+                        src={persona.image || "/placeholder.svg"}
+                        alt={persona.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
 
-          {/* Button Section - Always at bottom */}
-          <div className="mt-auto flex space-x-1">
-            {mode === "question" ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRecordingButtonClick(key, e);
-                }}
-                disabled={shouldGrayOut}
-                className={`flex-1 py-2 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
-                  shouldGrayOut ? "bg-gray-600 text-gray-400 cursor-not-allowed" : ""
-                }`}
-              >
-                <SmallMicIcon isActive={selectedPersona === key && isListening} />
-                <span className="truncate">{getStatusText(key)}</span>
-              </button>
-            ) : (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (!isDebating) {
-                    handleCharacterSelect(key)
-                  }
-                }}
-                className={`w-full py-2 px-2 rounded text-xs font-semibold transition-all duration-300 ${getButtonColor(key)}`}
-                disabled={
-                  isDebating || (selectedCharacters.length >= 2 && !selectedCharacters.includes(key))
-                }
-              >
-                <span className="truncate">{getStatusText(key)}</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-})}
-          </div>
+                      {/* Speaking animation overlay */}
+                      {isCurrentDebateSpeaker && speakerStatus === "speaking" && (
+                        <div className="absolute inset-0 bg-green-500 bg-opacity-20 flex items-center justify-center">
+                          <div className="w-8 h-8 border-4 border-green-400 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      )}
+                    </div>
 
-{/* Debate Topic Display - MOVED BELOW CHARACTERS */}
-{false && isDebating && debateTopic && (
-  <div className="mb-8 text-center">
-              <div className="bg-gray-800 rounded-lg p-4 inline-block">
-                <h2 className="text-xl font-bold text-yellow-400 mb-2">Current Debate Topic</h2>
-                <p className="text-gray-300">{debateTopic}</p>
-                <p className="text-sm text-gray-400 mt-1">Round {debateRound + 1} of 4</p>
-                <div className="mt-4 flex justify-center space-x-3">
-                  {!isDebatePaused ? (
-                    <button
-                      onClick={pauseDebateAudio}
-                      className="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded text-sm flex items-center space-x-2"
-                    >
-                      <span>⏸</span>
-                      <span>Pause Debate</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={resumeDebateAudio}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm flex items-center space-x-2"
-                    >
-                      <span>▶</span>
-                      <span>Resume Debate</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={endDebate}
-                    className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm"
-                  >
-                    End Debate
-                  </button>
+                    {/* Content Section - Fixed Layout */}
+                    <div className="p-3 min-h-[120px] flex flex-col">
+                      {/* Character Name - Always at top */}
+                      <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
+
+                      {/* Pause/Resume/Stop buttons when playing - MOVED HERE */}
+                      {mode === "question" && selectedPersona === key && isPlaying && (
+                        <div className="flex space-x-1 mb-2">
+                          {!isPaused ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                pauseAudio()
+                              }}
+                              className="flex-1 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
+                              title="Pause"
+                            >
+                              ⏸ Pause
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                resumeAudio()
+                              }}
+                              className="flex-1 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                              title="Resume"
+                            >
+                              ▶ Resume
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              stopAudio()
+                            }}
+                            className="flex-1 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                            title="Stop"
+                          >
+                            ⏹ Stop
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Button Section - Always at bottom */}
+                      <div className="mt-auto flex space-x-1">
+                        {mode === "question" ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleRecordingButtonClick(key, e)
+                            }}
+                            disabled={shouldGrayOut}
+                            className={`flex-1 py-2 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
+                              shouldGrayOut ? "bg-gray-600 text-gray-400 cursor-not-allowed" : ""
+                            }`}
+                          >
+                            <SmallMicIcon isActive={selectedPersona === key && isListening} />
+                            <span className="truncate">{getStatusText(key)}</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (!isDebating) {
+                                handleCharacterSelect(key)
+                              }
+                            }}
+                            className={`w-full py-2 px-2 rounded text-xs font-semibold transition-all duration-300 ${getButtonColor(key)}`}
+                            disabled={
+                              isDebating || (selectedCharacters.length >= 2 && !selectedCharacters.includes(key))
+                            }
+                          >
+                            <span className="truncate">{getStatusText(key)}</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          )}
+              )
+            })}
+          </div>
 
           {/* Audio Error Display */}
           {audioError && <div className="mb-8 p-4 bg-red-900 text-red-100 rounded-lg text-center">{audioError}</div>}
@@ -1628,10 +1644,12 @@ await audio.play()
             </div>
           )}
         </div>
-    </div>
-    
-    {/* Mobile Debug Monitor */}
-    <MobileDebugMonitor isVisible={true} />
-  </Layout>
+      </div>
+
+      {/* Mobile Debug Monitor */}
+      <MobileDebugMonitor isVisible={true} />
+    </Layout>
   )
 }
+
+export default Home
