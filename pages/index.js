@@ -1304,12 +1304,9 @@ export default function Home() {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white">
         <div className="container mx-auto px-4 py-8 max-w-6xl">
           <div className="text-center mb-12">
-            <h1 className="text-5xl font-bold mb-4 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-              Heroes of History
-            </h1>
-            <p className="text-xl text-gray-300 mb-8">
-              Engage in conversations and debates with history's greatest minds
-            </p>
+            <h1 className="text-5xl font-bold mb-8 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+  Heroes of History
+</h1>
 
             {/* Mode Toggle */}
             <div className="flex justify-center mb-8">
@@ -1334,14 +1331,19 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Instructions */}
-          <div className="text-center mb-8">
-            {mode === "debate" && selectedCharacters.length < 2 && !isDebating && (
-              <p className="text-lg text-gray-300">
-                Select two historical figures to watch them debate fascinating topics
-              </p>
-            )}
-          </div>
+       {/* Instructions */}
+<div className="text-center mb-8">
+  {mode === "question" && (
+    <p className="text-lg text-gray-300">
+      Ask a question to a hero of history
+    </p>
+  )}
+  {mode === "debate" && selectedCharacters.length < 2 && !isDebating && (
+    <p className="text-lg text-gray-300">
+      Select two historical figures to watch them debate fascinating topics
+    </p>
+  )}
+</div>
 
           {/* Character Grid - SINGLE UNIFIED INTERFACE */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-12">
@@ -1352,11 +1354,12 @@ export default function Home() {
 
               return (
                 <div
-                  key={key}
-                  className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
-                    isSelected ? "ring-4 ring-yellow-400" : ""
-                  } ${shouldGrayOut ? "opacity-30" : ""} ${isCurrentDebateSpeaker ? "ring-4 ring-green-400" : ""}`}
-                >
+  key={key}
+  onClick={() => handleCharacterSelect(key)}
+  className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
+    isSelected ? "ring-4 ring-yellow-400" : ""
+  } ${shouldGrayOut ? "opacity-30" : ""} ${isCurrentDebateSpeaker ? "ring-4 ring-green-400" : ""}`}
+>
                   <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl">
                     {/* Image Section - Fixed Height */}
                     <div className="h-48 relative">
@@ -1422,7 +1425,10 @@ export default function Home() {
                       <div className="mt-auto flex space-x-1">
                         {mode === "question" ? (
                           <button
-                            onClick={(e) => handleRecordingButtonClick(key, e)}
+                            onClick={(e) => {
+  e.stopPropagation();
+  handleRecordingButtonClick(key, e);
+}}
                             disabled={shouldGrayOut}
                             className={`flex-1 py-2 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
                               shouldGrayOut ? "bg-gray-600 text-gray-400 cursor-not-allowed" : ""
