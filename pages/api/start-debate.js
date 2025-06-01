@@ -67,14 +67,14 @@ export default async function handler(req, res) {
           messages: [
             {
               role: "system",
-              content: `${persona1.prompt} You are starting a debate about "${topic}". Give a brief opening statement (1-2 sentences max). Be authentic to your character.`,
+              content: `${persona1.prompt} You are starting a debate about "${topic}". Give a brief opening statement (1 sentence max). Be authentic to your character.`,
             },
             {
               role: "user",
               content: `Give your opening statement on the topic: "${topic}"`,
             },
           ],
-          max_tokens: 50, // Reduced from 150 to 50
+          max_tokens: 30, // Reduced from 50 to 30 for easier testing
           temperature: 0.8,
         }),
       }),
@@ -89,14 +89,14 @@ export default async function handler(req, res) {
           messages: [
             {
               role: "system",
-              content: `${persona2.prompt} You are starting a debate about "${topic}". Give a brief opening statement (1-2 sentences max). Be authentic to your character.`,
+              content: `${persona2.prompt} You are starting a debate about "${topic}". Give a brief opening statement (1 sentence max). Be authentic to your character.`,
             },
             {
               role: "user",
               content: `Give your opening statement on the topic: "${topic}"`,
             },
           ],
-          max_tokens: 50, // Reduced from 150 to 50
+          max_tokens: 30, // Reduced from 50 to 30 for easier testing
           temperature: 0.8,
         }),
       }),

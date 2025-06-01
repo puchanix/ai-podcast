@@ -53,7 +53,7 @@ export default async function handler(req, res) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      max_tokens: 50, // Reduced from 100 to 50
+      max_tokens: 30, // Reduced from 50 to 30 for easier testing
       temperature: 0.7,
     })
 
