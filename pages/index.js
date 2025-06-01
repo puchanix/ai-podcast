@@ -1,10 +1,13 @@
 "use client"
 
+import StickyDebateStatusBar from "../components/StickyDebateStatusBar"
+import useIsMobile from "../hooks/useIsMobile"
 import { useState, useEffect, useRef, useCallback } from "react"
 import Layout from "../components/layout"
 import { useMobileAudioUnlock } from "../hooks/useMobileAudioUnlock"
 
 export default function Home() {
+  const isMobile = useIsMobile()
   const [selectedPersona, setSelectedPersona] = useState("")
   const [isListening, setIsListening] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -1300,12 +1303,24 @@ export default function Home() {
   }
 
   return (
-    <Layout>
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white">
+  <Layout>
+    <StickyDebateStatusBar
+      isDebating={isDebating}
+      debateTopic={debateTopic}
+      selectedCharacters={selectedCharacters}
+      currentSpeaker={currentSpeaker}
+      personas={personas}
+      debateRound={debateRound}
+      isDebatePaused={isDebatePaused}
+      pauseDebateAudio={pauseDebateAudio}
+      resumeDebateAudio={resumeDebateAudio}
+      endDebate={endDebate}
+    />
+    <div className={`min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white ${isDebating ? "pt-24" : ""}`}>
         <div className="container mx-auto px-4 py-8 max-w-6xl">
           <div className="text-center mb-12">
             <h1 className="text-5xl font-bold mb-8 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-  Heroes of History
+  AI Heroes of History
 </h1>
 
             {/* Mode Toggle */}
@@ -1461,9 +1476,9 @@ export default function Home() {
             })}
           </div>
 
-          {/* Debate Topic Display - MOVED BELOW CHARACTERS */}
-          {isDebating && debateTopic && (
-            <div className="mb-8 text-center">
+{/* Debate Topic Display - MOVED BELOW CHARACTERS */}
+{false && isDebating && debateTopic && (
+  <div className="mb-8 text-center">
               <div className="bg-gray-800 rounded-lg p-4 inline-block">
                 <h2 className="text-xl font-bold text-yellow-400 mb-2">Current Debate Topic</h2>
                 <p className="text-gray-300">{debateTopic}</p>
