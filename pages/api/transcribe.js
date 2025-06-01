@@ -1,4 +1,4 @@
-import Busboy from "busboy"
+import busboy from "busboy"
 import FormData from "form-data"
 import axios from "axios"
 
@@ -17,7 +17,6 @@ export default async function handler(req, res) {
   let fileBuffer = null
   let safeFilename = ""
   let isIOS = false
-  const mimeType = ""
 
   try {
     // Parse the form data
@@ -114,14 +113,14 @@ async function parseFormData(req) {
     let filename = "recording.mp3" // Default filename
     let isIOS = false
 
-    const busboy = Busboy({
+    const bb = busboy({
       headers: req.headers,
       limits: {
         fileSize: 25 * 1024 * 1024, // 25MB max file size
       },
     })
 
-    busboy.on("file", (fieldname, file, info) => {
+    bb.on("file", (fieldname, file, info) => {
       const { filename: originalFilename, mimeType } = info
 
       // Determine the appropriate filename based on the MIME type
@@ -145,23 +144,23 @@ async function parseFormData(req) {
       })
     })
 
-    busboy.on("field", (fieldname, val) => {
+    bb.on("field", (fieldname, val) => {
       if (fieldname === "isIOS" && val === "true") {
         isIOS = true
         console.log("📱 iOS device detected")
       }
     })
 
-    busboy.on("finish", () => {
+    bb.on("finish", () => {
       const buffer = Buffer.concat(chunks)
       resolve({ buffer, filename, ios: isIOS })
     })
 
-    busboy.on("error", (err) => {
+    bb.on("error", (err) => {
       console.error("❌ Busboy error:", err)
       reject(err)
     })
 
-    req.pipe(busboy)
+    req.pipe(bb)
   })
 }
