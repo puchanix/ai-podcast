@@ -998,7 +998,7 @@ export default function Home() {
     try {
       // Resume audio context before playing (mobile audio fix)
       if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
-        const AudioContextClass = AudioContext || webkitAudioContext
+        const AudioContextClass = AudioContext || window.webkitAudioContext
         if (window.audioContext) {
           if (window.audioContext.state === "suspended") {
             await window.audioContext.resume()
@@ -1043,7 +1043,7 @@ export default function Home() {
         if (nextIndex < allMessages.length) {
           setTimeout(() => {
             playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-          }, 1000)
+          }, 500) // Reduced from 1000
         } else {
           // Check if we should continue with more rounds
           const currentRound = debateRoundRef.current
@@ -1052,12 +1052,12 @@ export default function Home() {
           if (allMessages.length < 8) {
             setTimeout(() => {
               continueDebate()
-            }, 2000)
+            }, 1000) // Reduced from 2000
           } else {
             // Debate finished
             setTimeout(() => {
               endDebate()
-            }, 3000)
+            }, 1500) // Reduced from 3000
           }
         }
       }
@@ -1075,7 +1075,7 @@ export default function Home() {
         setSpeakerStatus("thinking")
         setTimeout(() => {
           playDebateAudio(message, allMessages, currentIndex, retryCount + 1)
-        }, 3000)
+        }, 2000) // Reduced from 3000
         return
       }
 
@@ -1087,11 +1087,11 @@ export default function Home() {
       if (nextIndex < allMessages.length) {
         setTimeout(() => {
           playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-        }, 2000)
+        }, 1000) // Reduced from 2000
       } else {
         setTimeout(() => {
           endDebate()
-        }, 2000)
+        }, 1000) // Reduced from 2000
       }
     }
   }
