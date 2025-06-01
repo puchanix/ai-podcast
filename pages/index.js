@@ -1,4 +1,5 @@
 "use client"
+
 import { useState, useEffect, useRef, useCallback } from "react"
 import MobileDebugMonitor from "../components/MobileDebugMonitor"
 import StickyDebateStatusBar from "../components/StickyDebateStatusBar"
@@ -6,7 +7,7 @@ import useIsMobile from "../hooks/useIsMobile"
 import Layout from "../components/layout"
 import { useMobileAudioUnlock } from "../hooks/useMobileAudioUnlock"
 
-const Home = () => {
+export default function Home() {
   const isMobile = useIsMobile()
   const [selectedPersona, setSelectedPersona] = useState("")
   const [isListening, setIsListening] = useState(false)
@@ -14,38 +15,29 @@ const Home = () => {
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioError, setAudioError] = useState(null)
   const [mode, setMode] = useState("question") // 'question' or 'debate'
-  const [characters, setCharacters] = useState([
-    { name: "Socrates", image: "/socrates.jpg" },
-    { name: "Marie Curie", image: "/marie_curie.jpg" },
-    { name: "Abraham Lincoln", image: "/abraham_lincoln.jpg" },
-    { name: "Cleopatra", image: "/cleopatra.jpg" },
-    { name: "Leonardo da Vinci", image: "/leonardo_da_vinci.jpg" },
-    { name: "Nelson Mandela", image: "/nelson_mandela.jpg" },
-  ])
   const [selectedCharacters, setSelectedCharacters] = useState([])
-  const [isDebating, setIsDebating] = useState(false)
-  const [currentDebateTurn, setCurrentDebateTurn] = useState(0)
-  const [debateTopic, setDebateTopic] = useState("The role of technology in society")
-  const [isDebatePaused, setIsDebatePaused] = useState(false)
-  const [debateRound, setDebateRound] = useState(0)
-  const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
   const [thinkingMessage, setThinkingMessage] = useState("")
-  const [isLoading, setIsLoading] = useState(true)
-  const [topics, setTopics] = useState([])
-  const [loadingTopics, setLoadingTopics] = useState(false)
+  const [personas, setPersonas] = useState({})
   const [showTopicSelector, setShowTopicSelector] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [isPaused, setIsPaused] = useState(false)
-  const [personas, setPersonas] = useState([])
+  const [isDebatePaused, setIsDebatePaused] = useState(false)
 
   // Custom topic recording state
   const [isRecordingCustomTopic, setIsRecordingCustomTopic] = useState(false)
   const [isProcessingCustomTopic, setIsProcessingCustomTopic] = useState(false)
 
   // Debate state
+  const [isDebating, setIsDebating] = useState(false)
+  const [debateTopic, setDebateTopic] = useState("")
+  const [topics, setTopics] = useState([])
+  const [loadingTopics, setLoadingTopics] = useState(false)
   const [debateMessages, setDebateMessages] = useState([])
+  const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [speakerStatus, setSpeakerStatus] = useState(null) // 'thinking', 'speaking', 'waiting'
+  const [debateRound, setDebateRound] = useState(0) // Track debate rounds
 
   // Mobile audio unlock hook
   const { audioUnlocked, unlockAudio } = useMobileAudioUnlock()
@@ -114,7 +106,6 @@ const Home = () => {
       try {
         const personasModule = await import("../lib/personas")
         setPersonas(personasModule.personas)
-        setCharacters(Object.values(personasModule.personas))
       } catch (error) {
         console.error("Error loading personas:", error)
       } finally {
@@ -1391,7 +1382,7 @@ const Home = () => {
         debateTopic={debateTopic}
         selectedCharacters={selectedCharacters}
         currentSpeaker={currentSpeaker}
-        personas={characters}
+        personas={personas}
         debateRound={debateRound}
         isDebatePaused={isDebatePaused}
         pauseDebateAudio={pauseDebateAudio}
@@ -1442,7 +1433,7 @@ const Home = () => {
 
           {/* Character Grid - SINGLE UNIFIED INTERFACE */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-12">
-            {Object.entries(characters).map(([key, persona]) => {
+            {Object.entries(personas).map(([key, persona]) => {
               const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
               const shouldGrayOut = shouldGrayOutCharacter(key)
               const isCurrentDebateSpeaker = currentSpeaker === key
@@ -1651,5 +1642,3 @@ const Home = () => {
     </Layout>
   )
 }
-
-export default Home
