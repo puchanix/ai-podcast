@@ -869,7 +869,9 @@ export default function Home() {
 
     // Update debate round based on index (every 2 messages = 1 round)
     const newRound = Math.floor(index / 2) + 1
-    setDebateRound(newRound)
+    if (newRound !== debateRound) {
+      setDebateRound(newRound)
+    }
 
     const audio = new Audio(queueItem.audioUrl)
     currentAudioRef.current = audio
@@ -943,7 +945,7 @@ export default function Home() {
     setDebateTopic(topicString)
     debateTopicRef.current = topicString
     setDebateMessages([])
-    setDebateRound(1) // Start at round 1
+    setDebateRound(0) // Start at round 0, will be updated when first audio plays
     setCurrentSpeaker(null)
     setSpeakerStatus(null)
     setIsDebatePaused(false)
@@ -966,7 +968,7 @@ export default function Home() {
     setDebateTopic(topicString)
     debateTopicRef.current = topicString
     setDebateMessages([])
-    setDebateRound(1) // Start at round 1
+    setDebateRound(0) // Start at round 0, will be updated when first audio plays
     setCurrentSpeaker(null)
     setSpeakerStatus(null)
     setIsDebatePaused(false)
