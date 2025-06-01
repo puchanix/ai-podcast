@@ -1,114 +1,177 @@
-// pages/api/auto-continue.js
 import OpenAI from "openai"
-import { personas } from "../../lib/personas"
 
-// Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
+const characters = {
+  daVinci:
+    "You are Leonardo da Vinci, the great Renaissance polymath. Speak with curiosity about art, science, and invention. Be passionate but thoughtful.",
+  socrates:
+    "You are Socrates, the ancient Greek philosopher. Use the Socratic method, asking probing questions. Be wise but humble.",
+  frida:
+    "You are Frida Kahlo, the passionate Mexican artist. Speak with intensity about art, pain, love, and identity. Be bold and emotional.",
+  shakespeare:
+    "You are William Shakespeare, the Bard of Avon. Speak poetically but accessibly about human nature, love, and drama. Be eloquent.",
+  mozart:
+    "You are Wolfgang Amadeus Mozart, the classical composer. Speak passionately about music, creativity, and artistic expression. Be energetic.",
+}
+
 export default async function handler(req, res) {
+  console.log("🔍 [AUTO-CONTINUE API] Request received")
+  console.log("🔍 [AUTO-CONTINUE API] Method:", req.method)
+  console.log("🔍 [AUTO-CONTINUE API] Headers:", req.headers)
+  console.log("🔍 [AUTO-CONTINUE API] Body:", req.body)
+
   if (req.method !== "POST") {
+    console.error("🔍 [AUTO-CONTINUE API] Wrong method:", req.method)
     return res.status(405).json({ error: "Method not allowed" })
   }
 
   try {
-    const { character1, character2, currentMessages, topic, format, historicalContext } = req.body
+    const { character1, character2, currentMessages, topic } = req.body
 
-    // Validate required fields
-    if (!character1 || !character2 || !currentMessages || !topic) {
-      return res.status(400).json({ error: "Missing required fields" })
+    console.log("🔍 [AUTO-CONTINUE API] Extracted parameters:")
+    console.log("🔍 [AUTO-CONTINUE API] - character1:", character1)
+    console.log("🔍 [AUTO-CONTINUE API] - character2:", character2)
+    console.log("🔍 [AUTO-CONTINUE API] - topic:", topic)
+    console.log("🔍 [AUTO-CONTINUE API] - currentMessages type:", typeof currentMessages)
+    console.log("🔍 [AUTO-CONTINUE API] - currentMessages length:", currentMessages?.length)
+    console.log("🔍 [AUTO-CONTINUE API] - currentMessages content:", currentMessages)
+
+    // Detailed validation
+    if (!character1) {
+      console.error("🔍 [AUTO-CONTINUE API] Missing character1")
+      return res.status(400).json({ error: "Missing character1" })
+    }
+    if (!character2) {
+      console.error("🔍 [AUTO-CONTINUE API] Missing character2")
+      return res.status(400).json({ error: "Missing character2" })
+    }
+    if (!topic) {
+      console.error("🔍 [AUTO-CONTINUE API] Missing topic")
+      return res.status(400).json({ error: "Missing topic" })
+    }
+    if (!currentMessages) {
+      console.error("🔍 [AUTO-CONTINUE API] Missing currentMessages")
+      return res.status(400).json({ error: "Missing currentMessages" })
+    }
+    if (!Array.isArray(currentMessages)) {
+      console.error("🔍 [AUTO-CONTINUE API] currentMessages is not an array:", typeof currentMessages)
+      return res.status(400).json({ error: "currentMessages must be an array" })
+    }
+    if (currentMessages.length === 0) {
+      console.error("🔍 [AUTO-CONTINUE API] currentMessages is empty")
+      return res.status(400).json({ error: "currentMessages cannot be empty" })
     }
 
-    // Get the personas for each character
-    const persona1 = personas[character1]
-    const persona2 = personas[character2]
+    console.log("🔍 [AUTO-CONTINUE API] All validations passed")
 
-    if (!persona1 || !persona2) {
-      return res.status(400).json({ error: "Invalid character selection" })
+    // Check if characters exist in our character definitions
+    if (!characters[character1]) {
+      console.error("🔍 [AUTO-CONTINUE API] Unknown character1:", character1)
+      return res.status(400).json({ error: `Unknown character: ${character1}` })
+    }
+    if (!characters[character2]) {
+      console.error("🔍 [AUTO-CONTINUE API] Unknown character2:", character2)
+      return res.status(400).json({ error: `Unknown character: ${character2}` })
     }
 
-    // Generate responses in parallel
-    const [response1Promise, response2Promise] = [
-      generateResponse(persona1, persona2, currentMessages, topic, format, historicalContext),
-      generateResponse(persona2, persona1, currentMessages, topic, format, historicalContext),
-    ]
+    console.log("🔍 [AUTO-CONTINUE API] Characters validated successfully")
 
-    const [response1, response2] = await Promise.all([response1Promise, response2Promise])
+    // Build conversation context
+    const conversationContext = currentMessages
+      .map((msg, index) => {
+        console.log(`🔍 [AUTO-CONTINUE API] Message ${index}:`, msg)
+        return `${msg.character}: ${msg.content}`
+      })
+      .join("\n\n")
 
-    // Get voice IDs for both characters
-    const voice1 = persona1.getVoiceId ? persona1.getVoiceId() : persona1.voiceId || "echo"
-    const voice2 = persona2.getVoiceId ? persona2.getVoiceId() : persona2.voiceId || "echo"
+    console.log("🔍 [AUTO-CONTINUE API] Conversation context built:")
+    console.log("🔍 [AUTO-CONTINUE API] Context length:", conversationContext.length)
+    console.log("🔍 [AUTO-CONTINUE API] Context preview:", conversationContext.substring(0, 200) + "...")
 
-    // Generate streaming audio URLs in parallel
-    const [audioUrl1, audioUrl2] = await Promise.all([
-      generateStreamingAudio(response1, voice1),
-      generateStreamingAudio(response2, voice2),
+    // Generate next responses for both characters
+    console.log("🔍 [AUTO-CONTINUE API] Starting response generation...")
+
+    const [response1, response2] = await Promise.all([
+      generateResponse(character1, character2, topic, conversationContext, currentMessages.length),
+      generateResponse(character2, character1, topic, conversationContext, currentMessages.length),
     ])
 
-    res.status(200).json({
+    console.log("🔍 [AUTO-CONTINUE API] Responses generated successfully")
+    console.log("🔍 [AUTO-CONTINUE API] Response1 length:", response1.length)
+    console.log("🔍 [AUTO-CONTINUE API] Response2 length:", response2.length)
+    console.log("🔍 [AUTO-CONTINUE API] Response1 preview:", response1.substring(0, 100) + "...")
+    console.log("🔍 [AUTO-CONTINUE API] Response2 preview:", response2.substring(0, 100) + "...")
+
+    const result = {
       response1,
       response2,
-      audioUrl1,
-      audioUrl2,
-    })
+    }
+
+    console.log("🔍 [AUTO-CONTINUE API] Sending successful response")
+    return res.status(200).json(result)
   } catch (error) {
-    console.error("Error continuing debate:", error)
-    res.status(500).json({ error: "Failed to continue debate" })
+    console.error("🔍 [AUTO-CONTINUE API] Caught error:", error)
+    console.error("🔍 [AUTO-CONTINUE API] Error stack:", error.stack)
+    return res.status(500).json({ error: "Internal server error: " + error.message })
   }
 }
 
-// Function to generate a response for a character
-async function generateResponse(persona, otherPersona, currentMessages, topic, format, historicalContext) {
-  // Build conversation context (last few messages only to save tokens)
-  const recentMessages = currentMessages.slice(-4) // Only last 4 messages
-  const conversationContext = recentMessages
-    .map((msg) => {
-      if (msg.character === "user") {
-        return `Question: ${msg.content}`
-      } else {
-        const speaker = msg.character === persona.id ? persona.name : otherPersona.name
-        return `${speaker}: ${msg.content}`
-      }
-    })
-    .join("\n")
+async function generateResponse(character, opponent, topic, context, messageCount) {
+  console.log(`🔍 [AUTO-CONTINUE API] Generating response for ${character}`)
+  console.log(`🔍 [AUTO-CONTINUE API] - opponent: ${opponent}`)
+  console.log(`🔍 [AUTO-CONTINUE API] - topic: ${topic}`)
+  console.log(`🔍 [AUTO-CONTINUE API] - messageCount: ${messageCount}`)
 
-  const systemPrompt = `${persona.systemPrompt}
-You are ${persona.name} in a debate with ${otherPersona.name} on "${topic}".
-Keep your response very concise (40-60 words maximum). Be direct and engaging.
+  const systemPrompt = characters[character]
 
-Recent conversation:
-${conversationContext}`
+  if (!systemPrompt) {
+    console.error("🔍 [AUTO-CONTINUE API] No system prompt found for character:", character)
+    throw new Error(`Unknown character: ${character}`)
+  }
+
+  // Determine the stage of debate based on message count
+  let stagePrompt = ""
+  if (messageCount <= 2) {
+    stagePrompt = "This is the opening round. Present your initial position clearly and passionately."
+  } else if (messageCount <= 4) {
+    stagePrompt = "This is the second round. Respond to your opponent's points and strengthen your argument."
+  } else if (messageCount <= 6) {
+    stagePrompt = "This is the third round. Challenge your opponent's logic and present new evidence."
+  } else {
+    stagePrompt = "This is the final round. Make your strongest closing argument."
+  }
+
+  const prompt = `You are continuing a debate about "${topic}" with ${opponent}. 
+
+${stagePrompt}
+
+Previous conversation:
+${context}
+
+Give your next response in 2-3 sentences. Stay true to your character, respond to the previous points made, and advance the debate. Be engaging and passionate about your position.`
+
+  console.log(`🔍 [AUTO-CONTINUE API] Generated prompt for ${character}:`, prompt.substring(0, 200) + "...")
 
   try {
+    console.log(`🔍 [AUTO-CONTINUE API] Calling OpenAI for ${character}`)
     const completion = await openai.chat.completions.create({
-      model: "gpt-4", // Reverted back to GPT-4
+      model: "gpt-4",
       messages: [
         { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: `Continue the debate. Give your next response. Be very concise and impactful.`,
-        },
+        { role: "user", content: prompt },
       ],
-      temperature: 0.7,
-      max_tokens: 80, // Reverted back to 80 tokens
+      max_tokens: 200,
+      temperature: 0.8,
     })
 
-    return completion.choices[0].message.content.trim()
+    const response = completion.choices[0]?.message?.content || "I need to think more about this."
+    console.log(`🔍 [AUTO-CONTINUE API] OpenAI response for ${character}:`, response)
+    return response
   } catch (error) {
-    console.error("Error generating response:", error)
-    throw error
-  }
-}
-
-// Function to generate streaming audio URL
-async function generateStreamingAudio(text, voiceId) {
-  try {
-    // Return the streaming URL instead of generating audio immediately
-    const audioId = `debate_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`
-    return `/api/stream-audio-realtime?id=${audioId}&text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId)}`
-  } catch (error) {
-    console.error("Error generating streaming audio:", error)
+    console.error(`🔍 [AUTO-CONTINUE API] OpenAI error for ${character}:`, error)
     throw error
   }
 }

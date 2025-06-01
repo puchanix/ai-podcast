@@ -1,4 +1,4 @@
-import busboy from "busboy"
+import Busboy from "busboy"
 import FormData from "form-data"
 import axios from "axios"
 
@@ -16,41 +16,33 @@ export default async function handler(req, res) {
 
   let fileBuffer = null
   let safeFilename = ""
-  let isIOS = false
 
   try {
+    // Check if we have the OpenAI API key
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: "OpenAI API key not configured" })
+    }
+
     // Parse the form data
-    const { buffer, filename, ios } = await parseFormData(req)
+    const { buffer, filename } = await parseFormData(req)
     fileBuffer = buffer
     safeFilename = filename
-    isIOS = ios
 
     if (!fileBuffer || fileBuffer.length < 1000) {
-      console.error("❌ Audio file too small or missing")
       return res.status(400).json({ error: "Audio file too small or missing" })
     }
 
-    console.log(`📦 Processing audio file: ${safeFilename}, size: ${fileBuffer.length} bytes, iOS: ${isIOS}`)
-
     // Determine the correct content type and filename for Whisper API
-    let apiFilename = safeFilename
-    let contentType
+    const apiFilename = safeFilename
+    let contentType = "audio/webm"
 
     if (apiFilename.endsWith(".mp3")) {
       contentType = "audio/mpeg"
     } else if (apiFilename.endsWith(".m4a")) {
       contentType = "audio/mp4"
-    } else if (apiFilename.endsWith(".webm")) {
-      contentType = "audio/webm"
     } else if (apiFilename.endsWith(".wav")) {
       contentType = "audio/wav"
-    } else {
-      // Default fallback
-      apiFilename = "recording.mp3"
-      contentType = "audio/mpeg"
     }
-
-    console.log(`🔊 Using content type: ${contentType} for file: ${apiFilename}`)
 
     const form = new FormData()
     form.append("file", fileBuffer, {
@@ -61,9 +53,7 @@ export default async function handler(req, res) {
     form.append("model", "whisper-1")
     form.append("response_format", "json")
     form.append("language", "en")
-    form.append("temperature", "0.2")
-
-    console.log(`🔊 Sending audio to Whisper API with filename: ${apiFilename}`)
+    form.append("temperature", "0.0")
 
     const response = await axios.post("https://api.openai.com/v1/audio/transcriptions", form, {
       headers: {
@@ -73,35 +63,22 @@ export default async function handler(req, res) {
       timeout: 60000,
     })
 
-    // Check if we got a valid response
-    if (!response.data) {
-      console.error("❌ Invalid response from Whisper API:", response.data)
-      return res.status(500).json({ error: "Invalid response from transcription service" })
-    }
-
-    let fullTranscript = ""
-
-    // Handle both verbose_json and simple text responses
-    if (response.data.text) {
-      fullTranscript = response.data.text.trim()
-      console.log("📜 Full Whisper transcript:", fullTranscript)
-    } else {
-      console.error("❌ No transcript in response:", response.data)
+    if (!response.data || !response.data.text) {
       return res.status(500).json({ error: "No transcript in response" })
     }
 
+    const fullTranscript = response.data.text.trim()
+
     res.status(200).json({ text: fullTranscript })
   } catch (err) {
-    console.error("❌ Final transcription error:", err.response?.data || err.message)
+    console.error("Transcription error:", err.response?.data || err.message)
 
-    // More detailed error response
     const errorDetails = err.response?.data || {}
     const errorMessage = errorDetails.error?.message || err.message || "Unknown error"
 
     res.status(500).json({
       error: "Failed to transcribe audio",
       message: errorMessage,
-      details: errorDetails,
     })
   }
 }
@@ -110,57 +87,33 @@ export default async function handler(req, res) {
 async function parseFormData(req) {
   return new Promise((resolve, reject) => {
     const chunks = []
-    let filename = "recording.mp3" // Default filename
-    let isIOS = false
+    let filename = "recording.webm"
 
-    const bb = busboy({
+    const busboy = Busboy({
       headers: req.headers,
       limits: {
         fileSize: 25 * 1024 * 1024, // 25MB max file size
       },
     })
 
-    bb.on("file", (fieldname, file, info) => {
-      const { filename: originalFilename, mimeType } = info
-
-      // Determine the appropriate filename based on the MIME type
-      if (originalFilename) {
-        if (originalFilename.endsWith(".mp3") || mimeType.includes("mpeg")) {
-          filename = "recording.mp3"
-        } else if (originalFilename.endsWith(".m4a") || mimeType.includes("mp4")) {
-          filename = "recording.mp3" // Convert to mp3 for better compatibility
-        } else if (originalFilename.endsWith(".webm") || mimeType.includes("webm")) {
-          filename = "recording.webm"
-        } else if (originalFilename.endsWith(".wav") || mimeType.includes("wav")) {
-          filename = "recording.wav"
-        }
-      }
-
-      console.log(`📥 Processing uploaded file: ${originalFilename}, MIME type: ${mimeType}`)
-      console.log(`📥 Using filename: ${filename}`)
+    busboy.on("file", (fieldname, file, info) => {
+      const { filename: originalFilename } = info
+      filename = originalFilename || "recording.webm"
 
       file.on("data", (chunk) => {
         chunks.push(chunk)
       })
     })
 
-    bb.on("field", (fieldname, val) => {
-      if (fieldname === "isIOS" && val === "true") {
-        isIOS = true
-        console.log("📱 iOS device detected")
-      }
-    })
-
-    bb.on("finish", () => {
+    busboy.on("finish", () => {
       const buffer = Buffer.concat(chunks)
-      resolve({ buffer, filename, ios: isIOS })
+      resolve({ buffer, filename })
     })
 
-    bb.on("error", (err) => {
-      console.error("❌ Busboy error:", err)
+    busboy.on("error", (err) => {
       reject(err)
     })
 
-    req.pipe(bb)
+    req.pipe(busboy)
   })
 }
