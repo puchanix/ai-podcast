@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { webkitAudioContext } from "some-audio-context-package" // Placeholder for actual import
 
 export function useMobileAudioUnlock() {
   const [audioUnlocked, setAudioUnlocked] = useState(false)
