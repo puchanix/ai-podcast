@@ -23,7 +23,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log("🔍 [CHAT DEBUG] Chat API called with body:", req.body)
     const { messages, character, message, persona } = req.body
 
     // Handle both old and new API formats
@@ -31,37 +30,25 @@ export default async function handler(req, res) {
     const userMessage = message || (messages && messages[0]?.content)
 
     if (!characterKey || !userMessage) {
-      console.error("🔍 [CHAT DEBUG] Missing required parameters:", {
-        character: characterKey,
-        message: userMessage,
-      })
       return res.status(400).json({ error: "Missing character or message" })
     }
 
-    console.log("🔍 [CHAT DEBUG] Processing request for character:", characterKey)
-    console.log("🔍 [CHAT DEBUG] User message:", userMessage)
-
     const systemPrompt = characters[characterKey]
     if (!systemPrompt) {
-      console.error("🔍 [CHAT DEBUG] Unknown character:", characterKey)
       return res.status(400).json({ error: `Unknown character: ${characterKey}` })
     }
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      max_tokens: 30, // Reduced from 50 to 30 for easier testing
+      max_tokens: 50,
       temperature: 0.7,
     })
 
-    console.log("🔍 [CHAT DEBUG] Token limit used:", 50)
-
     const response = completion.choices[0]?.message?.content || "I need to think more about this."
-    console.log("🔍 [CHAT DEBUG] Generated response:", response.substring(0, 100) + "...")
-    console.log("🔍 [CHAT DEBUG] Response length:", response.length, "characters")
 
     // Return in both formats for compatibility
     return res.status(200).json({
@@ -69,7 +56,7 @@ export default async function handler(req, res) {
       response: response, // Old format
     })
   } catch (error) {
-    console.error("🔍 [CHAT DEBUG] Chat API error:", error)
+    console.error("Chat API error:", error)
     return res.status(500).json({ error: "Failed to generate response" })
   }
 }

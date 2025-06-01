@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import MobileDebugMonitor from "../components/MobileDebugMonitor"
 import StickyDebateStatusBar from "../components/StickyDebateStatusBar"
 import useIsMobile from "../hooks/useIsMobile"
 import Layout from "../components/layout"
@@ -318,7 +317,6 @@ export default function Home() {
   // Custom topic recording functions
   const startCustomTopicRecording = useCallback(async () => {
     try {
-      console.log("🎤 [CUSTOM TOPIC] Starting custom topic recording...")
       setAudioError(null)
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -329,7 +327,6 @@ export default function Home() {
         },
       })
       customTopicStreamRef.current = stream
-      console.log("🎤 [CUSTOM TOPIC] Got media stream")
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: "audio/webm;codecs=opus",
@@ -340,38 +337,31 @@ export default function Home() {
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           customTopicAudioChunksRef.current.push(event.data)
-          console.log("🎤 [CUSTOM TOPIC] Audio chunk received, size:", event.data.size)
         }
       }
 
       mediaRecorder.onstop = async () => {
-        console.log("🎤 [CUSTOM TOPIC] Recording stopped, processing...")
         const audioBlob = new Blob(customTopicAudioChunksRef.current, { type: "audio/webm" })
-        console.log("🎤 [CUSTOM TOPIC] Audio blob created, size:", audioBlob.size)
         await processCustomTopicAudio(audioBlob)
       }
 
       mediaRecorder.start(1000)
       setIsRecordingCustomTopic(true)
-      console.log("🎤 [CUSTOM TOPIC] Recording started")
     } catch (error) {
-      console.error("🎤 [CUSTOM TOPIC] Error accessing microphone:", error)
+      console.error("Error accessing microphone:", error)
       setAudioError("Could not access microphone. Please check permissions.")
     }
   }, [])
 
   const stopCustomTopicRecording = useCallback(() => {
-    console.log("🎤 [CUSTOM TOPIC] Stopping custom topic recording...")
     if (customTopicMediaRecorderRef.current && customTopicMediaRecorderRef.current.state === "recording") {
       customTopicMediaRecorderRef.current.stop()
       setIsRecordingCustomTopic(false)
-      console.log("🎤 [CUSTOM TOPIC] MediaRecorder stopped")
     }
 
     if (customTopicStreamRef.current) {
       customTopicStreamRef.current.getTracks().forEach((track) => {
         track.stop()
-        console.log("🎤 [CUSTOM TOPIC] Track stopped:", track.kind)
       })
       customTopicStreamRef.current = null
     }
@@ -379,32 +369,24 @@ export default function Home() {
 
   const processCustomTopicAudio = useCallback(
     async (audioBlob) => {
-      console.log("🎤 [CUSTOM TOPIC] Processing custom topic audio...")
-      console.log("🎤 [CUSTOM TOPIC] Current selectedCharacters state:", selectedCharacters)
-      console.log("🎤 [CUSTOM TOPIC] Current selectedCharacters ref:", selectedCharactersRef.current)
       setIsProcessingCustomTopic(true)
       setAudioError(null)
 
       try {
         const formData = new FormData()
         formData.append("audio", audioBlob, "custom-topic.webm")
-        console.log("🎤 [CUSTOM TOPIC] Sending to transcription API...")
 
         const transcriptionResponse = await fetch("/api/transcribe", {
           method: "POST",
           body: formData,
         })
 
-        console.log("🎤 [CUSTOM TOPIC] Transcription response status:", transcriptionResponse.status)
-
         if (!transcriptionResponse.ok) {
           const errorText = await transcriptionResponse.text()
-          console.error("🎤 [CUSTOM TOPIC] Transcription error:", errorText)
           throw new Error("Failed to transcribe audio: " + errorText)
         }
 
         const { text } = await transcriptionResponse.json()
-        console.log("🎤 [CUSTOM TOPIC] Transcribed text:", text)
 
         if (!text || text.trim().length === 0) {
           throw new Error("No speech detected. Please try again.")
@@ -412,21 +394,17 @@ export default function Home() {
 
         // Use ref instead of state for characters
         const currentCharacters = selectedCharactersRef.current
-        console.log("🎤 [CUSTOM TOPIC] Using characters from ref:", currentCharacters)
 
         // Validate we have characters before proceeding
         if (!currentCharacters || currentCharacters.length !== 2) {
-          console.error("🎤 [CUSTOM TOPIC] No characters selected, cannot start debate")
           throw new Error("Please select two characters first")
         }
 
         // Start debate with the custom topic
-        console.log("🎤 [CUSTOM TOPIC] Starting debate with custom topic:", text.trim())
-        console.log("🎤 [CUSTOM TOPIC] Using characters:", currentCharacters)
         setShowTopicSelector(false)
         startDebateWithCharacters(text.trim(), currentCharacters)
       } catch (error) {
-        console.error("🎤 [CUSTOM TOPIC] Error processing custom topic audio:", error)
+        console.error("Error processing custom topic audio:", error)
         setAudioError(`Error: ${error.message}`)
       } finally {
         setIsProcessingCustomTopic(false)
@@ -516,12 +494,7 @@ export default function Home() {
 
   const processQuestionWithStreaming = async (question, persona) => {
     try {
-      console.log("⏱️ [TIMING] Starting question processing at:", Date.now())
       setIsPlaying(true)
-
-      // Start text generation
-      const textStartTime = Date.now()
-      console.log("⏱️ [TIMING] Starting text generation at:", textStartTime)
 
       const textResponse = await fetch("/api/chat", {
         method: "POST",
@@ -539,12 +512,8 @@ export default function Home() {
       }
 
       const { content: responseText } = await textResponse.json()
-      const textEndTime = Date.now()
-      console.log("⏱️ [TIMING] Text generation completed in:", textEndTime - textStartTime + "ms")
-      console.log("⏱️ [TIMING] Generated text length:", responseText.length, "characters")
 
       // Break text into sentences and start streaming audio
-      console.log("⏱️ [TIMING] Starting sentence-by-sentence audio at:", textEndTime)
       await generateStreamingAudioResponse(responseText, persona)
     } catch (error) {
       console.error("Error in parallel processing:", error)
@@ -555,12 +524,8 @@ export default function Home() {
 
   const generateStreamingAudioResponse = async (text, persona) => {
     try {
-      const streamStartTime = Date.now()
-      console.log("🎵 [STREAMING] Starting streaming audio at:", streamStartTime)
-
       // Split text into sentences
       const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
-      console.log("🎵 [STREAMING] Split into", sentences.length, "sentences")
 
       // Get voice settings
       const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
@@ -568,10 +533,9 @@ export default function Home() {
       let voice = currentVoiceIds[voiceKey]
 
       if (voice && voice.length > 10) {
-        console.log("🎵 [STREAMING] Using custom voice:", voiceKey)
+        voice = voice
       } else {
         voice = "echo"
-        console.log("🎵 [STREAMING] Using default voice: echo")
       }
 
       // Start with first sentence to get audio playing ASAP
@@ -580,9 +544,6 @@ export default function Home() {
         throw new Error("No valid sentences found")
       }
 
-      console.log("🎵 [STREAMING] Generating first sentence:", firstSentence.substring(0, 50) + "...")
-
-      const firstAudioStartTime = Date.now()
       const firstResponse = await fetch("/api/speak", {
         method: "POST",
         headers: {
@@ -599,8 +560,6 @@ export default function Home() {
       }
 
       const { audioUrl: firstAudioUrl } = await firstResponse.json()
-      const firstAudioTime = Date.now() - firstAudioStartTime
-      console.log("🎵 [STREAMING] First sentence audio generated in:", firstAudioTime + "ms")
 
       // Start playing first sentence immediately
       const firstAudio = new Audio(firstAudioUrl)
@@ -612,11 +571,8 @@ export default function Home() {
 
       // Generate remaining sentences in parallel
       if (sentences.length > 1) {
-        console.log("🎵 [STREAMING] Starting parallel generation of remaining", sentences.length - 1, "sentences")
-
         const remainingPromises = sentences.slice(1).map(async (sentence, index) => {
           try {
-            const sentenceStartTime = Date.now()
             const response = await fetch("/api/speak", {
               method: "POST",
               headers: {
@@ -629,17 +585,12 @@ export default function Home() {
             })
 
             if (!response.ok) {
-              console.error(`Sentence ${index + 2} audio failed:`, response.status)
               return null
             }
 
             const { audioUrl } = await response.json()
-            const sentenceTime = Date.now() - sentenceStartTime
-            console.log(`🎵 [STREAMING] Sentence ${index + 2} generated in:`, sentenceTime + "ms")
-
             return { audioUrl, index: index + 1 }
           } catch (error) {
-            console.error(`Error generating sentence ${index + 2}:`, error)
             return null
           }
         })
@@ -686,8 +637,6 @@ export default function Home() {
           // All audio finished
           setIsPlaying(false)
           setIsPaused(false)
-          const totalTime = Date.now() - streamStartTime
-          console.log("🎵 [STREAMING] Total streaming audio completed in:", totalTime + "ms")
         } else {
           // Wait for next audio to be ready
           setTimeout(playNextAudio, 100)
@@ -702,78 +651,9 @@ export default function Home() {
         setIsPaused(false)
       }
 
-      const playStartTime = Date.now()
       await firstAudio.play()
-      const timeToFirstAudio = playStartTime - streamStartTime
-      console.log("🎵 [STREAMING] First audio started playing after:", timeToFirstAudio + "ms")
-      console.log("🎵 [STREAMING] FIRST AUDIO RESPONSE TIME:", timeToFirstAudio + "ms")
     } catch (error) {
       console.error("Error in streaming audio generation:", error)
-      setAudioError(`Audio error: ${error.message}`)
-      setIsPlaying(false)
-    }
-  }
-
-  const generateAudioResponse = async (text, persona) => {
-    try {
-      const audioStartTime = Date.now()
-      console.log("🎵 [AUDIO TIMING] Starting audio generation at:", audioStartTime)
-      console.log("🎵 [AUDIO TIMING] Text to convert:", text.substring(0, 100) + "...")
-
-      const voiceKey = persona === "daVinci" ? "davinci" : persona.toLowerCase()
-      const currentVoiceIds = voiceIdsRef.current
-      let voice = currentVoiceIds[voiceKey]
-
-      if (voice && voice.length > 10) {
-        console.log("🎵 [AUDIO TIMING] Using custom voice:", voiceKey)
-      } else {
-        voice = "echo"
-        console.log("🎵 [AUDIO TIMING] Using default voice: echo")
-      }
-
-      // Start audio generation immediately
-      const response = await fetch("/api/speak", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: text,
-          voice: voice,
-        }),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Audio generation failed: ${response.status} - ${errorText}`)
-      }
-
-      const { audioUrl } = await response.json()
-      const audioGenerationTime = Date.now() - audioStartTime
-      console.log("🎵 [AUDIO TIMING] Audio generated in:", audioGenerationTime + "ms")
-
-      const audio = new Audio(audioUrl)
-      audioRef.current = audio
-
-      audio.onended = () => {
-        setIsPlaying(false)
-        setIsPaused(false)
-      }
-
-      audio.onerror = (e) => {
-        console.error("Audio playback error:", e)
-        setAudioError("Audio playback failed")
-        setIsPlaying(false)
-        setIsPaused(false)
-      }
-
-      const playStartTime = Date.now()
-      await audio.play()
-      const totalTime = playStartTime - audioStartTime
-      console.log("🎵 [AUDIO TIMING] Audio started playing after:", totalTime + "ms total")
-      console.log("🎵 [AUDIO TIMING] TOTAL RESPONSE TIME:", totalTime + "ms")
-    } catch (error) {
-      console.error("Error in audio generation:", error)
       setAudioError(`Audio error: ${error.message}`)
       setIsPlaying(false)
     }
@@ -782,17 +662,12 @@ export default function Home() {
   // NEW: Streaming debate function - similar to generateStreamingAudioResponse but for debate turns
   const playDebateWithStreaming = async (characters, topic) => {
     try {
-      console.log("🎯 [DEBATE STREAMING] Starting streaming debate...")
-      console.log("🎯 [DEBATE STREAMING] Characters:", characters)
-      console.log("🎯 [DEBATE STREAMING] Topic:", topic)
-
       // Initialize debate queue and state
       debateQueueRef.current = []
       currentDebateIndexRef.current = 0
       isGeneratingNextRef.current = false
 
       // Generate first speaker's opening statement immediately
-      console.log("🎯 [DEBATE STREAMING] Generating first opening statement...")
       setCurrentSpeaker(characters[0])
       setSpeakerStatus("thinking")
 
@@ -813,14 +688,12 @@ export default function Home() {
       })
 
       // Start playing first message immediately
-      console.log("🎯 [DEBATE STREAMING] Starting first speaker audio...")
       playDebateAudioFromQueue(0, characters, topic)
 
       // While first speaker is talking, generate second speaker's opening
-      console.log("🎯 [DEBATE STREAMING] Generating second opening in background...")
       generateNextDebateResponse(characters, topic, [firstMessage], 1)
     } catch (error) {
-      console.error("🎯 [DEBATE STREAMING] Error starting streaming debate:", error)
+      console.error("Error starting streaming debate:", error)
       setAudioError(`Failed to start debate: ${error.message}`)
       setIsDebating(false)
       setSpeakerStatus(null)
@@ -837,8 +710,6 @@ export default function Home() {
     messageCount,
     isOpening = false,
   ) => {
-    console.log(`🎯 [DEBATE GEN] Generating response for ${character}`)
-
     try {
       let textResponse
 
@@ -891,7 +762,7 @@ export default function Home() {
         return { text: responseText, audioUrl }
       }
     } catch (error) {
-      console.error(`🎯 [DEBATE GEN] Error generating response for ${character}:`, error)
+      console.error(`Error generating response for ${character}:`, error)
       throw error
     }
   }
@@ -919,15 +790,12 @@ export default function Home() {
   // Generate a single debate response (optimized for just-in-time generation)
   const generateSingleDebateResponse = async (character, characters, topic, currentMessages, targetIndex) => {
     if (isGeneratingNextRef.current) {
-      console.log("🎯 [SINGLE GEN] Already generating, skipping...")
       return
     }
 
     isGeneratingNextRef.current = true
 
     try {
-      console.log(`🎯 [SINGLE GEN] Generating response for ${character} at index ${targetIndex}`)
-
       let responseData
       if (targetIndex < 2) {
         // Still in opening statements (index 0 and 1)
@@ -979,10 +847,8 @@ export default function Home() {
         audioUrl: responseData.audioUrl,
         index: targetIndex,
       }
-
-      console.log(`🎯 [SINGLE GEN] Added response for ${character} to queue at index ${targetIndex}`)
     } catch (error) {
-      console.error(`🎯 [SINGLE GEN] Error generating response for ${character}:`, error)
+      console.error(`Error generating response for ${character}:`, error)
     } finally {
       isGeneratingNextRef.current = false
     }
@@ -993,16 +859,17 @@ export default function Home() {
     const queueItem = debateQueueRef.current[index]
 
     if (!queueItem) {
-      console.log("🎯 [DEBATE QUEUE] No audio ready at index", index, "- waiting...")
       // Wait for audio to be ready
       setTimeout(() => playDebateAudioFromQueue(index, characters, topic), 100)
       return
     }
 
-    console.log(`🎯 [DEBATE QUEUE] Playing audio ${index + 1} for ${queueItem.message.character}`)
-
     setCurrentSpeaker(queueItem.message.character)
     setSpeakerStatus("speaking")
+
+    // Update debate round based on index (every 2 messages = 1 round)
+    const newRound = Math.floor(index / 2) + 1
+    setDebateRound(newRound)
 
     const audio = new Audio(queueItem.audioUrl)
     currentAudioRef.current = audio
@@ -1011,44 +878,36 @@ export default function Home() {
     const nextIndex = index + 1
     if (nextIndex < 8) {
       // Only generate if we haven't reached the end
-      // Determine what to generate next
       const currentMessages = debateMessagesRef.current
 
       if (nextIndex < debateQueueRef.current.length) {
         // Next audio already exists, no need to generate
-        console.log(`🎯 [DEBATE QUEUE] Next audio (${nextIndex}) already in queue`)
       } else {
         // Simple alternation: if current index is even, next speaker is characters[1], if odd, next speaker is characters[0]
         const nextCharacter = characters[nextIndex % 2]
-        console.log(`🎯 [DEBATE QUEUE] Generating next speaker (index ${nextIndex}): ${nextCharacter}`)
         generateSingleDebateResponse(nextCharacter, characters, topic, currentMessages, nextIndex)
       }
     }
 
     audio.onended = () => {
-      console.log(`🎯 [DEBATE QUEUE] Audio ended for ${queueItem.message.character}`)
       setSpeakerStatus("waiting")
-
       currentDebateIndexRef.current = nextIndex
 
       // Check if we have more audio to play
       if (nextIndex < debateQueueRef.current.length) {
         // Play next audio immediately - should be ready!
-        console.log(`🎯 [DEBATE QUEUE] Playing next audio at index ${nextIndex}`)
         playDebateAudioFromQueue(nextIndex, characters, topic)
       } else if (nextIndex >= 8) {
         // End debate
-        console.log("🎯 [DEBATE QUEUE] Debate completed")
         endDebate()
       } else {
         // Wait a bit for next audio to be generated
-        console.log(`🎯 [DEBATE QUEUE] Waiting for next audio to be generated...`)
         setTimeout(() => playDebateAudioFromQueue(nextIndex, characters, topic), 500)
       }
     }
 
     audio.onerror = (e) => {
-      console.error(`🎯 [DEBATE QUEUE] Audio error for ${queueItem.message.character}:`, e)
+      console.error(`Audio error for ${queueItem.message.character}:`, e)
       setAudioError(`Audio playback failed for ${queueItem.message.character}`)
 
       // Try to continue to next audio
@@ -1059,7 +918,7 @@ export default function Home() {
 
     // Play the audio
     audio.play().catch((error) => {
-      console.error(`🎯 [DEBATE QUEUE] Failed to play audio for ${queueItem.message.character}:`, error)
+      console.error(`Failed to play audio for ${queueItem.message.character}:`, error)
       setAudioError(`Failed to play audio: ${error.message}`)
     })
   }
@@ -1072,25 +931,19 @@ export default function Home() {
 
   // Start debate function with explicit characters
   const startDebateWithCharacters = async (topic, characters) => {
-    console.log("🎯 [START DEBATE WITH CHARS] Function called with topic:", topic)
-    console.log("🎯 [START DEBATE WITH CHARS] Using characters:", characters)
-
     if (!characters || characters.length !== 2) {
-      console.error("🎯 [START DEBATE WITH CHARS] Invalid characters - returning early")
       setAudioError("Please select exactly two characters to start a debate")
       return
     }
 
     // Extract topic string if it's an object
     const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
-    console.log("🎯 [START DEBATE WITH CHARS] Topic string extracted:", topicString)
 
-    console.log("🎯 [START DEBATE WITH CHARS] Setting debate state...")
     setIsDebating(true)
     setDebateTopic(topicString)
     debateTopicRef.current = topicString
     setDebateMessages([])
-    setDebateRound(0)
+    setDebateRound(1) // Start at round 1
     setCurrentSpeaker(null)
     setSpeakerStatus(null)
     setIsDebatePaused(false)
@@ -1101,25 +954,19 @@ export default function Home() {
 
   // Start debate function
   const startDebate = async (topic) => {
-    console.log("🎯 [START DEBATE] Function called with topic:", topic)
-    console.log("🎯 [START DEBATE] Selected characters:", selectedCharacters)
-
     if (!selectedCharacters || selectedCharacters.length !== 2) {
-      console.error("🎯 [START DEBATE] Invalid characters - returning early")
       setAudioError("Please select exactly two characters to start a debate")
       return
     }
 
     // Extract topic string if it's an object
     const topicString = typeof topic === "object" ? topic.title || topic.description || String(topic) : topic
-    console.log("🎯 [START DEBATE] Topic string extracted:", topicString)
 
-    console.log("🎯 [START DEBATE] Setting debate state...")
     setIsDebating(true)
     setDebateTopic(topicString)
     debateTopicRef.current = topicString
     setDebateMessages([])
-    setDebateRound(0)
+    setDebateRound(1) // Start at round 1
     setCurrentSpeaker(null)
     setSpeakerStatus(null)
     setIsDebatePaused(false)
@@ -1601,9 +1448,6 @@ export default function Home() {
           )}
         </div>
       </div>
-
-      {/* Mobile Debug Monitor */}
-      <MobileDebugMonitor isVisible={true} />
     </Layout>
   )
 }

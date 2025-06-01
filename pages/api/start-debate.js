@@ -33,13 +33,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log("🔍 [START DEBATE API] Received request")
     const { character1, character2, topic } = req.body
-
-    console.log("🔍 [START DEBATE API] Parameters:")
-    console.log("🔍 [START DEBATE API] - character1:", character1)
-    console.log("🔍 [START DEBATE API] - character2:", character2)
-    console.log("🔍 [START DEBATE API] - topic:", topic)
 
     if (!character1 || !character2 || !topic) {
       return res.status(400).json({ error: "Missing required parameters" })
@@ -52,9 +46,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid characters" })
     }
 
-    console.log("🔍 [START DEBATE API] Generating opening statements...")
-
-    // Generate opening statements in parallel but with shorter, simpler prompts
+    // Generate opening statements in parallel
     const [opening1Response, opening2Response] = await Promise.all([
       fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -63,18 +55,18 @@ export default async function handler(req, res) {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "gpt-4o",
           messages: [
             {
               role: "system",
-              content: `${persona1.prompt} You are starting a debate about "${topic}". Give a brief opening statement (1 sentence max). Be authentic to your character.`,
+              content: `${persona1.prompt} You are starting a debate about "${topic}". Give a brief opening statement (1-2 sentences). Be authentic to your character.`,
             },
             {
               role: "user",
               content: `Give your opening statement on the topic: "${topic}"`,
             },
           ],
-          max_tokens: 30, // Reduced from 50 to 30 for easier testing
+          max_tokens: 50,
           temperature: 0.8,
         }),
       }),
@@ -85,25 +77,24 @@ export default async function handler(req, res) {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "gpt-4o",
           messages: [
             {
               role: "system",
-              content: `${persona2.prompt} You are starting a debate about "${topic}". Give a brief opening statement (1 sentence max). Be authentic to your character.`,
+              content: `${persona2.prompt} You are starting a debate about "${topic}". Give a brief opening statement (1-2 sentences). Be authentic to your character.`,
             },
             {
               role: "user",
               content: `Give your opening statement on the topic: "${topic}"`,
             },
           ],
-          max_tokens: 30, // Reduced from 50 to 30 for easier testing
+          max_tokens: 50,
           temperature: 0.8,
         }),
       }),
     ])
 
     if (!opening1Response.ok || !opening2Response.ok) {
-      console.error("🔍 [START DEBATE API] OpenAI API error")
       throw new Error("Failed to generate opening statements")
     }
 
@@ -111,10 +102,6 @@ export default async function handler(req, res) {
 
     const opening1 = data1.choices[0]?.message?.content || "I'm ready to discuss this topic."
     const opening2 = data2.choices[0]?.message?.content || "I look forward to this debate."
-
-    console.log("🔍 [START DEBATE API] Generated openings successfully")
-    console.log("🔍 [START DEBATE API] Opening 1:", opening1.substring(0, 50) + "...")
-    console.log("🔍 [START DEBATE API] Opening 2:", opening2.substring(0, 50) + "...")
 
     return res.status(200).json({
       success: true,
@@ -125,7 +112,7 @@ export default async function handler(req, res) {
       topic,
     })
   } catch (error) {
-    console.error("🔍 [START DEBATE API] Error:", error)
+    console.error("Start debate API error:", error)
     return res.status(500).json({ error: "Failed to start debate", details: error.message })
   }
 }
