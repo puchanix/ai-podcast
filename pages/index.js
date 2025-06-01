@@ -946,14 +946,29 @@ export default function Home() {
       // Check if we have more audio to play
       if (nextIndex < debateQueueRef.current.length) {
         // Play next audio immediately
+        console.log(`🎯 [DEBATE QUEUE] Playing next audio at index ${nextIndex}`)
         playDebateAudioFromQueue(nextIndex, characters, topic)
       } else {
         // Check if we need to generate more rounds
         const currentMessages = debateMessagesRef.current
+        console.log(`🎯 [DEBATE QUEUE] No more audio in queue. Current messages: ${currentMessages.length}`)
+
         if (currentMessages.length < 8) {
           // Generate next round
           console.log("🎯 [DEBATE QUEUE] Generating next round...")
           generateNextRound(characters, topic, currentMessages)
+            .then(() => {
+              // After generating next round, check if we have new audio to play
+              console.log(`🎯 [DEBATE QUEUE] Next round generated. Queue length: ${debateQueueRef.current.length}`)
+              if (nextIndex < debateQueueRef.current.length) {
+                console.log(`🎯 [DEBATE QUEUE] Playing newly generated audio at index ${nextIndex}`)
+                playDebateAudioFromQueue(nextIndex, characters, topic)
+              }
+            })
+            .catch((error) => {
+              console.error("🎯 [DEBATE QUEUE] Error generating next round:", error)
+              setAudioError(`Failed to continue debate: ${error.message}`)
+            })
         } else {
           // End debate
           console.log("🎯 [DEBATE QUEUE] Debate completed")
@@ -1104,9 +1119,11 @@ export default function Home() {
       )
 
       console.log("🎯 [DEBATE ROUND] Next round added to queue")
+      return Promise.resolve() // Explicitly return resolved promise
     } catch (error) {
       console.error("🎯 [DEBATE ROUND] Error generating next round:", error)
       setAudioError(`Failed to continue debate: ${error.message}`)
+      return Promise.reject(error)
     }
   }
 
