@@ -630,7 +630,7 @@ export default function Home() {
 
             const { audioUrl } = await response.json()
             const sentenceTime = Date.now() - sentenceStartTime
-            console.log(`�� [STREAMING] Sentence ${index + 2} generated in:`, sentenceTime + "ms")
+            console.log(`🎵 [STREAMING] Sentence ${index + 2} generated in:`, sentenceTime + "ms")
 
             return { audioUrl, index: index + 1 }
           } catch (error) {
@@ -996,6 +996,20 @@ export default function Home() {
     setSpeakerStatus("speaking")
 
     try {
+      // Resume audio context before playing (mobile audio fix)
+      if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
+        const AudioContextClass = AudioContext || webkitAudioContext
+        if (window.audioContext) {
+          if (window.audioContext.state === "suspended") {
+            await window.audioContext.resume()
+            console.log("🔊 [MOBILE AUDIO] Resumed audio context for debate")
+          }
+        } else {
+          window.audioContext = new AudioContextClass()
+          console.log("🔊 [MOBILE AUDIO] Created new audio context for debate")
+        }
+      }
+
       const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
       const currentVoiceIds = voiceIdsRef.current // Use ref for voice IDs
       const voice = currentVoiceIds[voiceKey] || "echo"
