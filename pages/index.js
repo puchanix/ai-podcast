@@ -57,14 +57,15 @@ export default function Home() {
   const customTopicAudioChunksRef = useRef([])
   const customTopicStreamRef = useRef(null)
 
-  // ADD TOPIC REF - This is the key fix!
+  // Debate refs
   const debateTopicRef = useRef("")
-
-  // ADD VOICE IDS REF - Fix for voice persistence!
   const voiceIdsRef = useRef({})
-
-  // ADD SELECTED CHARACTERS REF - Fix for character persistence!
   const selectedCharactersRef = useRef([])
+
+  // New refs for streaming debate
+  const debateQueueRef = useRef([])
+  const currentDebateIndexRef = useRef(0)
+  const isGeneratingNextRef = useRef(false)
 
   // Thinking messages for dynamic display
   const thinkingMessages = [
@@ -778,6 +779,337 @@ export default function Home() {
     }
   }
 
+  // NEW: Streaming debate function - similar to generateStreamingAudioResponse but for debate turns
+  const playDebateWithStreaming = async (characters, topic) => {
+    try {
+      console.log("🎯 [DEBATE STREAMING] Starting streaming debate...")
+      console.log("🎯 [DEBATE STREAMING] Characters:", characters)
+      console.log("🎯 [DEBATE STREAMING] Topic:", topic)
+
+      // Initialize debate queue and state
+      debateQueueRef.current = []
+      currentDebateIndexRef.current = 0
+      isGeneratingNextRef.current = false
+
+      // Generate first speaker's opening statement immediately
+      console.log("🎯 [DEBATE STREAMING] Generating first opening statement...")
+      setCurrentSpeaker(characters[0])
+      setSpeakerStatus("thinking")
+
+      const firstOpeningData = await generateDebateResponse(characters[0], characters[1], topic, [], 0, true)
+
+      // Add to messages and queue
+      const firstMessage = {
+        character: characters[0],
+        content: firstOpeningData.text,
+        timestamp: Date.now(),
+      }
+
+      setDebateMessages([firstMessage])
+      debateQueueRef.current.push({
+        message: firstMessage,
+        audioUrl: firstOpeningData.audioUrl,
+        index: 0,
+      })
+
+      // Start playing first message immediately
+      console.log("🎯 [DEBATE STREAMING] Starting first speaker audio...")
+      playDebateAudioFromQueue(0, characters, topic)
+
+      // While first speaker is talking, generate second speaker's opening
+      console.log("🎯 [DEBATE STREAMING] Generating second opening in background...")
+      generateNextDebateResponse(characters, topic, [firstMessage], 1)
+    } catch (error) {
+      console.error("🎯 [DEBATE STREAMING] Error starting streaming debate:", error)
+      setAudioError(`Failed to start debate: ${error.message}`)
+      setIsDebating(false)
+      setSpeakerStatus(null)
+      setCurrentSpeaker(null)
+    }
+  }
+
+  // Generate a single debate response (text + audio)
+  const generateDebateResponse = async (
+    character,
+    opponent,
+    topic,
+    currentMessages,
+    messageCount,
+    isOpening = false,
+  ) => {
+    console.log(`🎯 [DEBATE GEN] Generating response for ${character}`)
+
+    try {
+      let textResponse
+
+      if (isOpening) {
+        // Generate opening statement
+        textResponse = await fetch("/api/start-debate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            character1: character,
+            character2: opponent,
+            topic: topic,
+          }),
+        })
+
+        if (!textResponse.ok) {
+          throw new Error(`Failed to generate opening: ${textResponse.status}`)
+        }
+
+        const data = await textResponse.json()
+        const responseText = character === selectedCharactersRef.current[0] ? data.opening1 : data.opening2
+
+        // Generate audio for this text
+        const audioUrl = await generateDebateAudio(responseText, character)
+
+        return { text: responseText, audioUrl }
+      } else {
+        // Generate continuation response
+        textResponse = await fetch("/api/auto-continue", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            character1: selectedCharactersRef.current[0],
+            character2: selectedCharactersRef.current[1],
+            currentMessages: currentMessages,
+            topic: debateTopicRef.current,
+          }),
+        })
+
+        if (!textResponse.ok) {
+          throw new Error(`Failed to continue debate: ${textResponse.status}`)
+        }
+
+        const data = await textResponse.json()
+        const responseText = character === selectedCharactersRef.current[0] ? data.response1 : data.response2
+
+        // Generate audio for this text
+        const audioUrl = await generateDebateAudio(responseText, character)
+
+        return { text: responseText, audioUrl }
+      }
+    } catch (error) {
+      console.error(`🎯 [DEBATE GEN] Error generating response for ${character}:`, error)
+      throw error
+    }
+  }
+
+  // Generate audio for debate text
+  const generateDebateAudio = async (text, character) => {
+    const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
+    const currentVoiceIds = voiceIdsRef.current
+    const voice = currentVoiceIds[voiceKey] || "echo"
+
+    const response = await fetch("/api/speak", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, voice }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Audio generation failed for ${character}`)
+    }
+
+    const { audioUrl } = await response.json()
+    return audioUrl
+  }
+
+  // Play audio from the debate queue
+  const playDebateAudioFromQueue = (index, characters, topic) => {
+    const queueItem = debateQueueRef.current[index]
+
+    if (!queueItem) {
+      console.log("🎯 [DEBATE QUEUE] No audio ready at index", index, "- waiting...")
+      // Wait for audio to be ready
+      setTimeout(() => playDebateAudioFromQueue(index, characters, topic), 100)
+      return
+    }
+
+    console.log(`🎯 [DEBATE QUEUE] Playing audio ${index + 1} for ${queueItem.message.character}`)
+
+    setCurrentSpeaker(queueItem.message.character)
+    setSpeakerStatus("speaking")
+
+    const audio = new Audio(queueItem.audioUrl)
+    currentAudioRef.current = audio
+
+    audio.onended = () => {
+      console.log(`🎯 [DEBATE QUEUE] Audio ended for ${queueItem.message.character}`)
+      setSpeakerStatus("waiting")
+
+      // Move to next audio
+      const nextIndex = index + 1
+      currentDebateIndexRef.current = nextIndex
+
+      // Check if we have more audio to play
+      if (nextIndex < debateQueueRef.current.length) {
+        // Play next audio immediately
+        playDebateAudioFromQueue(nextIndex, characters, topic)
+      } else {
+        // Check if we need to generate more rounds
+        const currentMessages = debateMessagesRef.current
+        if (currentMessages.length < 8) {
+          // Generate next round
+          console.log("🎯 [DEBATE QUEUE] Generating next round...")
+          generateNextRound(characters, topic, currentMessages)
+        } else {
+          // End debate
+          console.log("🎯 [DEBATE QUEUE] Debate completed")
+          endDebate()
+        }
+      }
+    }
+
+    audio.onerror = (e) => {
+      console.error(`🎯 [DEBATE QUEUE] Audio error for ${queueItem.message.character}:`, e)
+      setAudioError(`Audio playback failed for ${queueItem.message.character}`)
+
+      // Try to continue to next audio
+      const nextIndex = index + 1
+      if (nextIndex < debateQueueRef.current.length) {
+        setTimeout(() => playDebateAudioFromQueue(nextIndex, characters, topic), 1000)
+      }
+    }
+
+    // Play the audio
+    audio.play().catch((error) => {
+      console.error(`🎯 [DEBATE QUEUE] Failed to play audio for ${queueItem.message.character}:`, error)
+      setAudioError(`Failed to play audio: ${error.message}`)
+    })
+  }
+
+  // Generate next debate response in background
+  const generateNextDebateResponse = async (characters, topic, currentMessages, nextIndex) => {
+    if (isGeneratingNextRef.current) {
+      console.log("🎯 [DEBATE NEXT] Already generating next response, skipping...")
+      return
+    }
+
+    isGeneratingNextRef.current = true
+
+    try {
+      const nextCharacter = characters[nextIndex % 2]
+      const opponent = characters[(nextIndex + 1) % 2]
+
+      console.log(`🎯 [DEBATE NEXT] Generating next response for ${nextCharacter}`)
+
+      let responseData
+      if (currentMessages.length < 2) {
+        // Still in opening statements
+        responseData = await generateDebateResponse(
+          nextCharacter,
+          opponent,
+          topic,
+          currentMessages,
+          currentMessages.length,
+          true,
+        )
+      } else {
+        // Generate continuation
+        responseData = await generateDebateResponse(
+          nextCharacter,
+          opponent,
+          topic,
+          currentMessages,
+          currentMessages.length,
+          false,
+        )
+      }
+
+      const newMessage = {
+        character: nextCharacter,
+        content: responseData.text,
+        timestamp: Date.now(),
+      }
+
+      // Add to messages state
+      setDebateMessages((prev) => [...prev, newMessage])
+
+      // Add to queue
+      debateQueueRef.current.push({
+        message: newMessage,
+        audioUrl: responseData.audioUrl,
+        index: nextIndex,
+      })
+
+      console.log(`🎯 [DEBATE NEXT] Added response for ${nextCharacter} to queue at index ${nextIndex}`)
+    } catch (error) {
+      console.error("🎯 [DEBATE NEXT] Error generating next response:", error)
+    } finally {
+      isGeneratingNextRef.current = false
+    }
+  }
+
+  // Generate next round of debate
+  const generateNextRound = async (characters, topic, currentMessages) => {
+    try {
+      console.log("🎯 [DEBATE ROUND] Generating next round...")
+      setDebateRound((prev) => prev + 1)
+
+      // Generate both responses for the next round
+      const response = await fetch("/api/auto-continue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          character1: characters[0],
+          character2: characters[1],
+          currentMessages: currentMessages,
+          topic: debateTopicRef.current,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to continue debate: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      // Generate audio for both responses in parallel
+      const [audio1, audio2] = await Promise.all([
+        generateDebateAudio(data.response1, characters[0]),
+        generateDebateAudio(data.response2, characters[1]),
+      ])
+
+      const newMessages = [
+        {
+          character: characters[0],
+          content: data.response1,
+          timestamp: Date.now(),
+        },
+        {
+          character: characters[1],
+          content: data.response2,
+          timestamp: Date.now() + 100,
+        },
+      ]
+
+      // Add to messages state
+      setDebateMessages((prev) => [...prev, ...newMessages])
+
+      // Add to queue
+      const currentQueueLength = debateQueueRef.current.length
+      debateQueueRef.current.push(
+        {
+          message: newMessages[0],
+          audioUrl: audio1,
+          index: currentQueueLength,
+        },
+        {
+          message: newMessages[1],
+          audioUrl: audio2,
+          index: currentQueueLength + 1,
+        },
+      )
+
+      console.log("🎯 [DEBATE ROUND] Next round added to queue")
+    } catch (error) {
+      console.error("🎯 [DEBATE ROUND] Error generating next round:", error)
+      setAudioError(`Failed to continue debate: ${error.message}`)
+    }
+  }
+
   // Start debate function with explicit characters
   const startDebateWithCharacters = async (topic, characters) => {
     console.log("🎯 [START DEBATE WITH CHARS] Function called with topic:", topic)
@@ -797,73 +1129,23 @@ export default function Home() {
     setIsDebating(true)
     setDebateTopic(topicString)
     debateTopicRef.current = topicString
-    setCurrentSpeaker(characters[0])
-    setSpeakerStatus("thinking")
     setDebateMessages([])
     setDebateRound(0)
-    console.log("🎯 [START DEBATE WITH CHARS] Debate state set, making API call...")
+    setCurrentSpeaker(null)
+    setSpeakerStatus(null)
+    setIsDebatePaused(false)
 
-    try {
-      const response = await fetch("/api/start-debate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          character1: characters[0],
-          character2: characters[1],
-          topic: topicString,
-        }),
-      })
-
-      console.log("🎯 [START DEBATE WITH CHARS] API response status:", response.status)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("🎯 [START DEBATE WITH CHARS] API error:", errorText)
-        throw new Error(`Failed to start debate: ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("🎯 [START DEBATE WITH CHARS] API response data:", data)
-
-      const messages = [
-        {
-          character: characters[0],
-          content: data.opening1,
-          timestamp: Date.now(),
-        },
-        {
-          character: characters[1],
-          content: data.opening2,
-          timestamp: Date.now() + 100,
-        },
-      ]
-
-      console.log("🎯 [START DEBATE WITH CHARS] Messages created:", messages)
-      setDebateMessages(messages)
-
-      // Start playing first message
-      console.log("🎯 [START DEBATE WITH CHARS] Starting audio playback...")
-      playDebateAudio(messages[0], messages, 0)
-    } catch (error) {
-      console.error("🎯 [START DEBATE WITH CHARS] Error starting debate:", error)
-      setAudioError(`Failed to start debate: ${error.message}`)
-      setIsDebating(false)
-      setSpeakerStatus(null)
-      setCurrentSpeaker(null)
-    }
+    // Start streaming debate
+    await playDebateWithStreaming(characters, topicString)
   }
 
   // Start debate function
   const startDebate = async (topic) => {
     console.log("🎯 [START DEBATE] Function called with topic:", topic)
     console.log("🎯 [START DEBATE] Selected characters:", selectedCharacters)
-    console.log("🎯 [START DEBATE] Selected characters length:", selectedCharacters?.length)
-    console.log("🎯 [START DEBATE] Current mode:", mode)
-    console.log("🎯 [START DEBATE] Show topic selector:", showTopicSelector)
 
     if (!selectedCharacters || selectedCharacters.length !== 2) {
       console.error("🎯 [START DEBATE] Invalid characters - returning early")
-      console.error("🎯 [START DEBATE] Characters state:", selectedCharacters)
       setAudioError("Please select exactly two characters to start a debate")
       return
     }
@@ -874,308 +1156,22 @@ export default function Home() {
 
     console.log("🎯 [START DEBATE] Setting debate state...")
     setIsDebating(true)
-    setDebateTopic(topicString) // Set state
-    debateTopicRef.current = topicString // Set ref immediately - THIS IS THE KEY FIX!
-    setCurrentSpeaker(selectedCharacters[0])
-    setSpeakerStatus("thinking")
+    setDebateTopic(topicString)
+    debateTopicRef.current = topicString
     setDebateMessages([])
     setDebateRound(0)
-    console.log("🎯 [START DEBATE] Debate state set, making API call...")
+    setCurrentSpeaker(null)
+    setSpeakerStatus(null)
+    setIsDebatePaused(false)
 
-    try {
-      const response = await fetch("/api/start-debate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          character1: selectedCharacters[0],
-          character2: selectedCharacters[1],
-          topic: topicString, // Use the extracted string
-        }),
-      })
-
-      console.log("🎯 [START DEBATE] API response status:", response.status)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("🎯 [START DEBATE] API error:", errorText)
-        throw new Error(`Failed to start debate: ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("🎯 [START DEBATE] API response data:", data)
-
-      const messages = [
-        {
-          character: selectedCharacters[0],
-          content: data.opening1,
-          timestamp: Date.now(),
-        },
-        {
-          character: selectedCharacters[1],
-          content: data.opening2,
-          timestamp: Date.now() + 100,
-        },
-      ]
-
-      console.log("🎯 [START DEBATE] Messages created:", messages)
-      setDebateMessages(messages)
-
-      // Start playing first message
-      console.log("🎯 [START DEBATE] Starting audio playback...")
-      playDebateAudio(messages[0], messages, 0)
-    } catch (error) {
-      console.error("🎯 [START DEBATE] Error starting debate:", error)
-      setAudioError(`Failed to start debate: ${error.message}`)
-      setIsDebating(false)
-      setSpeakerStatus(null)
-      setCurrentSpeaker(null)
-    }
-  }
-
-  // Continue debate with next round
-  const continueDebate = async () => {
-    // Use the ref instead of state - THIS IS THE KEY FIX!
-    const currentTopic = debateTopicRef.current
-
-    // Validate we have a topic
-    if (!currentTopic || currentTopic.trim() === "") {
-      setAudioError("Debate topic is missing. Cannot continue.")
-      return
-    }
-
-    try {
-      setSpeakerStatus("thinking")
-      setCurrentSpeaker(selectedCharacters[0]) // Reset to first character for new round
-
-      const requestBody = {
-        character1: selectedCharacters[0],
-        character2: selectedCharacters[1],
-        currentMessages: debateMessagesRef.current,
-        topic: currentTopic.trim(), // Use topic from ref
-      }
-
-      const response = await fetch("/api/auto-continue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Failed to continue debate: ${response.status} - ${errorText}`)
-      }
-
-      const data = await response.json()
-
-      const newMessages = [
-        {
-          character: selectedCharacters[0],
-          content: data.response1,
-          timestamp: Date.now(),
-        },
-        {
-          character: selectedCharacters[1],
-          content: data.response2,
-          timestamp: Date.now() + 100,
-        },
-      ]
-
-      const allMessages = [...debateMessagesRef.current, ...newMessages]
-      setDebateMessages(allMessages)
-      setDebateRound((prev) => prev + 1)
-
-      // Start playing the new messages
-      playDebateAudio(newMessages[0], allMessages, debateMessagesRef.current.length)
-    } catch (error) {
-      console.error("Error continuing debate:", error)
-      setAudioError(`Failed to continue debate: ${error.message}`)
-    }
-  }
-
-  // Play debate audio with retry logic and comprehensive debugging
-  const playDebateAudio = async (message, allMessages, currentIndex, retryCount = 0) => {
-    const { character, content } = message
-
-    setCurrentSpeaker(character)
-    setSpeakerStatus("speaking")
-
-    try {
-      // Resume audio context before playing (mobile audio fix)
-      if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
-        const AudioContextClass = AudioContext || window.webkitAudioContext
-
-        // Always ensure we have an audio context
-        if (!window.audioContext) {
-          window.audioContext = new AudioContextClass()
-          console.log("🔊 [MOBILE AUDIO] Created new audio context for debate")
-        }
-
-        // Resume if suspended
-        if (window.audioContext.state === "suspended") {
-          try {
-            await window.audioContext.resume()
-            console.log("🔊 [MOBILE AUDIO] Resumed audio context for debate")
-          } catch (error) {
-            console.error("🔊 [MOBILE AUDIO] Failed to resume audio context:", error)
-            // Try to create a new one
-            window.audioContext = new AudioContextClass()
-            console.log("🔊 [MOBILE AUDIO] Created fresh audio context after resume failure")
-          }
-        }
-
-        console.log("🔊 [MOBILE AUDIO] Audio context state:", window.audioContext.state)
-      }
-
-      const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
-      const currentVoiceIds = voiceIdsRef.current // Use ref for voice IDs
-      const voice = currentVoiceIds[voiceKey] || "echo"
-
-      // Add timeout to the fetch request
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
-
-      const response = await fetch("/api/speak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: content, voice }),
-        signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        throw new Error(`Audio API returned ${response.status}`)
-      }
-
-      const data = await response.json()
-      const audio = new Audio(data.audioUrl)
-      currentAudioRef.current = audio
-
-      // Add comprehensive debugging before play attempt
-      console.log(`🔍 [DEBUG] About to play audio for ${character}:`, {
-        audioContextState: window.audioContext?.state || "no context",
-        isUserActivation: navigator.userActivation?.isActive || "not supported",
-        hasUserGesture: document.hasStoredUserActivation || "not supported",
-        audioElement: audio ? "created" : "null",
-        currentTime: Date.now(),
-        fromUserGesture: document.hasStoredUserActivation || navigator.userActivation?.isActive || "unknown",
-        isMobile: isMobile,
-        currentIndex: currentIndex,
-        retryCount: retryCount,
-      })
-
-      // Define event handlers on currentAudioRef.current for consistency
-      currentAudioRef.current.onended = () => {
-        console.log(`🔍 [DEBUG] Audio ended for ${character}:`, {
-          nextIndex: currentIndex + 1,
-          totalMessages: allMessages.length,
-          audioContextState: window.audioContext?.state || "no context",
-          isUserActivation: navigator.userActivation?.isActive || "not supported",
-          hasUserGesture: document.hasStoredUserActivation || "not supported",
-          currentTime: Date.now(),
-          isMobile: isMobile,
-        })
-
-        setSpeakerStatus("waiting")
-
-        // Auto-continue to next message
-        const nextIndex = currentIndex + 1
-        if (nextIndex < allMessages.length) {
-          // CRITICAL FIX: Chain audio playback without setTimeout on iOS
-          if (isMobile) {
-            // Play next audio immediately to maintain user gesture chain
-            playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-          } else {
-            // On desktop, we can still use setTimeout for better pacing
-            setTimeout(() => {
-              playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-            }, 1000)
-          }
-        } else {
-          // Check if we should continue with more rounds
-          const currentRound = debateRoundRef.current
-
-          // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
-          if (allMessages.length < 8) {
-            if (isMobile) {
-              // On mobile, start next round immediately to maintain user gesture chain
-              continueDebate()
-            } else {
-              setTimeout(() => {
-                continueDebate()
-              }, 2000)
-            }
-          } else {
-            // Debate finished
-            if (isMobile) {
-              endDebate()
-            } else {
-              setTimeout(() => {
-                endDebate()
-              }, 3000)
-            }
-          }
-        }
-      }
-
-      currentAudioRef.current.onerror = (e) => {
-        console.log(`🔍 [DEBUG] Audio error for ${character}:`, {
-          error: e,
-          errorType: e.type,
-          audioContextState: window.audioContext?.state || "no context",
-          isUserActivation: navigator.userActivation?.isActive || "not supported",
-          currentTime: Date.now(),
-        })
-        throw new Error(`Audio playback failed: ${e.message}`)
-      }
-
-      await currentAudioRef.current.play()
-    } catch (error) {
-      console.error(`Error playing audio for ${character}:`, error)
-
-      // Add detailed error logging
-      console.log(`🔍 [DEBUG] Failed audio details:`, {
-        errorName: error.name,
-        errorMessage: error.message,
-        audioContextState: window.audioContext?.state || "no context",
-        isUserActivation: navigator.userActivation?.isActive || "not supported",
-        hasUserGesture: document.hasStoredUserActivation || "not supported",
-        currentTime: Date.now(),
-        isMobile: isMobile,
-        currentIndex: currentIndex,
-        retryCount: retryCount,
-      })
-
-      // Retry logic for network timeouts
-      if ((error.name === "AbortError" || error.message.includes("Failed to fetch")) && retryCount < 2) {
-        setSpeakerStatus("thinking")
-        setTimeout(() => {
-          playDebateAudio(message, allMessages, currentIndex, retryCount + 1)
-        }, 2000)
-        return
-      }
-
-      setAudioError(`Audio failed for ${character}: ${error.message}`)
-      setSpeakerStatus(null)
-
-      // Continue to next speaker even if current one fails
-      const nextIndex = currentIndex + 1
-      if (nextIndex < allMessages.length) {
-        setTimeout(() => {
-          playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-        }, 1000)
-      } else {
-        setTimeout(() => {
-          endDebate()
-        }, 1000)
-      }
-    }
+    // Start streaming debate
+    await playDebateWithStreaming(selectedCharacters, topicString)
   }
 
   const endDebate = () => {
     setIsDebating(false)
     setDebateTopic("")
-    debateTopicRef.current = "" // Clear topic ref too
+    debateTopicRef.current = ""
     setSelectedCharacters([])
     setShowTopicSelector(false)
     setTopics([])
@@ -1184,6 +1180,11 @@ export default function Home() {
     setSpeakerStatus(null)
     setDebateRound(0)
     setIsDebatePaused(false)
+
+    // Clear debate queue
+    debateQueueRef.current = []
+    currentDebateIndexRef.current = 0
+    isGeneratingNextRef.current = false
 
     if (currentAudioRef.current) {
       currentAudioRef.current.pause()
@@ -1203,7 +1204,7 @@ export default function Home() {
     setThinkingMessage("")
     setIsDebating(false)
     setDebateTopic("")
-    debateTopicRef.current = "" // Clear topic ref too
+    debateTopicRef.current = ""
     setShowTopicSelector(false)
     setTopics([])
     setDebateMessages([])
@@ -1214,7 +1215,11 @@ export default function Home() {
     setIsDebatePaused(false)
     setIsRecordingCustomTopic(false)
     setIsProcessingCustomTopic(false)
-    // DON'T reset voiceIds - keep them loaded!
+
+    // Clear debate queue
+    debateQueueRef.current = []
+    currentDebateIndexRef.current = 0
+    isGeneratingNextRef.current = false
   }
 
   const handleRecordingButtonClick = useCallback(
