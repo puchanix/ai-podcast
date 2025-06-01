@@ -1000,19 +1000,31 @@ export default function Home() {
     setSpeakerStatus("speaking")
 
     try {
-      // Resume audio context before playing (mobile audio fix)
-      if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
-        const AudioContextClass = AudioContext || window.webkitAudioContext
-        if (window.audioContext) {
-          if (window.audioContext.state === "suspended") {
-            await window.audioContext.resume()
-            console.log("🔊 [MOBILE AUDIO] Resumed audio context for debate")
-          }
-        } else {
-          window.audioContext = new AudioContextClass()
-          console.log("🔊 [MOBILE AUDIO] Created new audio context for debate")
-        }
-      }
+  // Resume audio context before playing (mobile audio fix)
+if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
+  const AudioContextClass = AudioContext || window.webkitAudioContext
+  
+  // Always ensure we have an audio context
+  if (!window.audioContext) {
+    window.audioContext = new AudioContextClass()
+    console.log("🔊 [MOBILE AUDIO] Created new audio context for debate")
+  }
+  
+  // Resume if suspended
+  if (window.audioContext.state === "suspended") {
+    try {
+      await window.audioContext.resume()
+      console.log("🔊 [MOBILE AUDIO] Resumed audio context for debate")
+    } catch (error) {
+      console.error("🔊 [MOBILE AUDIO] Failed to resume audio context:", error)
+      // Try to create a new one
+      window.audioContext = new AudioContextClass()
+      console.log("🔊 [MOBILE AUDIO] Created fresh audio context after resume failure")
+    }
+  }
+  
+  console.log("🔊 [MOBILE AUDIO] Audio context state:", window.audioContext.state)
+}
 
       const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
       const currentVoiceIds = voiceIdsRef.current // Use ref for voice IDs

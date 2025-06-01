@@ -19,15 +19,21 @@ export function useMobileAudioUnlock() {
       // Try to play the silent audio
       await silentAudio.play()
 
-      // Also create and resume AudioContext if available
-      if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
-        const AudioContextClass = AudioContext || webkitAudioContext
-        const audioContext = new AudioContextClass()
-        if (audioContext.state === "suspended") {
-          await audioContext.resume()
-        }
-        audioContext.close()
-      }
+// Also create and resume AudioContext if available
+if (typeof AudioContext !== "undefined" || typeof webkitAudioContext !== "undefined") {
+  const AudioContextClass = AudioContext || webkitAudioContext
+  
+  // Create global audio context that persists
+  if (!window.audioContext) {
+    window.audioContext = new AudioContextClass()
+  }
+  
+  if (window.audioContext.state === "suspended") {
+    await window.audioContext.resume()
+  }
+  
+  console.log("🔊 [MOBILE AUDIO] Global audio context state:", window.audioContext.state)
+}
 
       setAudioUnlocked(true)
       console.log("🔊 [MOBILE AUDIO] Audio successfully unlocked!")
