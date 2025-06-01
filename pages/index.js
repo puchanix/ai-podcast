@@ -1038,15 +1038,19 @@ export default function Home() {
       const audio = new Audio(data.audioUrl)
       currentAudioRef.current = audio
 
-      audio.onended = () => {
-        setSpeakerStatus("waiting")
+    audio.onended = () => {
+  setSpeakerStatus("waiting")
+  console.log("🎵 [DEBATE AUDIO] Audio ended, moving to next speaker")
+  console.log("🎵 [DEBATE AUDIO] Current index:", currentIndex, "Next index:", nextIndex)
+  console.log("🎵 [DEBATE AUDIO] Total messages:", allMessages.length)
 
-        // Auto-continue to next message
-        const nextIndex = currentIndex + 1
-        if (nextIndex < allMessages.length) {
-          setTimeout(() => {
-            playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-          }, 500) // Reduced from 1000
+  // Auto-continue to next message
+  const nextIndex = currentIndex + 1
+  if (nextIndex < allMessages.length) {
+    console.log("🎵 [DEBATE AUDIO] Starting next speaker in 500ms")
+    setTimeout(() => {
+      playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
+    }, 500) // Reduced from 1000
         } else {
           // Check if we should continue with more rounds
           const currentRound = debateRoundRef.current
@@ -1363,117 +1367,122 @@ export default function Home() {
           {/* Character Grid - SINGLE UNIFIED INTERFACE */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-12">
             {Object.entries(personas).map(([key, persona]) => {
-              const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
-              const shouldGrayOut = shouldGrayOutCharacter(key)
-              const isCurrentDebateSpeaker = currentSpeaker === key
+  const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
+  const shouldGrayOut = shouldGrayOutCharacter(key)
+  const isCurrentDebateSpeaker = currentSpeaker === key
 
-              return (
-                <div
-  key={key}
-  onClick={() => handleCharacterSelect(key)}
-  className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
-    isSelected ? "ring-4 ring-yellow-400" : ""
-  } ${shouldGrayOut ? "opacity-30" : ""} ${isCurrentDebateSpeaker ? "ring-4 ring-green-400" : ""}`}
->
-                  <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl">
-                    {/* Image Section - Fixed Height */}
-                    <div className="h-48 relative">
-                      <img
-                        src={persona.image || "/placeholder.svg"}
-                        alt={persona.name}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
+  // Hide non-participating characters on mobile when in debate mode and 2 characters selected
+  const shouldHideOnMobile = isMobile && mode === "debate" && selectedCharacters.length === 2 && !selectedCharacters.includes(key)
+  
+  if (shouldHideOnMobile) return null
 
-                      {/* Speaking animation overlay */}
-                      {isCurrentDebateSpeaker && speakerStatus === "speaking" && (
-                        <div className="absolute inset-0 bg-green-500 bg-opacity-20 flex items-center justify-center">
-                          <div className="w-8 h-8 border-4 border-green-400 border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                      )}
-                    </div>
+  return (
+    <div
+      key={key}
+      onClick={() => handleCharacterSelect(key)}
+      className={`relative group cursor-pointer transform transition-all duration-300 hover:scale-105 ${
+        isSelected ? "ring-4 ring-yellow-400" : ""
+      } ${shouldGrayOut ? "opacity-30" : ""} ${isCurrentDebateSpeaker ? "ring-4 ring-green-400" : ""}`}
+    >
+      <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl">
+        {/* Image Section - Fixed Height */}
+        <div className="h-48 relative">
+          <img
+            src={persona.image || "/placeholder.svg"}
+            alt={persona.name}
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+          />
 
-                    {/* Content Section - Fixed Layout */}
-                    <div className="p-3 min-h-[120px] flex flex-col">
-                      {/* Character Name - Always at top */}
-                      <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
+          {/* Speaking animation overlay */}
+          {isCurrentDebateSpeaker && speakerStatus === "speaking" && (
+            <div className="absolute inset-0 bg-green-500 bg-opacity-20 flex items-center justify-center">
+              <div className="w-8 h-8 border-4 border-green-400 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+        </div>
 
-                      {/* Pause/Resume/Stop buttons when playing - MOVED HERE */}
-                      {mode === "question" && selectedPersona === key && isPlaying && (
-                        <div className="flex space-x-1 mb-2">
-                          {!isPaused ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                pauseAudio()
-                              }}
-                              className="flex-1 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
-                              title="Pause"
-                            >
-                              ⏸ Pause
-                            </button>
-                          ) : (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                resumeAudio()
-                              }}
-                              className="flex-1 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                              title="Resume"
-                            >
-                              ▶ Resume
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              stopAudio()
-                            }}
-                            className="flex-1 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                            title="Stop"
-                          >
-                            ⏹ Stop
-                          </button>
-                        </div>
-                      )}
+        {/* Content Section - Fixed Layout */}
+        <div className="p-3 min-h-[120px] flex flex-col">
+          {/* Character Name - Always at top */}
+          <h3 className="text-sm font-bold text-yellow-400 mb-2 truncate">{persona.name}</h3>
 
-                      {/* Button Section - Always at bottom */}
-                      <div className="mt-auto flex space-x-1">
-                        {mode === "question" ? (
-                          <button
-                            onClick={(e) => {
-  e.stopPropagation();
-  handleRecordingButtonClick(key, e);
-}}
-                            disabled={shouldGrayOut}
-                            className={`flex-1 py-2 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
-                              shouldGrayOut ? "bg-gray-600 text-gray-400 cursor-not-allowed" : ""
-                            }`}
-                          >
-                            <SmallMicIcon isActive={selectedPersona === key && isListening} />
-                            <span className="truncate">{getStatusText(key)}</span>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (!isDebating) {
-                                handleCharacterSelect(key)
-                              }
-                            }}
-                            className={`w-full py-2 px-2 rounded text-xs font-semibold transition-all duration-300 ${getButtonColor(key)}`}
-                            disabled={
-                              isDebating || (selectedCharacters.length >= 2 && !selectedCharacters.includes(key))
-                            }
-                          >
-                            <span className="truncate">{getStatusText(key)}</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+          {/* Pause/Resume/Stop buttons when playing - MOVED HERE */}
+          {mode === "question" && selectedPersona === key && isPlaying && (
+            <div className="flex space-x-1 mb-2">
+              {!isPaused ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    pauseAudio()
+                  }}
+                  className="flex-1 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700"
+                  title="Pause"
+                >
+                  ⏸ Pause
+                </button>
+              ) : (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    resumeAudio()
+                  }}
+                  className="flex-1 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                  title="Resume"
+                >
+                  ▶ Resume
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  stopAudio()
+                }}
+                className="flex-1 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                title="Stop"
+              >
+                ⏹ Stop
+              </button>
+            </div>
+          )}
+
+          {/* Button Section - Always at bottom */}
+          <div className="mt-auto flex space-x-1">
+            {mode === "question" ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRecordingButtonClick(key, e);
+                }}
+                disabled={shouldGrayOut}
+                className={`flex-1 py-2 px-2 rounded text-xs font-semibold transition-all duration-300 flex items-center justify-center space-x-1 ${getButtonColor(key)} ${
+                  shouldGrayOut ? "bg-gray-600 text-gray-400 cursor-not-allowed" : ""
+                }`}
+              >
+                <SmallMicIcon isActive={selectedPersona === key && isListening} />
+                <span className="truncate">{getStatusText(key)}</span>
+              </button>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!isDebating) {
+                    handleCharacterSelect(key)
+                  }
+                }}
+                className={`w-full py-2 px-2 rounded text-xs font-semibold transition-all duration-300 ${getButtonColor(key)}`}
+                disabled={
+                  isDebating || (selectedCharacters.length >= 2 && !selectedCharacters.includes(key))
+                }
+              >
+                <span className="truncate">{getStatusText(key)}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+})}
           </div>
 
 {/* Debate Topic Display - MOVED BELOW CHARACTERS */}
