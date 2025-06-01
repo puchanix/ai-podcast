@@ -1036,44 +1036,89 @@ export default function Home() {
 
       const data = await response.json()
       const audio = new Audio(data.audioUrl)
-      currentAudioRef.current = audio
+currentAudioRef.current = audio
 
-    audio.onended = () => {
+// Calculate approximate audio duration (rough estimate based on content length)
+const estimatedDuration = Math.max(2000, content.length * 80) // ~80ms per character, minimum 2 seconds
+console.log(`🎵 [DEBATE AUDIO] Estimated duration for ${character}: ${estimatedDuration}ms (${content.length} chars)`)
+
+// Set up multiple ways to detect audio completion
+let audioCompleted = false
+const completeAudio = () => {
+  if (audioCompleted) return // Prevent multiple executions
+  audioCompleted = true
+  
+  console.log(`🎵 [DEBATE AUDIO] Audio completed for ${character}`)
   setSpeakerStatus("waiting")
-  console.log("🎵 [DEBATE AUDIO] Audio ended, moving to next speaker")
-  console.log("🎵 [DEBATE AUDIO] Current index:", currentIndex, "Next index:", nextIndex)
-  console.log("🎵 [DEBATE AUDIO] Total messages:", allMessages.length)
-
+  
   // Auto-continue to next message
   const nextIndex = currentIndex + 1
+  console.log("🎵 [DEBATE AUDIO] Current index:", currentIndex, "Next index:", nextIndex)
+  console.log("🎵 [DEBATE AUDIO] Total messages:", allMessages.length)
+  
   if (nextIndex < allMessages.length) {
     console.log("🎵 [DEBATE AUDIO] Starting next speaker in 500ms")
     setTimeout(() => {
       playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-    }, 500) // Reduced from 1000
-        } else {
-          // Check if we should continue with more rounds
-          const currentRound = debateRoundRef.current
+    }, 500)
+  } else {
+    // Check if we should continue with more rounds
+    const currentRound = debateRoundRef.current
+    console.log("🎵 [DEBATE AUDIO] Current round:", currentRound)
+    
+    // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
+    if (allMessages.length < 8) {
+      console.log("🎵 [DEBATE AUDIO] Starting next debate round in 1000ms")
+      setTimeout(() => {
+        continueDebate()
+      }, 1000)
+    } else {
+      // Debate finished
+      console.log("🎵 [DEBATE AUDIO] Debate finished, ending in 1500ms")
+      setTimeout(() => {
+        endDebate()
+      }, 1500)
+    }
+  }
+}
 
-          // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
-          if (allMessages.length < 8) {
-            setTimeout(() => {
-              continueDebate()
-            }, 1000) // Reduced from 2000
-          } else {
-            // Debate finished
-            setTimeout(() => {
-              endDebate()
-            }, 1500) // Reduced from 3000
-          }
-        }
-      }
+// Method 1: Standard onended event
+audio.onended = completeAudio
 
-      audio.onerror = (e) => {
-        throw new Error(`Audio playback failed: ${e.message}`)
-      }
+// Method 2: Error handling
+audio.onerror = (e) => {
+  console.error(`🎵 [DEBATE AUDIO] Error playing audio for ${character}:`, e)
+  completeAudio() // Still try to continue
+}
 
-      await audio.play()
+// Method 3: Backup timer in case the event doesn't fire
+const backupTimer = setTimeout(() => {
+  console.log(`🎵 [DEBATE AUDIO] Backup timer triggered for ${character} after ${estimatedDuration}ms`)
+  completeAudio()
+}, estimatedDuration + 1000) // Add 1 second buffer
+
+// Method 4: Check periodically if audio has ended
+const checkInterval = setInterval(() => {
+  if (audio.ended || audio.paused || audio.currentTime >= audio.duration - 0.5) {
+    console.log(`🎵 [DEBATE AUDIO] Interval check detected audio completion for ${character}`)
+    clearInterval(checkInterval)
+    completeAudio()
+  }
+}, 500)
+
+// Clean up function to prevent memory leaks
+audio.addEventListener('ended', () => {
+  clearTimeout(backupTimer)
+  clearInterval(checkInterval)
+})
+
+try {
+  await audio.play()
+  console.log(`🎵 [DEBATE AUDIO] Started playing audio for ${character}`)
+} catch (error) {
+  console.error(`🎵 [DEBATE AUDIO] Failed to play audio for ${character}:`, error)
+  completeAudio() // Still try to continue
+}
     } catch (error) {
       console.error(`Error playing audio for ${character}:`, error)
 
