@@ -929,8 +929,8 @@ export default function Home() {
       console.log(`🎯 [SINGLE GEN] Generating response for ${character} at index ${targetIndex}`)
 
       let responseData
-      if (currentMessages.length < 2) {
-        // Still in opening statements
+      if (targetIndex < 2) {
+        // Still in opening statements (index 0 and 1)
         responseData = await generateDebateResponse(
           character,
           characters[(characters.indexOf(character) + 1) % 2],
@@ -1017,15 +1017,10 @@ export default function Home() {
       if (nextIndex < debateQueueRef.current.length) {
         // Next audio already exists, no need to generate
         console.log(`🎯 [DEBATE QUEUE] Next audio (${nextIndex}) already in queue`)
-      } else if (currentMessages.length % 2 === 1) {
-        // We have odd number of messages, need the second speaker of current round
-        const nextCharacter = characters[currentMessages.length % 2]
-        console.log(`🎯 [DEBATE QUEUE] Generating second speaker of current round: ${nextCharacter}`)
-        generateSingleDebateResponse(nextCharacter, characters, topic, currentMessages, nextIndex)
       } else {
-        // We have even number of messages, need first speaker of next round
-        const nextCharacter = characters[0] // Always start new round with first character
-        console.log(`🎯 [DEBATE QUEUE] Generating first speaker of next round: ${nextCharacter}`)
+        // Simple alternation: if current index is even, next speaker is characters[1], if odd, next speaker is characters[0]
+        const nextCharacter = characters[nextIndex % 2]
+        console.log(`🎯 [DEBATE QUEUE] Generating next speaker (index ${nextIndex}): ${nextCharacter}`)
         generateSingleDebateResponse(nextCharacter, characters, topic, currentMessages, nextIndex)
       }
     }
