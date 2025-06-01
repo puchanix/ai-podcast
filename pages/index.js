@@ -1057,23 +1057,39 @@ audio.onended = () => {
   // Auto-continue to next message
   const nextIndex = currentIndex + 1
   if (nextIndex < allMessages.length) {
-    setTimeout(() => {
+    // CRITICAL FIX: Chain audio playback without setTimeout on iOS
+    if (isMobile) {
+      // Play next audio immediately to maintain user gesture chain
       playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-    }, 1000) // Back to original timing
+    } else {
+      // On desktop, we can still use setTimeout for better pacing
+      setTimeout(() => {
+        playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
+      }, 1000)
+    }
   } else {
     // Check if we should continue with more rounds
     const currentRound = debateRoundRef.current
 
     // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
     if (allMessages.length < 8) {
-      setTimeout(() => {
+      if (isMobile) {
+        // On mobile, start next round immediately to maintain user gesture chain
         continueDebate()
-      }, 2000) // Back to original timing
+      } else {
+        setTimeout(() => {
+          continueDebate()
+        }, 2000)
+      }
     } else {
       // Debate finished
-      setTimeout(() => {
+      if (isMobile) {
         endDebate()
-      }, 3000) // Back to original timing
+      } else {
+        setTimeout(() => {
+          endDebate()
+        }, 3000)
+      }
     }
   }
 }
