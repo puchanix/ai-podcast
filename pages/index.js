@@ -1,5 +1,6 @@
 "use client"
 
+import MobileDebugMonitor from "../components/MobileDebugMonitor"
 import StickyDebateStatusBar from "../components/StickyDebateStatusBar"
 import useIsMobile from "../hooks/useIsMobile"
 import { useState, useEffect, useRef, useCallback } from "react"
@@ -1113,10 +1114,12 @@ audio.addEventListener('ended', () => {
 })
 
 try {
+  console.log(`🎵 [DEBATE AUDIO] About to play audio for ${character}`)
   await audio.play()
-  console.log(`🎵 [DEBATE AUDIO] Started playing audio for ${character}`)
+  console.log(`🎵 [DEBATE AUDIO] ✅ Successfully started playing audio for ${character}`)
+  console.log(`🎵 [DEBATE AUDIO] Audio duration: ${audio.duration}s, current time: ${audio.currentTime}s`)
 } catch (error) {
-  console.error(`🎵 [DEBATE AUDIO] Failed to play audio for ${character}:`, error)
+  console.error(`🎵 [DEBATE AUDIO] ❌ Failed to play audio for ${character}:`, error)
   completeAudio() // Still try to continue
 }
     } catch (error) {
@@ -1648,7 +1651,10 @@ try {
             </div>
           )}
         </div>
-      </div>
-    </Layout>
+    </div>
+    
+    {/* Mobile Debug Monitor */}
+    <MobileDebugMonitor isVisible={true} />
+  </Layout>
   )
 }
