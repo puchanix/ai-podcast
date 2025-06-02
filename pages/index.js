@@ -530,9 +530,16 @@ const [responsePersona, setResponsePersona] = useState("")
     const { content: responseText } = await textResponse.json()
 
     // Show "Play Response" button instead of auto-playing
-    setResponseText(responseText)
-    setResponsePersona(currentPersona)
-    setShowResponseReady(true)
+    if (isMobile) {
+  // Show "Play Response" button on mobile
+  setResponseText(responseText)
+  setResponsePersona(currentPersona)
+  setShowResponseReady(true)
+} else {
+  // Auto-play on desktop
+  await generateStreamingAudioResponse(responseText, currentPersona)
+  setIsPlaying(true)
+}
   } catch (error) {
     console.error("Error processing audio question:", error)
     setAudioError(`Error: ${error.message}`)
@@ -1114,10 +1121,10 @@ const playResponse = async () => {
 
       if (mode === "question") {
   if (selectedPersona === characterId) {
-    if (showResponseReady) {
-      // Play the response
-      playResponse()
-    } else if (isListening) {
+   if (showResponseReady && isMobile) {
+  // Play the response
+  playResponse()
+} else if (isListening) {
       stopListening()
     } else if (!isProcessing && !isPlaying) {
       await startListening()
@@ -1213,7 +1220,7 @@ const playResponse = async () => {
 if (selectedPersona !== characterId) return "Ask Question"
 if (isListening) return "Stop Recording"
 if (isProcessing) return thinkingMessage || "Processing..."
-if (showResponseReady) return "Play Response"
+if (showResponseReady && isMobile) return "Play Response"
 if (isPlaying) return "Speaking..."
 return "Ask Question"
   }
@@ -1234,7 +1241,7 @@ return "Ask Question"
     if (selectedPersona !== characterId) return "bg-gray-700 text-white hover:bg-gray-600"
 if (isListening) return "bg-red-500 text-white"
 if (isProcessing) return "bg-blue-500 text-white"
-if (showResponseReady) return "bg-green-500 text-white"
+if (showResponseReady && isMobile) return "bg-green-500 text-white"
 if (isPlaying) return "bg-green-500 text-white"
 return "bg-yellow-500 text-black"
   }
