@@ -1,6 +1,7 @@
 import fs from "fs"
 import path from "path"
 
+// This file runs only on the server side
 const FEEDBACK_FILE = path.join(process.cwd(), "data", "feedback.json")
 
 // Ensure data directory exists

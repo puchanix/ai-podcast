@@ -1,95 +1,108 @@
-// Simple file-based storage for feedback
-import fs from "fs"
-import path from "path"
+"use client"
 
-const FEEDBACK_FILE = path.join(process.cwd(), "data", "feedback.json")
+import { useState } from "react"
+import Layout from "../components/layout"
 
-// Ensure data directory exists
-function ensureDataDir() {
-  const dataDir = path.dirname(FEEDBACK_FILE)
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true })
-  }
-}
+export default function Feedback() {
+  const [submitted, setSubmitted] = useState(false)
+  const [text, setText] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-// Read feedback from file
-function readFeedback() {
-  ensureDataDir()
-  try {
-    if (fs.existsSync(FEEDBACK_FILE)) {
-      const data = fs.readFileSync(FEEDBACK_FILE, "utf8")
-      return JSON.parse(data)
-    }
-  } catch (error) {
-    console.error("Error reading feedback file:", error)
-  }
-  return []
-}
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setIsSubmitting(true)
 
-// Write feedback to file
-function writeFeedback(feedback) {
-  ensureDataDir()
-  try {
-    fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(feedback, null, 2))
-  } catch (error) {
-    console.error("Error writing feedback file:", error)
-    throw error
-  }
-}
-
-export default function handler(req, res) {
-  if (req.method === "POST") {
     try {
-      const { text } = req.body
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      })
 
-      if (!text || typeof text !== "string" || text.trim().length === 0) {
-        return res.status(400).json({ error: "Feedback text is required" })
+      if (res.ok) {
+        setSubmitted(true)
+        setText("")
+      } else {
+        alert("Failed to submit feedback.")
       }
-
-      const feedback = readFeedback()
-      const newEntry = {
-        text: text.trim(),
-        timestamp: Date.now(),
-        date: new Date().toISOString(),
-      }
-
-      feedback.push(newEntry)
-      writeFeedback(feedback)
-
-      res.status(200).json({ success: true, message: "Feedback submitted successfully" })
     } catch (error) {
-      console.error("Error saving feedback:", error)
-      res.status(500).json({ error: "Failed to save feedback" })
+      console.error("Error submitting feedback:", error)
+      alert("Failed to submit feedback.")
+    } finally {
+      setIsSubmitting(false)
     }
-  } else if (req.method === "GET") {
-    try {
-      const feedback = readFeedback()
-      // Sort by timestamp, newest first
-      feedback.sort((a, b) => b.timestamp - a.timestamp)
-      res.status(200).json({ feedback })
-    } catch (error) {
-      console.error("Error reading feedback:", error)
-      res.status(500).json({ error: "Failed to read feedback" })
-    }
-  } else if (req.method === "DELETE") {
-    try {
-      const { timestamp } = req.query
-
-      if (!timestamp) {
-        return res.status(400).json({ error: "Timestamp is required" })
-      }
-
-      const feedback = readFeedback()
-      const filteredFeedback = feedback.filter((entry) => entry.timestamp !== Number.parseInt(timestamp))
-
-      writeFeedback(filteredFeedback)
-      res.status(200).json({ success: true, message: "Feedback deleted successfully" })
-    } catch (error) {
-      console.error("Error deleting feedback:", error)
-      res.status(500).json({ error: "Failed to delete feedback" })
-    }
-  } else {
-    res.setHeader("Allow", ["GET", "POST", "DELETE"])
-    res.status(405).json({ error: "Method not allowed" })
   }
+
+  return (
+    <Layout>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 text-white">
+        <div className="container mx-auto px-4 py-8 max-w-2xl">
+          <div className="text-center mb-12">
+            <h1 className="text-5xl font-bold mb-8 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+              Feedback
+            </h1>
+            <p className="text-lg text-gray-300">
+              Help us improve AI Heroes of History with your thoughts and suggestions
+            </p>
+          </div>
+
+          <div className="bg-gray-800 rounded-xl p-8 shadow-2xl">
+            {submitted ? (
+              <div className="text-center">
+                <div className="mb-6">
+                  <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-green-400 mb-2">Thank you!</h2>
+                  <p className="text-gray-300">Your feedback has been submitted successfully.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSubmitted(false)
+                    setText("")
+                  }}
+                  className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold py-3 px-6 rounded-lg transition-all duration-300"
+                >
+                  Submit More Feedback
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                  <label className="block text-lg font-semibold text-yellow-400 mb-3">
+                    Share your thoughts, suggestions, or report issues:
+                  </label>
+                  <textarea
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    className="w-full p-4 rounded-lg bg-gray-700 text-white border border-gray-600 focus:border-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-opacity-50 transition-all duration-300"
+                    rows={6}
+                    placeholder="Tell us what you think about the AI Heroes experience..."
+                    required
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !text.trim()}
+                  className="w-full bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-black font-semibold py-3 px-6 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <span>Submit Feedback</span>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    </Layout>
+  )
 }
