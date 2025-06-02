@@ -405,6 +405,7 @@ export default function Home() {
         const topicText = text.trim()
         setCustomTopicText(topicText)
 
+        // Always show the button on mobile
         if (isMobile) {
           // On mobile: Show the topic and require user to click "Start Debate"
           setShowCustomTopicResult(true)
@@ -412,19 +413,6 @@ export default function Home() {
         } else {
           // On desktop: Try the seamless approach
           try {
-            // IMMEDIATELY play processing audio to maintain gesture context
-            const processingAudio = new Audio("/processing-debate.mp3")
-            processingAudio.volume = 0.7
-
-            // Start processing audio right away (within user gesture)
-            await processingAudio.play()
-
-            // Wait for processing audio to finish
-            await new Promise((resolve) => {
-              processingAudio.onended = resolve
-              processingAudio.onerror = resolve
-            })
-
             const currentCharacters = selectedCharactersRef.current
 
             if (!currentCharacters || currentCharacters.length !== 2) {
