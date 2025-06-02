@@ -68,7 +68,7 @@ async function generateResponse(character, opponent, topic, context, messageCoun
     stagePrompt = "This is the final round. Make your strongest closing argument."
   }
 
-  // Make the word limit instruction more prominent
+  // Make the word limit instruction more prominent and include AI_CONFIG
   const prompt = `You are continuing a debate about "${topic}" with ${opponent}. 
 
 ${stagePrompt}
@@ -82,7 +82,7 @@ Give your next response in 2-3 complete sentences. Stay true to your character, 
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: `${systemPrompt} ${AI_CONFIG.WORD_LIMIT_INSTRUCTION}` },
         { role: "user", content: prompt },
       ],
       max_tokens: AI_CONFIG.TOKEN_LIMIT,
