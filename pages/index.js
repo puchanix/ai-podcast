@@ -401,6 +401,8 @@ export default function Home() {
           throw new Error("No speech detected. Please try again.")
         }
 
+        const topicText = text.trim()
+
         // Use ref instead of state for characters
         const currentCharacters = selectedCharactersRef.current
 
@@ -409,14 +411,24 @@ export default function Home() {
           throw new Error("Please select two characters first")
         }
 
-        // Don't start debate immediately - show a button instead
-        setShowTopicSelector(false)
-        setDebateTopic(text.trim())
-        debateTopicRef.current = text.trim()
+        if (isMobile) {
+          // On mobile: Show the button approach
+          setShowTopicSelector(false)
+          setDebateTopic(topicText)
+          debateTopicRef.current = topicText
+          setShowCustomTopicResult(true)
+          setCustomTopicText(topicText)
+        } else {
+          // On desktop: Start debate immediately
+          setShowTopicSelector(false)
+          setDebateTopic(topicText)
+          debateTopicRef.current = topicText
+          setShowCustomTopicResult(false)
+          setCustomTopicText("")
 
-        // Show a "Start Debate" button instead of auto-starting
-        setShowCustomTopicResult(true)
-        setCustomTopicText(text.trim())
+          // Start the debate immediately
+          startDebateWithCharacters(topicText, currentCharacters)
+        }
       } catch (error) {
         console.error("Error processing custom topic audio:", error)
         setAudioError(`Error: ${error.message}`)
@@ -424,7 +436,7 @@ export default function Home() {
         setIsProcessingCustomTopic(false)
       }
     },
-    [], // Add dependencies
+    [isMobile, startDebateWithCharacters], // Add dependencies
   )
 
   const startCustomDebate = async () => {
@@ -435,7 +447,7 @@ export default function Home() {
 
     setShowCustomTopicResult(false)
     setCustomTopicText("")
-    startDebateWithCharacters(customTopicText, selectedCharactersRef.current)
+    await startDebateWithCharacters(customTopicText, selectedCharactersRef.current)
   }
 
   const pauseAudio = useCallback(() => {
@@ -1020,7 +1032,7 @@ export default function Home() {
     currentDebateIndexRef.current = 0
     isGeneratingNextRef.current = false
 
-    if (currentAudioRef.current) {
+    if (AudioRef.current) {
       currentAudioRef.current.pause()
       currentAudioRef.current = null
     }
@@ -1495,157 +1507,4 @@ export default function Home() {
       </div>
     </Layout>
   )
-
-  // Play debate audio with retry logic
-  const playDebateAudio = async (message, allMessages, currentIndex, retryCount = 0) => {
-    const { character, content } = message
-
-    setCurrentSpeaker(character)
-    setSpeakerStatus("speaking")
-
-    // Update debate round based on message index (every 2 messages = 1 round)
-    const newRound = Math.floor(currentIndex / 2) + 1
-    if (newRound !== debateRound) {
-      setDebateRound(newRound)
-    }
-
-    try {
-      const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
-      const currentVoiceIds = voiceIdsRef.current // Use ref for voice IDs
-      const voice = currentVoiceIds[voiceKey] || "echo"
-
-      // Add timeout to the fetch request
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
-
-      const response = await fetch("/api/speak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: content, voice }),
-        signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        throw new Error(`Audio API returned ${response.status}`)
-      }
-
-      const data = await response.json()
-      const audio = new Audio(data.audioUrl)
-      currentAudioRef.current = audio
-
-      audio.onended = () => {
-        setSpeakerStatus("waiting")
-
-        // Auto-continue to next message
-        const nextIndex = currentIndex + 1
-        if (nextIndex < allMessages.length) {
-          setTimeout(() => {
-            playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-          }, 1000)
-        } else {
-          // Check if we should continue with more rounds
-          const currentRound = Math.floor(currentIndex / 2) + 1
-
-          // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
-          if (allMessages.length < 8) {
-            setTimeout(() => {
-              continueDebate()
-            }, 2000)
-          } else {
-            // Debate finished
-            setTimeout(() => {
-              endDebate()
-            }, 3000)
-          }
-        }
-      }
-
-      audio.onerror = (e) => {
-        throw new Error(`Audio playback failed: ${e.message}`)
-      }
-
-      await audio.play()
-    } catch (error) {
-      console.error(`Error playing audio for ${character}:`, error)
-
-      // Retry logic for network timeouts
-      if ((error.name === "AbortError" || error.message.includes("Failed to fetch")) && retryCount < 2) {
-        setSpeakerStatus("thinking")
-        setTimeout(() => {
-          playDebateAudio(message, allMessages, currentIndex, retryCount + 1)
-        }, 3000)
-        return
-      }
-
-      setAudioError(`Audio failed for ${character}: ${error.message}`)
-      setSpeakerStatus(null)
-
-      // Continue to next speaker even if current one fails
-      const nextIndex = currentIndex + 1
-      if (nextIndex < allMessages.length) {
-        setTimeout(() => {
-          playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-        }, 2000)
-      } else {
-        setTimeout(() => {
-          endDebate()
-        }, 2000)
-      }
-    }
-  }
-
-  const continueDebate = async () => {
-    if (!selectedCharacters || selectedCharacters.length !== 2) {
-      setAudioError("Please select exactly two characters to start a debate")
-      return
-    }
-
-    const currentMessages = debateMessagesRef.current
-
-    try {
-      const response = await fetch("/api/auto-continue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          character1: selectedCharacters[0],
-          character2: selectedCharacters[1],
-          currentMessages: currentMessages,
-          topic: debateTopicRef.current,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to continue debate: ${response.status}`)
-      }
-
-      const data = await response.json()
-      const response1 = data.response1
-      const response2 = data.response2
-
-      const newMessage1 = {
-        character: selectedCharacters[0],
-        content: response1,
-        timestamp: Date.now(),
-      }
-
-      const newMessage2 = {
-        character: selectedCharacters[1],
-        content: response2,
-        timestamp: Date.now(),
-      }
-
-      // Update messages state
-      setDebateMessages((prev) => [...prev, newMessage1, newMessage2])
-
-      // Play audio for the new messages
-      const allMessages = [...currentMessages, newMessage1, newMessage2]
-      playDebateAudio(newMessage1, allMessages, currentMessages.length)
-    } catch (error) {
-      console.error("Error continuing debate:", error)
-      setAudioError(`Error: ${error.message}`)
-      endDebate()
-    }
-  }
 }
