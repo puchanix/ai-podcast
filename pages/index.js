@@ -382,32 +382,46 @@ export default function Home() {
 
     try {
       // IMMEDIATELY play processing audio to maintain gesture context
-      const processingAudio = new Audio("/processing-debate.mp3") // We'll need this file
+      const processingAudio = new Audio("/processing-debate.mp3")
       processingAudio.volume = 0.7
 
       // Start processing audio right away (within user gesture)
       await processingAudio.play()
 
-      // Process transcription in parallel
-      const formData = new FormData()
-      formData.append("audio", audioBlob, "custom-topic.webm")
+      // Process transcription and generate first response in parallel
+      const [transcriptionResult, firstResponseResult] = await Promise.all([
+        // Transcription
+        (async () => {
+          const formData = new FormData()
+          formData.append("audio", audioBlob, "custom-topic.webm")
 
-      const transcriptionResponse = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      })
+          const transcriptionResponse = await fetch("/api/transcribe", {
+            method: "POST",
+            body: formData,
+          })
 
-      if (!transcriptionResponse.ok) {
-        const errorText = await transcriptionResponse.text()
-        throw new Error("Failed to transcribe audio: " + errorText)
-      }
+          if (!transcriptionResponse.ok) {
+            const errorText = await transcriptionResponse.text()
+            throw new Error("Failed to transcribe audio: " + errorText)
+          }
 
-      const { text } = await transcriptionResponse.json()
+          const { text } = await transcriptionResponse.json()
 
-      if (!text || text.trim().length === 0) {
-        throw new Error("No speech detected. Please try again.")
-      }
+          if (!text || text.trim().length === 0) {
+            throw new Error("No speech detected. Please try again.")
+          }
 
+          return text.trim()
+        })(),
+
+        // Wait for processing audio to finish
+        new Promise((resolve) => {
+          processingAudio.onended = resolve
+          processingAudio.onerror = resolve
+        }),
+      ])
+
+      const topicText = transcriptionResult
       const currentCharacters = selectedCharactersRef.current
 
       if (!currentCharacters || currentCharacters.length !== 2) {
@@ -416,59 +430,56 @@ export default function Home() {
 
       // Set up debate state
       setShowTopicSelector(false)
-      setDebateTopic(text.trim())
-      debateTopicRef.current = text.trim()
+      setDebateTopic(topicText)
+      debateTopicRef.current = topicText
       setIsDebating(true)
       setDebateMessages([])
       setDebateRound(0)
-      setCurrentSpeaker(null)
-      setSpeakerStatus(null)
-      setIsDebatePaused(false)
-
-      // Generate first debate response while processing audio plays
       setCurrentSpeaker(currentCharacters[0])
       setSpeakerStatus("thinking")
+      setIsDebatePaused(false)
 
+      // Generate first debate response
       const firstOpeningData = await generateDebateResponse(
         currentCharacters[0],
         currentCharacters[1],
-        text.trim(),
+        topicText,
         [],
         0,
         true,
       )
 
-      // When processing audio ends, seamlessly start debate audio
-      processingAudio.onended = () => {
-        // Create first message
-        const firstMessage = {
-          character: currentCharacters[0],
-          content: firstOpeningData.text,
-          timestamp: Date.now(),
-        }
-
-        setDebateMessages([firstMessage])
-
-        // Initialize debate queue
-        debateQueueRef.current = [
-          {
-            message: firstMessage,
-            audioUrl: firstOpeningData.audioUrl,
-            index: 0,
-          },
-        ]
-        currentDebateIndexRef.current = 0
-        isGeneratingNextRef.current = false
-
-        // Start debate audio immediately (audio context is still alive)
-        playDebateAudioFromQueue(0, currentCharacters, text.trim())
-
-        // Generate second speaker's opening in background
-        generateNextDebateResponse(currentCharacters, text.trim(), [firstMessage], 1)
+      // Create first message
+      const firstMessage = {
+        character: currentCharacters[0],
+        content: firstOpeningData.text,
+        timestamp: Date.now(),
       }
+
+      setDebateMessages([firstMessage])
+
+      // Initialize debate queue
+      debateQueueRef.current = [
+        {
+          message: firstMessage,
+          audioUrl: firstOpeningData.audioUrl,
+          index: 0,
+        },
+      ]
+      currentDebateIndexRef.current = 0
+      isGeneratingNextRef.current = false
+
+      // Start debate audio immediately (audio context should still be alive)
+      playDebateAudioFromQueue(0, currentCharacters, topicText)
+
+      // Generate second speaker's opening in background
+      generateNextDebateResponse(currentCharacters, topicText, [firstMessage], 1)
     } catch (error) {
       console.error("Error processing custom topic audio:", error)
       setAudioError(`Error: ${error.message}`)
+      setIsDebating(false)
+      setSpeakerStatus(null)
+      setCurrentSpeaker(null)
     } finally {
       setIsProcessingCustomTopic(false)
     }
@@ -1542,157 +1553,4 @@ export default function Home() {
       </div>
     </Layout>
   )
-
-  // Play debate audio with retry logic
-  const playDebateAudio = async (message, allMessages, currentIndex, retryCount = 0) => {
-    const { character, content } = message
-
-    setCurrentSpeaker(character)
-    setSpeakerStatus("speaking")
-
-    // Update debate round based on message index (every 2 messages = 1 round)
-    const newRound = Math.floor(currentIndex / 2) + 1
-    if (newRound !== debateRound) {
-      setDebateRound(newRound)
-    }
-
-    try {
-      const voiceKey = character === "daVinci" ? "davinci" : character.toLowerCase()
-      const currentVoiceIds = voiceIdsRef.current // Use ref for voice IDs
-      const voice = currentVoiceIds[voiceKey] || "echo"
-
-      // Add timeout to the fetch request
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 second timeout
-
-      const response = await fetch("/api/speak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: content, voice }),
-        signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        throw new Error(`Audio API returned ${response.status}`)
-      }
-
-      const data = await response.json()
-      const audio = new Audio(data.audioUrl)
-      currentAudioRef.current = audio
-
-      audio.onended = () => {
-        setSpeakerStatus("waiting")
-
-        // Auto-continue to next message
-        const nextIndex = currentIndex + 1
-        if (nextIndex < allMessages.length) {
-          setTimeout(() => {
-            playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-          }, 1000)
-        } else {
-          // Check if we should continue with more rounds
-          const currentRound = Math.floor(currentIndex / 2) + 1
-
-          // Continue if we have less than 8 total messages (4 rounds of 2 messages each)
-          if (allMessages.length < 8) {
-            setTimeout(() => {
-              continueDebate()
-            }, 2000)
-          } else {
-            // Debate finished
-            setTimeout(() => {
-              endDebate()
-            }, 3000)
-          }
-        }
-      }
-
-      audio.onerror = (e) => {
-        throw new Error(`Audio playback failed: ${e.message}`)
-      }
-
-      await audio.play()
-    } catch (error) {
-      console.error(`Error playing audio for ${character}:`, error)
-
-      // Retry logic for network timeouts
-      if ((error.name === "AbortError" || error.message.includes("Failed to fetch")) && retryCount < 2) {
-        setSpeakerStatus("thinking")
-        setTimeout(() => {
-          playDebateAudio(message, allMessages, currentIndex, retryCount + 1)
-        }, 3000)
-        return
-      }
-
-      setAudioError(`Audio failed for ${character}: ${error.message}`)
-      setSpeakerStatus(null)
-
-      // Continue to next speaker even if current one fails
-      const nextIndex = currentIndex + 1
-      if (nextIndex < allMessages.length) {
-        setTimeout(() => {
-          playDebateAudio(allMessages[nextIndex], allMessages, nextIndex)
-        }, 2000)
-      } else {
-        setTimeout(() => {
-          endDebate()
-        }, 2000)
-      }
-    }
-  }
-
-  const continueDebate = async () => {
-    if (!selectedCharacters || selectedCharacters.length !== 2) {
-      setAudioError("Please select exactly two characters to start a debate")
-      return
-    }
-
-    const currentMessages = debateMessagesRef.current
-
-    try {
-      const response = await fetch("/api/auto-continue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          character1: selectedCharacters[0],
-          character2: selectedCharacters[1],
-          currentMessages: currentMessages,
-          topic: debateTopicRef.current,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to continue debate: ${response.status}`)
-      }
-
-      const data = await response.json()
-      const response1 = data.response1
-      const response2 = data.response2
-
-      const newMessage1 = {
-        character: selectedCharacters[0],
-        content: response1,
-        timestamp: Date.now(),
-      }
-
-      const newMessage2 = {
-        character: selectedCharacters[1],
-        content: response2,
-        timestamp: Date.now(),
-      }
-
-      // Update messages state
-      setDebateMessages((prev) => [...prev, newMessage1, newMessage2])
-
-      // Play audio for the new messages
-      const allMessages = [...currentMessages, newMessage1, newMessage2]
-      playDebateAudio(newMessage1, allMessages, currentMessages.length)
-    } catch (error) {
-      console.error("Error continuing debate:", error)
-      setAudioError(`Error: ${error.message}`)
-      endDebate()
-    }
-  }
 }
