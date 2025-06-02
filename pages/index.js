@@ -413,14 +413,21 @@ const [responsePersona, setResponsePersona] = useState("")
           throw new Error("Please select two characters first")
         }
 
-        // Don't start debate immediately - show a button instead
-        setShowTopicSelector(false)
-        setDebateTopic(text.trim())
-        debateTopicRef.current = text.trim()
+// Mobile vs Desktop behavior
+setShowTopicSelector(false)
+setDebateTopic(text.trim())
+debateTopicRef.current = text.trim()
 
-        // Show a "Start Debate" button instead of auto-starting
-        setShowCustomTopicResult(true)
-        setCustomTopicText(text.trim())
+if (isMobile) {
+  // Show a "Start Debate" button on mobile
+  setShowCustomTopicResult(true)
+  setCustomTopicText(text.trim())
+} else {
+  // Auto-start debate on desktop
+  setShowCustomTopicResult(false)
+  setCustomTopicText("")
+  startDebateWithCharacters(text.trim(), currentCharacters)
+}
       } catch (error) {
         console.error("Error processing custom topic audio:", error)
         setAudioError(`Error: ${error.message}`)
