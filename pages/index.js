@@ -13,7 +13,7 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioError, setAudioError] = useState(null)
-  const [mode, setMode] = useState("question") // 'question' or 'debate'
+  const [mode, setMode] = useState("debate") // 'question' or 'debate'
   const [selectedCharacters, setSelectedCharacters] = useState([])
   const [isLoadingVoices, setIsLoadingVoices] = useState(true)
   const [voiceIds, setVoiceIds] = useState({})
@@ -37,6 +37,9 @@ export default function Home() {
   const [currentSpeaker, setCurrentSpeaker] = useState(null)
   const [speakerStatus, setSpeakerStatus] = useState(null) // 'thinking', 'speaking', 'waiting'
   const [debateRound, setDebateRound] = useState(0) // Track debate rounds
+
+  const [showCustomTopicResult, setShowCustomTopicResult] = useState(false)
+  const [customTopicText, setCustomTopicText] = useState("")
 
   // Mobile audio unlock hook
   const { audioUnlocked, unlockAudio } = useMobileAudioUnlock()
@@ -406,14 +409,14 @@ export default function Home() {
           throw new Error("Please select two characters first")
         }
 
-        // Ensure audio is unlocked right before starting debate
-        if (!audioUnlocked) {
-          await unlockAudio()
-        }
-
-        // Start debate with the custom topic
+        // Don't start debate immediately - show a button instead
         setShowTopicSelector(false)
-        startDebateWithCharacters(text.trim(), currentCharacters)
+        setDebateTopic(text.trim())
+        debateTopicRef.current = text.trim()
+
+        // Show a "Start Debate" button instead of auto-starting
+        setShowCustomTopicResult(true)
+        setCustomTopicText(text.trim())
       } catch (error) {
         console.error("Error processing custom topic audio:", error)
         setAudioError(`Error: ${error.message}`)
@@ -421,8 +424,19 @@ export default function Home() {
         setIsProcessingCustomTopic(false)
       }
     },
-    [audioUnlocked, unlockAudio], // Add dependencies
+    [], // Add dependencies
   )
+
+  const startCustomDebate = async () => {
+    // Fresh user interaction - unlock audio again
+    if (!audioUnlocked) {
+      await unlockAudio()
+    }
+
+    setShowCustomTopicResult(false)
+    setCustomTopicText("")
+    startDebateWithCharacters(customTopicText, selectedCharactersRef.current)
+  }
 
   const pauseAudio = useCallback(() => {
     if (audioRef.current && !audioRef.current.paused) {
@@ -1229,18 +1243,18 @@ export default function Home() {
                 <button
                   onClick={toggleMode}
                   className={`px-6 py-3 rounded-full transition-all duration-300 ${
-                    mode === "question" ? "bg-yellow-500 text-black font-semibold" : "text-gray-300 hover:text-white"
-                  }`}
-                >
-                  Ask Questions
-                </button>
-                <button
-                  onClick={toggleMode}
-                  className={`px-6 py-3 rounded-full transition-all duration-300 ${
                     mode === "debate" ? "bg-yellow-500 text-black font-semibold" : "text-gray-300 hover:text-white"
                   }`}
                 >
                   Watch Debates
+                </button>
+                <button
+                  onClick={toggleMode}
+                  className={`px-6 py-3 rounded-full transition-all duration-300 ${
+                    mode === "question" ? "bg-yellow-500 text-black font-semibold" : "text-gray-300 hover:text-white"
+                  }`}
+                >
+                  Ask Questions
                 </button>
               </div>
             </div>
@@ -1456,6 +1470,24 @@ export default function Home() {
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Custom Topic Result - Show "Start Debate" button */}
+          {showCustomTopicResult && customTopicText && (
+            <div className="w-full max-w-4xl mx-auto mb-8">
+              <div className="bg-gray-800 rounded-xl p-6 text-center">
+                <h2 className="text-2xl font-bold text-yellow-400 mb-4">Custom Topic Ready!</h2>
+                <div className="bg-gray-700 rounded-lg p-4 mb-6">
+                  <p className="text-lg text-white">"{customTopicText}"</p>
+                </div>
+                <button
+                  onClick={startCustomDebate}
+                  className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold text-lg transition-all duration-300"
+                >
+                  Start Debate
+                </button>
               </div>
             </div>
           )}
