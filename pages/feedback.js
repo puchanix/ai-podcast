@@ -7,27 +7,34 @@ export default function Feedback() {
   const [submitted, setSubmitted] = useState(false)
   const [text, setText] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState("")
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsSubmitting(true)
+    setError("")
 
     try {
-      const res = await fetch("/api/feedback", {
+      const response = await fetch("https://formspree.io/f/xeokqavy", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: text,
+          _subject: "AI Heroes Feedback",
+        }),
       })
 
-      if (res.ok) {
+      if (response.ok) {
         setSubmitted(true)
         setText("")
       } else {
-        alert("Failed to submit feedback.")
+        setError("Failed to submit feedback. Please try again.")
       }
     } catch (error) {
-      console.error("Error submitting feedback:", error)
-      alert("Failed to submit feedback.")
+      console.error("Error:", error)
+      setError("Network error. Please try again later.")
     } finally {
       setIsSubmitting(false)
     }
@@ -62,6 +69,7 @@ export default function Feedback() {
                   onClick={() => {
                     setSubmitted(false)
                     setText("")
+                    setError("")
                   }}
                   className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold py-3 px-6 rounded-lg transition-all duration-300"
                 >
@@ -84,6 +92,11 @@ export default function Feedback() {
                     disabled={isSubmitting}
                   />
                 </div>
+
+                {error && (
+                  <div className="p-3 bg-red-900/50 border border-red-700 rounded-lg text-red-200 text-sm">{error}</div>
+                )}
+
                 <button
                   type="submit"
                   disabled={isSubmitting || !text.trim()}
