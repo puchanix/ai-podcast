@@ -1,4 +1,3 @@
-// Simple file-based storage for feedback
 import fs from "fs"
 import path from "path"
 
