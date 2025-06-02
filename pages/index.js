@@ -353,7 +353,7 @@ export default function Home() {
     }
   }, [])
 
-  const stopCustomTopicRecording = useCallback(() => {
+  const stopCustomTopicRecording = useCallback(async () => {
     if (customTopicMediaRecorderRef.current && customTopicMediaRecorderRef.current.state === "recording") {
       customTopicMediaRecorderRef.current.stop()
       setIsRecordingCustomTopic(false)
@@ -365,7 +365,13 @@ export default function Home() {
       })
       customTopicStreamRef.current = null
     }
-  }, [])
+
+    // Unlock audio again using the stop recording click as user interaction
+    // This ensures audio context is fresh for the upcoming debate
+    if (!audioUnlocked) {
+      await unlockAudio()
+    }
+  }, [audioUnlocked, unlockAudio])
 
   const processCustomTopicAudio = useCallback(
     async (audioBlob) => {
@@ -400,6 +406,11 @@ export default function Home() {
           throw new Error("Please select two characters first")
         }
 
+        // Ensure audio is unlocked right before starting debate
+        if (!audioUnlocked) {
+          await unlockAudio()
+        }
+
         // Start debate with the custom topic
         setShowTopicSelector(false)
         startDebateWithCharacters(text.trim(), currentCharacters)
@@ -410,7 +421,7 @@ export default function Home() {
         setIsProcessingCustomTopic(false)
       }
     },
-    [], // Remove selectedCharacters dependency since we're using ref
+    [audioUnlocked, unlockAudio], // Add dependencies
   )
 
   const pauseAudio = useCallback(() => {
@@ -1550,6 +1561,59 @@ export default function Home() {
           endDebate()
         }, 2000)
       }
+    }
+  }
+
+  const continueDebate = async () => {
+    if (!selectedCharacters || selectedCharacters.length !== 2) {
+      setAudioError("Please select exactly two characters to start a debate")
+      return
+    }
+
+    const currentMessages = debateMessagesRef.current
+
+    try {
+      const response = await fetch("/api/auto-continue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          character1: selectedCharacters[0],
+          character2: selectedCharacters[1],
+          currentMessages: currentMessages,
+          topic: debateTopicRef.current,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to continue debate: ${response.status}`)
+      }
+
+      const data = await response.json()
+      const response1 = data.response1
+      const response2 = data.response2
+
+      const newMessage1 = {
+        character: selectedCharacters[0],
+        content: response1,
+        timestamp: Date.now(),
+      }
+
+      const newMessage2 = {
+        character: selectedCharacters[1],
+        content: response2,
+        timestamp: Date.now(),
+      }
+
+      // Update messages state
+      setDebateMessages((prev) => [...prev, newMessage1, newMessage2])
+
+      // Play audio for the new messages
+      const allMessages = [...currentMessages, newMessage1, newMessage2]
+      playDebateAudio(newMessage1, allMessages, currentMessages.length)
+    } catch (error) {
+      console.error("Error continuing debate:", error)
+      setAudioError(`Error: ${error.message}`)
+      endDebate()
     }
   }
 }
