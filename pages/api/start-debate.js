@@ -41,6 +41,7 @@ export default async function handler(req, res) {
           ],
           max_tokens: AI_CONFIG.TOKEN_LIMIT,
           temperature: 0.8,
+          stop: ["\n\n", "Human:", "User:"],
         }),
       }),
       fetch("https://api.openai.com/v1/chat/completions", {
@@ -63,6 +64,7 @@ export default async function handler(req, res) {
           ],
           max_tokens: AI_CONFIG.TOKEN_LIMIT,
           temperature: 0.8,
+          stop: ["\n\n", "Human:", "User:"],
         }),
       }),
     ])

@@ -68,6 +68,7 @@ async function generateResponse(character, opponent, topic, context, messageCoun
     stagePrompt = "This is the final round. Make your strongest closing argument."
   }
 
+  // Make the word limit instruction more prominent
   const prompt = `You are continuing a debate about "${topic}" with ${opponent}. 
 
 ${stagePrompt}
@@ -75,7 +76,7 @@ ${stagePrompt}
 Previous conversation:
 ${context}
 
-Give your next response in 2-3 sentences. Stay true to your character, respond to the previous points made, and advance the debate. Be engaging and passionate about your position. ${AI_CONFIG.WORD_LIMIT_INSTRUCTION}`
+Give your next response in 2-3 complete sentences. Stay true to your character, respond to the previous points made, and advance the debate. Be engaging and passionate about your position. ${AI_CONFIG.WORD_LIMIT_INSTRUCTION}`
 
   try {
     const completion = await openai.chat.completions.create({
@@ -86,6 +87,8 @@ Give your next response in 2-3 sentences. Stay true to your character, respond t
       ],
       max_tokens: AI_CONFIG.TOKEN_LIMIT,
       temperature: 0.8,
+      // Add stop sequences to avoid cutting mid-sentence
+      stop: ["\n\n", "Human:", "User:"],
     })
 
     const response = completion.choices[0]?.message?.content || "I need to think more about this."
