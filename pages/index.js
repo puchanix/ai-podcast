@@ -6,6 +6,9 @@ import useIsMobile from "../hooks/useIsMobile"
 import Layout from "../components/layout"
 import { useMobileAudioUnlock } from "../hooks/useMobileAudioUnlock"
 
+// Browser environment check
+const isBrowser = typeof window !== "undefined"
+
 export default function Home() {
   const isMobile = useIsMobile()
   const [selectedPersona, setSelectedPersona] = useState("")
@@ -271,6 +274,8 @@ export default function Home() {
   )
 
   const startListening = useCallback(async () => {
+    if (!isBrowser) return
+
     try {
       setAudioError(null)
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -324,6 +329,8 @@ export default function Home() {
 
   // Custom topic recording functions
   const startCustomTopicRecording = useCallback(async () => {
+    if (!isBrowser) return
+
     try {
       setAudioError(null)
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -555,25 +562,9 @@ export default function Home() {
     }
   }, [])
 
-  const playResponse = async () => {
-    // Fresh user interaction - unlock audio
-    if (!audioUnlocked) {
-      await unlockAudio()
-    }
-
-    setShowResponseReady(false)
-    setIsPlaying(true)
-
-    try {
-      await generateStreamingAudioResponse(responseText, responsePersona)
-    } catch (error) {
-      console.error("Error playing response:", error)
-      setAudioError(`Audio error: ${error.message}`)
-      setIsPlaying(false)
-    }
-  }
-
   const generateStreamingAudioResponse = async (text, persona) => {
+    if (!isBrowser) return
+
     try {
       // Split text into sentences
       const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
@@ -613,6 +604,7 @@ export default function Home() {
       const { audioUrl: firstAudioUrl } = await firstResponse.json()
 
       // Start playing first sentence immediately
+      if (!isBrowser) return
       const firstAudio = new Audio(firstAudioUrl)
       audioRef.current = firstAudio
 
@@ -665,6 +657,7 @@ export default function Home() {
 
         // Check if next audio is ready
         if (currentAudioIndex < sentences.length && audioQueue[currentAudioIndex]) {
+          if (!isBrowser) return
           const nextAudio = new Audio(audioQueue[currentAudioIndex])
           audioRef.current = nextAudio
 
@@ -710,6 +703,24 @@ export default function Home() {
     }
   }
 
+  const playResponse = async () => {
+    // Fresh user interaction - unlock audio
+    if (!audioUnlocked) {
+      await unlockAudio()
+    }
+
+    setShowResponseReady(false)
+    setIsPlaying(true)
+
+    try {
+      await generateStreamingAudioResponse(responseText, responsePersona)
+    } catch (error) {
+      console.error("Error playing response:", error)
+      setAudioError(`Audio error: ${error.message}`)
+      setIsPlaying(false)
+    }
+  }
+
   // NEW: Streaming debate function - similar to generateStreamingAudioResponse but for debate turns
   const playDebateWithStreaming = async (characters, topic) => {
     try {
@@ -750,6 +761,79 @@ export default function Home() {
       setSpeakerStatus(null)
       setCurrentSpeaker(null)
     }
+  }
+
+  const playDebateAudioFromQueue = (index, characters, topic) => {
+    if (!isBrowser) return
+
+    const queueItem = debateQueueRef.current[index]
+
+    if (!queueItem) {
+      // Wait for audio to be ready
+      setTimeout(() => playDebateAudioFromQueue(index, characters, topic), 100)
+      return
+    }
+
+    setCurrentSpeaker(queueItem.message.character)
+    setSpeakerStatus("speaking")
+
+    // Update debate round based on index (every 2 messages = 1 round)
+    const newRound = Math.floor(index / 2) + 1
+    if (newRound !== debateRound) {
+      setDebateRound(newRound)
+    }
+
+    if (!isBrowser) return
+    const audio = new Audio(queueItem.audioUrl)
+    currentAudioRef.current = audio
+
+    // IMMEDIATELY start generating the next speaker while this one is talking
+    const nextIndex = index + 1
+    if (nextIndex < 8) {
+      // Only generate if we haven't reached the end
+      const currentMessages = debateMessagesRef.current
+
+      if (nextIndex < debateQueueRef.current.length) {
+        // Next audio already exists, no need to generate
+      } else {
+        // Simple alternation: if current index is even, next speaker is characters[1], if odd, next speaker is characters[0]
+        const nextCharacter = characters[nextIndex % 2]
+        generateSingleDebateResponse(nextCharacter, characters, topic, currentMessages, nextIndex)
+      }
+    }
+
+    audio.onended = () => {
+      setSpeakerStatus("waiting")
+      currentDebateIndexRef.current = nextIndex
+
+      // Check if we have more audio to play
+      if (nextIndex < debateQueueRef.current.length) {
+        // Play next audio immediately - should be ready!
+        playDebateAudioFromQueue(nextIndex, characters, topic)
+      } else if (nextIndex >= 8) {
+        // End debate
+        endDebate()
+      } else {
+        // Wait a bit for next audio to be generated
+        setTimeout(() => playDebateAudioFromQueue(nextIndex, characters, topic), 500)
+      }
+    }
+
+    audio.onerror = (e) => {
+      console.error(`Audio error for ${queueItem.message.character}:`, e)
+      setAudioError(`Audio playback failed for ${queueItem.message.character}`)
+
+      // Try to continue to next audio
+      if (nextIndex < debateQueueRef.current.length) {
+        setTimeout(() => playDebateAudioFromQueue(nextIndex, characters, topic), 1000)
+      }
+    }
+
+    // Play the audio
+    audio.play().catch((error) => {
+      console.error(`Failed to play audio for ${queueItem.message.character}:`, error)
+      setAudioError(`Failed to play audio: ${error.message}`)
+    })
   }
 
   // Generate a single debate response (text + audio)
@@ -903,77 +987,6 @@ export default function Home() {
     } finally {
       isGeneratingNextRef.current = false
     }
-  }
-
-  // Play audio from the debate queue
-  const playDebateAudioFromQueue = (index, characters, topic) => {
-    const queueItem = debateQueueRef.current[index]
-
-    if (!queueItem) {
-      // Wait for audio to be ready
-      setTimeout(() => playDebateAudioFromQueue(index, characters, topic), 100)
-      return
-    }
-
-    setCurrentSpeaker(queueItem.message.character)
-    setSpeakerStatus("speaking")
-
-    // Update debate round based on index (every 2 messages = 1 round)
-    const newRound = Math.floor(index / 2) + 1
-    if (newRound !== debateRound) {
-      setDebateRound(newRound)
-    }
-
-    const audio = new Audio(queueItem.audioUrl)
-    currentAudioRef.current = audio
-
-    // IMMEDIATELY start generating the next speaker while this one is talking
-    const nextIndex = index + 1
-    if (nextIndex < 8) {
-      // Only generate if we haven't reached the end
-      const currentMessages = debateMessagesRef.current
-
-      if (nextIndex < debateQueueRef.current.length) {
-        // Next audio already exists, no need to generate
-      } else {
-        // Simple alternation: if current index is even, next speaker is characters[1], if odd, next speaker is characters[0]
-        const nextCharacter = characters[nextIndex % 2]
-        generateSingleDebateResponse(nextCharacter, characters, topic, currentMessages, nextIndex)
-      }
-    }
-
-    audio.onended = () => {
-      setSpeakerStatus("waiting")
-      currentDebateIndexRef.current = nextIndex
-
-      // Check if we have more audio to play
-      if (nextIndex < debateQueueRef.current.length) {
-        // Play next audio immediately - should be ready!
-        playDebateAudioFromQueue(nextIndex, characters, topic)
-      } else if (nextIndex >= 8) {
-        // End debate
-        endDebate()
-      } else {
-        // Wait a bit for next audio to be generated
-        setTimeout(() => playDebateAudioFromQueue(nextIndex, characters, topic), 500)
-      }
-    }
-
-    audio.onerror = (e) => {
-      console.error(`Audio error for ${queueItem.message.character}:`, e)
-      setAudioError(`Audio playback failed for ${queueItem.message.character}`)
-
-      // Try to continue to next audio
-      if (nextIndex < debateQueueRef.current.length) {
-        setTimeout(() => playDebateAudioFromQueue(nextIndex, characters, topic), 1000)
-      }
-    }
-
-    // Play the audio
-    audio.play().catch((error) => {
-      console.error(`Failed to play audio for ${queueItem.message.character}:`, error)
-      setAudioError(`Failed to play audio: ${error.message}`)
-    })
   }
 
   // Generate next debate response in background (simplified)
