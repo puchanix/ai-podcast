@@ -1032,7 +1032,7 @@ export default function Home() {
     currentDebateIndexRef.current = 0
     isGeneratingNextRef.current = false
 
-    if (AudioRef.current) {
+    if (currentAudioRef.current) {
       currentAudioRef.current.pause()
       currentAudioRef.current = null
     }
