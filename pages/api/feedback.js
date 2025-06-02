@@ -1,50 +1,95 @@
+// Simple file-based storage for feedback
+import fs from "fs"
+import path from "path"
 
-import { createClient } from 'redis';
+const FEEDBACK_FILE = path.join(process.cwd(), "data", "feedback.json")
 
-const redisClient = createClient({ url: process.env.REDIS_URL });
-let isRedisConnected = false;
-
-async function getRedis() {
-  if (!isRedisConnected) {
-    redisClient.on('error', (err) => console.error('Redis Client Error', err));
-    await redisClient.connect();
-    isRedisConnected = true;
+// Ensure data directory exists
+function ensureDataDir() {
+  const dataDir = path.dirname(FEEDBACK_FILE)
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true })
   }
-  return redisClient;
 }
 
-export default async function handler(req, res) {
-  const client = await getRedis();
-
-  if (req.method === 'POST') {
-    const { text } = req.body;
-    if (!text || typeof text !== 'string' || text.trim() === '') {
-      return res.status(400).json({ error: 'Invalid feedback' });
+// Read feedback from file
+function readFeedback() {
+  ensureDataDir()
+  try {
+    if (fs.existsSync(FEEDBACK_FILE)) {
+      const data = fs.readFileSync(FEEDBACK_FILE, "utf8")
+      return JSON.parse(data)
     }
-    const timestamp = Date.now();
-    await client.set(`feedback:${timestamp}`, text.trim());
-    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("Error reading feedback file:", error)
   }
+  return []
+}
 
-  if (req.method === 'GET') {
-    const keys = await client.keys('feedback:*');
-    const sortedKeys = keys.sort((a, b) => b.localeCompare(a)); // newest first
-    const values = await Promise.all(sortedKeys.map((k) => client.get(k)));
-    const feedback = sortedKeys.map((k, i) => ({
-      text: values[i],
-      timestamp: Number(k.split(':')[1])
-    }));
-    return res.status(200).json({ feedback });
+// Write feedback to file
+function writeFeedback(feedback) {
+  ensureDataDir()
+  try {
+    fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(feedback, null, 2))
+  } catch (error) {
+    console.error("Error writing feedback file:", error)
+    throw error
   }
+}
 
-  if (req.method === 'DELETE') {
-    const { timestamp } = req.query;
-    if (!timestamp || isNaN(timestamp)) {
-      return res.status(400).json({ error: 'Missing or invalid timestamp' });
+export default function handler(req, res) {
+  if (req.method === "POST") {
+    try {
+      const { text } = req.body
+
+      if (!text || typeof text !== "string" || text.trim().length === 0) {
+        return res.status(400).json({ error: "Feedback text is required" })
+      }
+
+      const feedback = readFeedback()
+      const newEntry = {
+        text: text.trim(),
+        timestamp: Date.now(),
+        date: new Date().toISOString(),
+      }
+
+      feedback.push(newEntry)
+      writeFeedback(feedback)
+
+      res.status(200).json({ success: true, message: "Feedback submitted successfully" })
+    } catch (error) {
+      console.error("Error saving feedback:", error)
+      res.status(500).json({ error: "Failed to save feedback" })
     }
-    await client.del(`feedback:${timestamp}`);
-    return res.status(200).json({ success: true });
-  }
+  } else if (req.method === "GET") {
+    try {
+      const feedback = readFeedback()
+      // Sort by timestamp, newest first
+      feedback.sort((a, b) => b.timestamp - a.timestamp)
+      res.status(200).json({ feedback })
+    } catch (error) {
+      console.error("Error reading feedback:", error)
+      res.status(500).json({ error: "Failed to read feedback" })
+    }
+  } else if (req.method === "DELETE") {
+    try {
+      const { timestamp } = req.query
 
-  return res.status(405).end(); // Method Not Allowed
+      if (!timestamp) {
+        return res.status(400).json({ error: "Timestamp is required" })
+      }
+
+      const feedback = readFeedback()
+      const filteredFeedback = feedback.filter((entry) => entry.timestamp !== Number.parseInt(timestamp))
+
+      writeFeedback(filteredFeedback)
+      res.status(200).json({ success: true, message: "Feedback deleted successfully" })
+    } catch (error) {
+      console.error("Error deleting feedback:", error)
+      res.status(500).json({ error: "Failed to delete feedback" })
+    }
+  } else {
+    res.setHeader("Allow", ["GET", "POST", "DELETE"])
+    res.status(405).json({ error: "Method not allowed" })
+  }
 }
