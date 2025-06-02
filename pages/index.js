@@ -376,114 +376,126 @@ export default function Home() {
     }
   }, [audioUnlocked, unlockAudio])
 
-  const processCustomTopicAudio = useCallback(async (audioBlob) => {
-    setIsProcessingCustomTopic(true)
-    setAudioError(null)
+  const processCustomTopicAudio = useCallback(
+    async (audioBlob) => {
+      setIsProcessingCustomTopic(true)
+      setAudioError(null)
 
-    try {
-      // IMMEDIATELY play processing audio to maintain gesture context
-      const processingAudio = new Audio("/processing-debate.mp3")
-      processingAudio.volume = 0.7
+      try {
+        // Process transcription
+        const formData = new FormData()
+        formData.append("audio", audioBlob, "custom-topic.webm")
 
-      // Start processing audio right away (within user gesture)
-      await processingAudio.play()
+        const transcriptionResponse = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        })
 
-      // Process transcription and generate first response in parallel
-      const [transcriptionResult, firstResponseResult] = await Promise.all([
-        // Transcription
-        (async () => {
-          const formData = new FormData()
-          formData.append("audio", audioBlob, "custom-topic.webm")
+        if (!transcriptionResponse.ok) {
+          const errorText = await transcriptionResponse.text()
+          throw new Error("Failed to transcribe audio: " + errorText)
+        }
 
-          const transcriptionResponse = await fetch("/api/transcribe", {
-            method: "POST",
-            body: formData,
-          })
+        const { text } = await transcriptionResponse.json()
 
-          if (!transcriptionResponse.ok) {
-            const errorText = await transcriptionResponse.text()
-            throw new Error("Failed to transcribe audio: " + errorText)
+        if (!text || text.trim().length === 0) {
+          throw new Error("No speech detected. Please try again.")
+        }
+
+        const topicText = text.trim()
+        setCustomTopicText(topicText)
+
+        if (isMobile) {
+          // On mobile: Show the topic and require user to click "Start Debate"
+          setShowCustomTopicResult(true)
+          setShowTopicSelector(false)
+        } else {
+          // On desktop: Try the seamless approach
+          try {
+            // IMMEDIATELY play processing audio to maintain gesture context
+            const processingAudio = new Audio("/processing-debate.mp3")
+            processingAudio.volume = 0.7
+
+            // Start processing audio right away (within user gesture)
+            await processingAudio.play()
+
+            // Wait for processing audio to finish
+            await new Promise((resolve) => {
+              processingAudio.onended = resolve
+              processingAudio.onerror = resolve
+            })
+
+            const currentCharacters = selectedCharactersRef.current
+
+            if (!currentCharacters || currentCharacters.length !== 2) {
+              throw new Error("Please select two characters first")
+            }
+
+            // Set up debate state
+            setShowTopicSelector(false)
+            setDebateTopic(topicText)
+            debateTopicRef.current = topicText
+            setIsDebating(true)
+            setDebateMessages([])
+            setDebateRound(0)
+            setCurrentSpeaker(currentCharacters[0])
+            setSpeakerStatus("thinking")
+            setIsDebatePaused(false)
+
+            // Generate first debate response
+            const firstOpeningData = await generateDebateResponse(
+              currentCharacters[0],
+              currentCharacters[1],
+              topicText,
+              [],
+              0,
+              true,
+            )
+
+            // Create first message
+            const firstMessage = {
+              character: currentCharacters[0],
+              content: firstOpeningData.text,
+              timestamp: Date.now(),
+            }
+
+            setDebateMessages([firstMessage])
+
+            // Initialize debate queue
+            debateQueueRef.current = [
+              {
+                message: firstMessage,
+                audioUrl: firstOpeningData.audioUrl,
+                index: 0,
+              },
+            ]
+            currentDebateIndexRef.current = 0
+            isGeneratingNextRef.current = false
+
+            // Start debate audio immediately (audio context should still be alive)
+            playDebateAudioFromQueue(0, currentCharacters, topicText)
+
+            // Generate second speaker's opening in background
+            generateNextDebateResponse(currentCharacters, topicText, [firstMessage], 1)
+          } catch (desktopError) {
+            console.error("Desktop seamless approach failed:", desktopError)
+            // Fall back to button approach even on desktop
+            setShowCustomTopicResult(true)
+            setShowTopicSelector(false)
           }
-
-          const { text } = await transcriptionResponse.json()
-
-          if (!text || text.trim().length === 0) {
-            throw new Error("No speech detected. Please try again.")
-          }
-
-          return text.trim()
-        })(),
-
-        // Wait for processing audio to finish
-        new Promise((resolve) => {
-          processingAudio.onended = resolve
-          processingAudio.onerror = resolve
-        }),
-      ])
-
-      const topicText = transcriptionResult
-      const currentCharacters = selectedCharactersRef.current
-
-      if (!currentCharacters || currentCharacters.length !== 2) {
-        throw new Error("Please select two characters first")
+        }
+      } catch (error) {
+        console.error("Error processing custom topic audio:", error)
+        setAudioError(`Error: ${error.message}`)
+        setIsDebating(false)
+        setSpeakerStatus(null)
+        setCurrentSpeaker(null)
+      } finally {
+        setIsProcessingCustomTopic(false)
       }
-
-      // Set up debate state
-      setShowTopicSelector(false)
-      setDebateTopic(topicText)
-      debateTopicRef.current = topicText
-      setIsDebating(true)
-      setDebateMessages([])
-      setDebateRound(0)
-      setCurrentSpeaker(currentCharacters[0])
-      setSpeakerStatus("thinking")
-      setIsDebatePaused(false)
-
-      // Generate first debate response
-      const firstOpeningData = await generateDebateResponse(
-        currentCharacters[0],
-        currentCharacters[1],
-        topicText,
-        [],
-        0,
-        true,
-      )
-
-      // Create first message
-      const firstMessage = {
-        character: currentCharacters[0],
-        content: firstOpeningData.text,
-        timestamp: Date.now(),
-      }
-
-      setDebateMessages([firstMessage])
-
-      // Initialize debate queue
-      debateQueueRef.current = [
-        {
-          message: firstMessage,
-          audioUrl: firstOpeningData.audioUrl,
-          index: 0,
-        },
-      ]
-      currentDebateIndexRef.current = 0
-      isGeneratingNextRef.current = false
-
-      // Start debate audio immediately (audio context should still be alive)
-      playDebateAudioFromQueue(0, currentCharacters, topicText)
-
-      // Generate second speaker's opening in background
-      generateNextDebateResponse(currentCharacters, topicText, [firstMessage], 1)
-    } catch (error) {
-      console.error("Error processing custom topic audio:", error)
-      setAudioError(`Error: ${error.message}`)
-      setIsDebating(false)
-      setSpeakerStatus(null)
-      setCurrentSpeaker(null)
-    } finally {
-      setIsProcessingCustomTopic(false)
-    }
-  }, [])
+    },
+    [isMobile],
+  )
 
   const startCustomDebate = async () => {
     // Fresh user interaction - unlock audio again
@@ -493,7 +505,7 @@ export default function Home() {
 
     setShowCustomTopicResult(false)
     setCustomTopicText("")
-    startDebateWithCharacters(customTopicText, selectedCharactersRef.current)
+    await startDebateWithCharacters(customTopicText, selectedCharactersRef.current)
   }
 
   const pauseAudio = useCallback(() => {
