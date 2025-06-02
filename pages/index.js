@@ -1113,19 +1113,22 @@ const playResponse = async () => {
       }
 
       if (mode === "question") {
-        if (selectedPersona === characterId) {
-          if (isListening) {
-            stopListening()
-          } else if (!isProcessing && !isPlaying) {
-            await startListening()
-          }
-        } else {
-          setSelectedPersona(characterId)
-          currentPersonaRef.current = characterId
-          setSelectedCharacters([characterId])
-          await startListening()
-        }
-      }
+  if (selectedPersona === characterId) {
+    if (showResponseReady) {
+      // Play the response
+      playResponse()
+    } else if (isListening) {
+      stopListening()
+    } else if (!isProcessing && !isPlaying) {
+      await startListening()
+    }
+  } else {
+    setSelectedPersona(characterId)
+    currentPersonaRef.current = characterId
+    setSelectedCharacters([characterId])
+    await startListening()
+  }
+}
     },
     [
       mode,
@@ -1206,12 +1209,13 @@ const playResponse = async () => {
       }
     }
 
-    // Question mode logic remains the same
-    if (selectedPersona !== characterId) return "Ask Question"
-    if (isListening) return "Stop Recording"
-    if (isProcessing) return thinkingMessage || "Processing..."
-    if (isPlaying) return "Speaking..."
-    return "Ask Question"
+  // Question mode logic
+if (selectedPersona !== characterId) return "Ask Question"
+if (isListening) return "Stop Recording"
+if (isProcessing) return thinkingMessage || "Processing..."
+if (showResponseReady) return "Play Response"
+if (isPlaying) return "Speaking..."
+return "Ask Question"
   }
 
   // Get button color based on status
@@ -1228,10 +1232,11 @@ const playResponse = async () => {
     }
 
     if (selectedPersona !== characterId) return "bg-gray-700 text-white hover:bg-gray-600"
-    if (isListening) return "bg-red-500 text-white"
-    if (isProcessing) return "bg-blue-500 text-white"
-    if (isPlaying) return "bg-green-500 text-white"
-    return "bg-yellow-500 text-black"
+if (isListening) return "bg-red-500 text-white"
+if (isProcessing) return "bg-blue-500 text-white"
+if (showResponseReady) return "bg-green-500 text-white"
+if (isPlaying) return "bg-green-500 text-white"
+return "bg-yellow-500 text-black"
   }
 
   // Determine if character should be grayed out
@@ -1520,23 +1525,7 @@ const playResponse = async () => {
               </div>
             </div>
           )}
-{/* Response Ready - Show "Play Response" button */}
-{showResponseReady && responseText && (
-  <div className="w-full max-w-4xl mx-auto mb-8">
-    <div className="bg-gray-800 rounded-xl p-6 text-center">
-      <h2 className="text-2xl font-bold text-yellow-400 mb-4">Response Ready!</h2>
-      <div className="bg-gray-700 rounded-lg p-4 mb-6">
-        <p className="text-lg text-white">"{responseText}"</p>
-      </div>
-      <button
-        onClick={playResponse}
-        className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold text-lg transition-all duration-300"
-      >
-        Play Response
-      </button>
-    </div>
-  </div>
-)}
+
           {/* Custom Topic Result - Show "Start Debate" button */}
           {showCustomTopicResult && customTopicText && (
             <div className="w-full max-w-4xl mx-auto mb-8">
