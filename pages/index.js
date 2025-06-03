@@ -85,7 +85,6 @@ export default function Home() {
     "Delving into wisdom...",
     "Searching through memories...",
     "Formulating thoughts...",
-    "Formulating thoughts...",
   ]
 
   // Load voice IDs when component mounts - PERSIST ACROSS MODE CHANGES
@@ -224,18 +223,6 @@ export default function Home() {
       if (interval) clearInterval(interval)
     }
   }, [isProcessing])
-
-  // Auto-start debate on desktop when topic is ready
-  useEffect(() => {
-    if (showCustomTopicResult && customTopicText && !isMobile) {
-      // Small delay to ensure everything is ready
-      const timer = setTimeout(() => {
-        startCustomDebate()
-      }, 100)
-
-      return () => clearTimeout(timer)
-    }
-  }, [showCustomTopicResult, customTopicText, isMobile])
 
   const handleCharacterSelect = useCallback(
     async (characterId) => {
@@ -393,53 +380,56 @@ export default function Home() {
     }
   }, [audioUnlocked, unlockAudio])
 
-  const processCustomTopicAudio = useCallback(async (audioBlob) => {
-    setIsProcessingCustomTopic(true)
-    setAudioError(null)
+  const processCustomTopicAudio = useCallback(
+    async (audioBlob) => {
+      setIsProcessingCustomTopic(true)
+      setAudioError(null)
 
-    try {
-      const formData = new FormData()
-      formData.append("audio", audioBlob, "custom-topic.webm")
+      try {
+        const formData = new FormData()
+        formData.append("audio", audioBlob, "custom-topic.webm")
 
-      const transcriptionResponse = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      })
+        const transcriptionResponse = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        })
 
-      if (!transcriptionResponse.ok) {
-        const errorText = await transcriptionResponse.text()
-        throw new Error("Failed to transcribe audio: " + errorText)
+        if (!transcriptionResponse.ok) {
+          const errorText = await transcriptionResponse.text()
+          throw new Error("Failed to transcribe audio: " + errorText)
+        }
+
+        const { text } = await transcriptionResponse.json()
+
+        if (!text || text.trim().length === 0) {
+          throw new Error("No speech detected. Please try again.")
+        }
+
+        // Use ref instead of state for characters
+        const currentCharacters = selectedCharactersRef.current
+
+        // Validate we have characters before proceeding
+        if (!currentCharacters || currentCharacters.length !== 2) {
+          throw new Error("Please select two characters first")
+        }
+
+        // Don't start debate immediately - show a button instead
+        setShowTopicSelector(false)
+        setDebateTopic(text.trim())
+        debateTopicRef.current = text.trim()
+
+        // Show a "Start Debate" button instead of auto-starting
+        setShowCustomTopicResult(true)
+        setCustomTopicText(text.trim())
+      } catch (error) {
+        console.error("Error processing custom topic audio:", error)
+        setAudioError(`Error: ${error.message}`)
+      } finally {
+        setIsProcessingCustomTopic(false)
       }
-
-      const { text } = await transcriptionResponse.json()
-
-      if (!text || text.trim().length === 0) {
-        throw new Error("No speech detected. Please try again.")
-      }
-
-      // Use ref instead of state for characters
-      const currentCharacters = selectedCharactersRef.current
-
-      // Validate we have characters before proceeding
-      if (!currentCharacters || currentCharacters.length !== 2) {
-        throw new Error("Please select two characters first")
-      }
-
-      // Don't start debate immediately - show a button instead
-      setShowTopicSelector(false)
-      setDebateTopic(text.trim())
-      debateTopicRef.current = text.trim()
-
-      // Show a "Start Debate" button instead of auto-starting
-      setShowCustomTopicResult(true)
-      setCustomTopicText(text.trim())
-    } catch (error) {
-      console.error("Error processing custom topic audio:", error)
-      setAudioError(`Error: ${error.message}`)
-    } finally {
-      setIsProcessingCustomTopic(false)
-    }
-  }, [])
+    },
+    [], // Add dependencies
+  )
 
   const startCustomDebate = async () => {
     // Fresh user interaction - unlock audio again
@@ -490,76 +480,67 @@ export default function Home() {
     }
   }, [isDebatePaused])
 
-  const processAudioQuestion = useCallback(
-    async (audioBlob) => {
-      const currentPersona = currentPersonaRef.current
+  const processAudioQuestion = useCallback(async (audioBlob) => {
+    const currentPersona = currentPersonaRef.current
 
-      if (!currentPersona) {
-        setAudioError("Please select a character first")
-        return
+    if (!currentPersona) {
+      setAudioError("Please select a character first")
+      return
+    }
+
+    setIsProcessing(true)
+    setAudioError(null)
+
+    try {
+      const formData = new FormData()
+      formData.append("audio", audioBlob, "question.webm")
+
+      const transcriptionResponse = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!transcriptionResponse.ok) {
+        const errorText = await transcriptionResponse.text()
+        throw new Error("Failed to transcribe audio: " + errorText)
       }
 
-      setIsProcessing(true)
-      setAudioError(null)
+      const { text } = await transcriptionResponse.json()
 
-      try {
-        const formData = new FormData()
-        formData.append("audio", audioBlob, "question.webm")
-
-        const transcriptionResponse = await fetch("/api/transcribe", {
-          method: "POST",
-          body: formData,
-        })
-
-        if (!transcriptionResponse.ok) {
-          const errorText = await transcriptionResponse.text()
-          throw new Error("Failed to transcribe audio: " + errorText)
-        }
-
-        const { text } = await transcriptionResponse.json()
-
-        if (!text || text.trim().length === 0) {
-          throw new Error("No speech detected. Please try again.")
-        }
-
-        // Generate text response
-        const textResponse = await fetch("/api/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: text }],
-            character: currentPersona,
-          }),
-        })
-
-        if (!textResponse.ok) {
-          throw new Error("Failed to generate response")
-        }
-
-        const { content: responseText } = await textResponse.json()
-
-        // On mobile: Show "Play Response" button
-        // On desktop: Auto-play the response
-        if (isMobile) {
-          setResponseText(responseText)
-          setResponsePersona(currentPersona)
-          setShowResponseReady(true)
-        } else {
-          setIsPlaying(true)
-          generateStreamingAudioResponse(responseText, currentPersona)
-        }
-      } catch (error) {
-        console.error("Error processing audio question:", error)
-        setAudioError(`Error: ${error.message}`)
-      } finally {
-        setIsProcessing(false)
-        setThinkingMessage("")
+      if (!text || text.trim().length === 0) {
+        throw new Error("No speech detected. Please try again.")
       }
-    },
-    [isMobile, generateStreamingAudioResponse],
-  )
+
+      // Generate text response
+      const textResponse = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: text }],
+          character: currentPersona,
+        }),
+      })
+
+      if (!textResponse.ok) {
+        throw new Error("Failed to generate response")
+      }
+
+      const { content: responseText } = await textResponse.json()
+
+      // Show "Play Response" button instead of auto-playing
+      setResponseText(responseText)
+      setResponsePersona(currentPersona)
+      setShowResponseReady(true)
+    } catch (error) {
+      console.error("Error processing audio question:", error)
+      setAudioError(`Error: ${error.message}`)
+    } finally {
+      setIsProcessing(false)
+      setThinkingMessage("")
+    }
+  }, [])
 
   const playResponse = async () => {
     // Fresh user interaction - unlock audio
@@ -1032,7 +1013,7 @@ export default function Home() {
     setDebateTopic(topicString)
     debateTopicRef.current = topicString
     setDebateMessages([])
-    setDebateRound(0)
+    setDebateRound(0) // Start at round 0, will be updated when first audio plays
     setCurrentSpeaker(null)
     setSpeakerStatus(null)
     setIsDebatePaused(false)
@@ -1545,8 +1526,8 @@ export default function Home() {
             </div>
           )}
 
-          {/* Custom Topic Result - Minimalistic Start Button - Only on Mobile */}
-          {showCustomTopicResult && customTopicText && isMobile && (
+          {/* Custom Topic Result - Minimalistic Start Button */}
+          {showCustomTopicResult && customTopicText && (
             <div className="w-full max-w-4xl mx-auto mb-8">
               <div className="flex justify-center">
                 <button
