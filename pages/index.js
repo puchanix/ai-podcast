@@ -435,7 +435,7 @@ if (isMobile) {
         setIsProcessingCustomTopic(false)
       }
     },
-    [], // Add dependencies
+    [isMobile], // Add dependencies
   )
 
   const startCustomDebate = async () => {
