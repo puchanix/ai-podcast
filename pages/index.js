@@ -85,6 +85,7 @@ export default function Home() {
     "Delving into wisdom...",
     "Searching through memories...",
     "Formulating thoughts...",
+    "Formulating thoughts...",
   ]
 
   // Load voice IDs when component mounts - PERSIST ACROSS MODE CHANGES
@@ -223,6 +224,18 @@ export default function Home() {
       if (interval) clearInterval(interval)
     }
   }, [isProcessing])
+
+  // Auto-start debate on desktop when topic is ready
+  useEffect(() => {
+    if (showCustomTopicResult && customTopicText && !isMobile) {
+      // Small delay to ensure everything is ready
+      const timer = setTimeout(() => {
+        startCustomDebate()
+      }, 100)
+
+      return () => clearTimeout(timer)
+    }
+  }, [showCustomTopicResult, customTopicText, isMobile])
 
   const handleCharacterSelect = useCallback(
     async (characterId) => {
@@ -380,56 +393,53 @@ export default function Home() {
     }
   }, [audioUnlocked, unlockAudio])
 
-  const processCustomTopicAudio = useCallback(
-    async (audioBlob) => {
-      setIsProcessingCustomTopic(true)
-      setAudioError(null)
+  const processCustomTopicAudio = useCallback(async (audioBlob) => {
+    setIsProcessingCustomTopic(true)
+    setAudioError(null)
 
-      try {
-        const formData = new FormData()
-        formData.append("audio", audioBlob, "custom-topic.webm")
+    try {
+      const formData = new FormData()
+      formData.append("audio", audioBlob, "custom-topic.webm")
 
-        const transcriptionResponse = await fetch("/api/transcribe", {
-          method: "POST",
-          body: formData,
-        })
+      const transcriptionResponse = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      })
 
-        if (!transcriptionResponse.ok) {
-          const errorText = await transcriptionResponse.text()
-          throw new Error("Failed to transcribe audio: " + errorText)
-        }
-
-        const { text } = await transcriptionResponse.json()
-
-        if (!text || text.trim().length === 0) {
-          throw new Error("No speech detected. Please try again.")
-        }
-
-        // Use ref instead of state for characters
-        const currentCharacters = selectedCharactersRef.current
-
-        // Validate we have characters before proceeding
-        if (!currentCharacters || currentCharacters.length !== 2) {
-          throw new Error("Please select two characters first")
-        }
-
-        // Don't start debate immediately - show a button instead
-        setShowTopicSelector(false)
-        setDebateTopic(text.trim())
-        debateTopicRef.current = text.trim()
-
-        // Show a "Start Debate" button instead of auto-starting
-        setShowCustomTopicResult(true)
-        setCustomTopicText(text.trim())
-      } catch (error) {
-        console.error("Error processing custom topic audio:", error)
-        setAudioError(`Error: ${error.message}`)
-      } finally {
-        setIsProcessingCustomTopic(false)
+      if (!transcriptionResponse.ok) {
+        const errorText = await transcriptionResponse.text()
+        throw new Error("Failed to transcribe audio: " + errorText)
       }
-    },
-    [], // Add dependencies
-  )
+
+      const { text } = await transcriptionResponse.json()
+
+      if (!text || text.trim().length === 0) {
+        throw new Error("No speech detected. Please try again.")
+      }
+
+      // Use ref instead of state for characters
+      const currentCharacters = selectedCharactersRef.current
+
+      // Validate we have characters before proceeding
+      if (!currentCharacters || currentCharacters.length !== 2) {
+        throw new Error("Please select two characters first")
+      }
+
+      // Don't start debate immediately - show a button instead
+      setShowTopicSelector(false)
+      setDebateTopic(text.trim())
+      debateTopicRef.current = text.trim()
+
+      // Show a "Start Debate" button instead of auto-starting
+      setShowCustomTopicResult(true)
+      setCustomTopicText(text.trim())
+    } catch (error) {
+      console.error("Error processing custom topic audio:", error)
+      setAudioError(`Error: ${error.message}`)
+    } finally {
+      setIsProcessingCustomTopic(false)
+    }
+  }, [])
 
   const startCustomDebate = async () => {
     // Fresh user interaction - unlock audio again
@@ -1022,7 +1032,7 @@ export default function Home() {
     setDebateTopic(topicString)
     debateTopicRef.current = topicString
     setDebateMessages([])
-    setDebateRound(0) // Start at round 0, will be updated when first audio plays
+    setDebateRound(0)
     setCurrentSpeaker(null)
     setSpeakerStatus(null)
     setIsDebatePaused(false)
@@ -1546,14 +1556,6 @@ export default function Home() {
                   Start Debate
                 </button>
               </div>
-            </div>
-          )}
-
-          {/* Auto-start debate on desktop */}
-          {showCustomTopicResult && customTopicText && !isMobile && (
-            <div className="hidden">
-              {/* This is a trick to auto-trigger the debate on desktop */}
-              {setTimeout(() => startCustomDebate(), 100)}
             </div>
           )}
         </div>
