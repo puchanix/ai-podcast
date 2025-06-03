@@ -41,10 +41,10 @@ export default function Home() {
   const [showCustomTopicResult, setShowCustomTopicResult] = useState(false)
   const [customTopicText, setCustomTopicText] = useState("")
 
-// Question mode response state
-const [showResponseReady, setShowResponseReady] = useState(false)
-const [responseText, setResponseText] = useState("")
-const [responsePersona, setResponsePersona] = useState("")
+  // Question mode response state
+  const [showResponseReady, setShowResponseReady] = useState(false)
+  const [responseText, setResponseText] = useState("")
+  const [responsePersona, setResponsePersona] = useState("")
   // Mobile audio unlock hook
   const { audioUnlocked, unlockAudio } = useMobileAudioUnlock()
 
@@ -481,84 +481,84 @@ const [responsePersona, setResponsePersona] = useState("")
   }, [isDebatePaused])
 
   const processAudioQuestion = useCallback(async (audioBlob) => {
-  const currentPersona = currentPersonaRef.current
+    const currentPersona = currentPersonaRef.current
 
-  if (!currentPersona) {
-    setAudioError("Please select a character first")
-    return
-  }
-
-  setIsProcessing(true)
-  setAudioError(null)
-
-  try {
-    const formData = new FormData()
-    formData.append("audio", audioBlob, "question.webm")
-
-    const transcriptionResponse = await fetch("/api/transcribe", {
-      method: "POST",
-      body: formData,
-    })
-
-    if (!transcriptionResponse.ok) {
-      const errorText = await transcriptionResponse.text()
-      throw new Error("Failed to transcribe audio: " + errorText)
+    if (!currentPersona) {
+      setAudioError("Please select a character first")
+      return
     }
 
-    const { text } = await transcriptionResponse.json()
+    setIsProcessing(true)
+    setAudioError(null)
 
-    if (!text || text.trim().length === 0) {
-      throw new Error("No speech detected. Please try again.")
+    try {
+      const formData = new FormData()
+      formData.append("audio", audioBlob, "question.webm")
+
+      const transcriptionResponse = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!transcriptionResponse.ok) {
+        const errorText = await transcriptionResponse.text()
+        throw new Error("Failed to transcribe audio: " + errorText)
+      }
+
+      const { text } = await transcriptionResponse.json()
+
+      if (!text || text.trim().length === 0) {
+        throw new Error("No speech detected. Please try again.")
+      }
+
+      // Generate text response
+      const textResponse = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: text }],
+          character: currentPersona,
+        }),
+      })
+
+      if (!textResponse.ok) {
+        throw new Error("Failed to generate response")
+      }
+
+      const { content: responseText } = await textResponse.json()
+
+      // Show "Play Response" button instead of auto-playing
+      setResponseText(responseText)
+      setResponsePersona(currentPersona)
+      setShowResponseReady(true)
+    } catch (error) {
+      console.error("Error processing audio question:", error)
+      setAudioError(`Error: ${error.message}`)
+    } finally {
+      setIsProcessing(false)
+      setThinkingMessage("")
+    }
+  }, [])
+
+  const playResponse = async () => {
+    // Fresh user interaction - unlock audio
+    if (!audioUnlocked) {
+      await unlockAudio()
     }
 
-    // Generate text response
-    const textResponse = await fetch("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messages: [{ role: "user", content: text }],
-        character: currentPersona,
-      }),
-    })
+    setShowResponseReady(false)
+    setIsPlaying(true)
 
-    if (!textResponse.ok) {
-      throw new Error("Failed to generate response")
+    try {
+      await generateStreamingAudioResponse(responseText, responsePersona)
+    } catch (error) {
+      console.error("Error playing response:", error)
+      setAudioError(`Audio error: ${error.message}`)
+      setIsPlaying(false)
     }
-
-    const { content: responseText } = await textResponse.json()
-
-    // Show "Play Response" button instead of auto-playing
-    setResponseText(responseText)
-    setResponsePersona(currentPersona)
-    setShowResponseReady(true)
-  } catch (error) {
-    console.error("Error processing audio question:", error)
-    setAudioError(`Error: ${error.message}`)
-  } finally {
-    setIsProcessing(false)
-    setThinkingMessage("")
   }
-}, [])
-
-const playResponse = async () => {
-  // Fresh user interaction - unlock audio
-  if (!audioUnlocked) {
-    await unlockAudio()
-  }
-
-  setShowResponseReady(false)
-  setIsPlaying(true)
-
-  try {
-    await generateStreamingAudioResponse(responseText, responsePersona)
-  } catch (error) {
-    console.error("Error playing response:", error)
-    setAudioError(`Audio error: ${error.message}`)
-    setIsPlaying(false)
-  }
-}
 
   const processQuestionWithStreaming = async (question, persona) => {
     try {
@@ -1113,22 +1113,22 @@ const playResponse = async () => {
       }
 
       if (mode === "question") {
-  if (selectedPersona === characterId) {
-    if (showResponseReady) {
-      // Play the response
-      playResponse()
-    } else if (isListening) {
-      stopListening()
-    } else if (!isProcessing && !isPlaying) {
-      await startListening()
-    }
-  } else {
-    setSelectedPersona(characterId)
-    currentPersonaRef.current = characterId
-    setSelectedCharacters([characterId])
-    await startListening()
-  }
-}
+        if (selectedPersona === characterId) {
+          if (showResponseReady) {
+            // Play the response
+            playResponse()
+          } else if (isListening) {
+            stopListening()
+          } else if (!isProcessing && !isPlaying) {
+            await startListening()
+          }
+        } else {
+          setSelectedPersona(characterId)
+          currentPersonaRef.current = characterId
+          setSelectedCharacters([characterId])
+          await startListening()
+        }
+      }
     },
     [
       mode,
@@ -1209,13 +1209,13 @@ const playResponse = async () => {
       }
     }
 
-  // Question mode logic
-if (selectedPersona !== characterId) return "Ask Question"
-if (isListening) return "Stop Recording"
-if (isProcessing) return thinkingMessage || "Processing..."
-if (showResponseReady) return "Play Response"
-if (isPlaying) return "Speaking..."
-return "Ask Question"
+    // Question mode logic
+    if (selectedPersona !== characterId) return "Ask Question"
+    if (isListening) return "Stop Recording"
+    if (isProcessing) return thinkingMessage || "Processing..."
+    if (showResponseReady) return "Play Response"
+    if (isPlaying) return "Speaking..."
+    return "Ask Question"
   }
 
   // Get button color based on status
@@ -1232,11 +1232,11 @@ return "Ask Question"
     }
 
     if (selectedPersona !== characterId) return "bg-gray-700 text-white hover:bg-gray-600"
-if (isListening) return "bg-red-500 text-white"
-if (isProcessing) return "bg-blue-500 text-white"
-if (showResponseReady) return "bg-green-500 text-white"
-if (isPlaying) return "bg-green-500 text-white"
-return "bg-yellow-500 text-black"
+    if (isListening) return "bg-red-500 text-white"
+    if (isProcessing) return "bg-blue-500 text-white"
+    if (showResponseReady) return "bg-green-500 text-white"
+    if (isPlaying) return "bg-green-500 text-white"
+    return "bg-yellow-500 text-black"
   }
 
   // Determine if character should be grayed out
@@ -1526,17 +1526,13 @@ return "bg-yellow-500 text-black"
             </div>
           )}
 
-          {/* Custom Topic Result - Show "Start Debate" button */}
+          {/* Custom Topic Result - Minimalistic Start Button */}
           {showCustomTopicResult && customTopicText && (
             <div className="w-full max-w-4xl mx-auto mb-8">
-              <div className="bg-gray-800 rounded-xl p-6 text-center">
-                <h2 className="text-2xl font-bold text-yellow-400 mb-4">Custom Topic Ready!</h2>
-                <div className="bg-gray-700 rounded-lg p-4 mb-6">
-                  <p className="text-lg text-white">"{customTopicText}"</p>
-                </div>
+              <div className="flex justify-center">
                 <button
                   onClick={startCustomDebate}
-                  className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold text-lg transition-all duration-300"
+                  className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold transition-all duration-300"
                 >
                   Start Debate
                 </button>
