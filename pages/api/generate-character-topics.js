@@ -63,58 +63,17 @@ async function generateTopicsWithRetry(persona1, persona2, character1, character
 
     console.log(`Generating topics for ${expertise1} and ${expertise2}`)
 
-    // Create the OpenAI request with RELEVANT UNIVERSAL topic generation
-    const openaiPromise = openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: `You are creating debate topics for two great minds with different areas of expertise.
+    // Generate both serious and light topics
+    const [seriousTopic, lightTopic] = await Promise.all([
+      generateSeriousTopic(expertise1, expertise2),
+      generateLightTopic(expertise1, expertise2),
+    ])
 
-DEBATER BACKGROUNDS:
-- First debater: ${expertise1}
-- Second debater: ${expertise2}
+    const topics = [seriousTopic, lightTopic]
 
-CRITICAL RULES:
-- Create UNIVERSAL topics that don't mention specific people or names
-- Topics should be relevant to BOTH debaters' areas of expertise
-- Focus on concepts both minds would find intellectually engaging
-- Never use "vs" between people or direct comparisons
-- Make topics that leverage their different perspectives
+    console.log("Generated topics:", topics)
 
-GOOD EXAMPLES:
-- For artist + philosopher: "The Role of Beauty in Understanding Truth"
-- For scientist + artist: "Logic vs Intuition in Creative Discovery"
-- For two philosophers: "The Nature of Human Consciousness"
-
-Return ONLY a valid JSON array with exactly 2 objects. Each object must have:
-- id: unique kebab-case identifier
-- title: relevant universal topic (max 50 characters, no names)
-- description: brief explanation (max 100 characters, no names)
-- category: one of "philosophy", "arts", "science", "politics", "history", "education"
-
-Do not wrap the response in markdown code blocks. Return only the JSON array.`,
-        },
-        {
-          role: "user",
-          content: `Generate 2 universal debate topics that would be particularly engaging for a ${expertise1} and a ${expertise2} to discuss. Focus on areas where their different expertise would create interesting perspectives. Return only valid JSON array.`,
-        },
-      ],
-      temperature: 0.9, // Increased for more variety
-      max_tokens: 400,
-    })
-
-    // Race between OpenAI request and timeout
-    const completion = await Promise.race([openaiPromise, timeoutPromise])
-
-    console.log("Raw AI response:", completion.choices[0].message.content)
-
-    // Parse the response with robust error handling
-    const topics = parseGPTResponse(completion.choices[0].message.content, character1, character2)
-
-    console.log("Parsed topics before validation:", topics)
-
-    // Validate topics don't contain forbidden content (less aggressive)
+    // Validate topics don't contain forbidden content
     const validatedTopics = topics.map((topic, index) => validateUniversalTopic(topic, index))
 
     console.log("Final validated topics:", validatedTopics)
@@ -135,6 +94,126 @@ Do not wrap the response in markdown code blocks. Return only the JSON array.`,
 
     // If all retries failed, throw error to trigger fallback
     throw error
+  }
+}
+
+// Generate a serious, intellectual topic
+async function generateSeriousTopic(expertise1, expertise2) {
+  const completion = await openai.chat.completions.create({
+    model: "gpt-3.5-turbo",
+    messages: [
+      {
+        role: "system",
+        content: `Create ONE serious, intellectual debate topic for two great minds.
+
+DEBATER BACKGROUNDS:
+- First debater: ${expertise1}
+- Second debater: ${expertise2}
+
+RULES:
+- Create a UNIVERSAL topic (no specific names or people)
+- Make it intellectually engaging and thought-provoking
+- Should be relevant to both debaters' expertise
+- Focus on deep, meaningful concepts
+
+Return ONLY a single JSON object with:
+- id: unique kebab-case identifier
+- title: serious topic (max 50 characters, no names)
+- description: thoughtful explanation (max 100 characters, no names)
+- category: one of "philosophy", "arts", "science", "politics", "history", "education"`,
+      },
+      {
+        role: "user",
+        content: `Generate 1 serious, intellectual debate topic for a ${expertise1} and a ${expertise2}. Return only a single JSON object.`,
+      },
+    ],
+    temperature: 0.8,
+    max_tokens: 200,
+  })
+
+  const content = completion.choices[0].message.content.trim()
+  return parseTopicResponse(content, "serious")
+}
+
+// Generate a lighter, more humorous topic
+async function generateLightTopic(expertise1, expertise2) {
+  const completion = await openai.chat.completions.create({
+    model: "gpt-3.5-turbo",
+    messages: [
+      {
+        role: "system",
+        content: `Create ONE lighter, more playful debate topic for two great minds.
+
+DEBATER BACKGROUNDS:
+- First debater: ${expertise1}
+- Second debater: ${expertise2}
+
+RULES:
+- Create a UNIVERSAL topic (no specific names or people)
+- Make it fun, witty, or slightly humorous
+- Should still be relevant to their expertise but more accessible
+- Think everyday situations, quirky questions, or playful "what-ifs"
+- Keep it intelligent but not overly serious
+
+Examples of light topics:
+- "The Art of Procrastination"
+- "Why Do Socks Disappear in the Laundry?"
+- "The Philosophy of Pizza Toppings"
+- "Is Perfectionism a Blessing or Curse?"
+
+Return ONLY a single JSON object with:
+- id: unique kebab-case identifier
+- title: light/fun topic (max 50 characters, no names)
+- description: playful explanation (max 100 characters, no names)
+- category: one of "philosophy", "arts", "science", "politics", "history", "education"`,
+      },
+      {
+        role: "user",
+        content: `Generate 1 light, playful debate topic for a ${expertise1} and a ${expertise2}. Make it fun but still intellectually engaging. Return only a single JSON object.`,
+      },
+    ],
+    temperature: 1.0, // Higher temperature for more creativity
+    max_tokens: 200,
+  })
+
+  const content = completion.choices[0].message.content.trim()
+  return parseTopicResponse(content, "light")
+}
+
+// Parse a single topic response
+function parseTopicResponse(content, type) {
+  if (!content || typeof content !== "string") {
+    throw new Error(`Empty or invalid ${type} topic response`)
+  }
+
+  let cleanContent = content.trim()
+
+  // Remove markdown code blocks if present
+  if (cleanContent.startsWith("```json")) {
+    cleanContent = cleanContent.replace(/^```json\s*/, "").replace(/\s*```$/, "")
+  } else if (cleanContent.startsWith("```")) {
+    cleanContent = cleanContent.replace(/^```\s*/, "").replace(/\s*```$/, "")
+  }
+
+  cleanContent = cleanContent.trim()
+
+  // Try to find JSON object in the response
+  const jsonMatch = cleanContent.match(/\{[\s\S]*\}/)
+  if (jsonMatch) {
+    cleanContent = jsonMatch[0]
+  }
+
+  try {
+    const topic = JSON.parse(cleanContent)
+    return {
+      id: sanitizeString(topic.id) || `${type}-topic-${Date.now()}`,
+      title: sanitizeString(topic.title) || `${type} Topic`,
+      description: sanitizeString(topic.description) || `A ${type} debate topic`,
+      category: validateCategory(topic.category) || "philosophy",
+    }
+  } catch (parseError) {
+    console.error(`${type} topic JSON parse error:`, cleanContent)
+    throw new Error(`Failed to parse ${type} topic JSON: ${parseError.message}`)
   }
 }
 
@@ -182,94 +261,25 @@ function validateUniversalTopic(topic, index) {
 
   if (containsStrictlyForbidden) {
     console.log(`Topic ${index + 1} contained forbidden word, replacing:`, topic)
-    // Use different fallbacks to avoid duplicates
+    // Use different fallbacks - serious for first, light for second
     const fallbacks = [
       {
-        id: `universal-wisdom-${Date.now()}-${index}`,
+        id: `serious-fallback-${Date.now()}-${index}`,
         title: "The Source of Wisdom",
         description: "Where does true understanding come from?",
         category: "philosophy",
       },
       {
-        id: `universal-creativity-${Date.now()}-${index}`,
-        title: "The Nature of Creativity",
-        description: "What drives human innovation and artistic expression?",
-        category: "arts",
+        id: `light-fallback-${Date.now()}-${index}`,
+        title: "The Art of Procrastination",
+        description: "Is delaying tasks a form of creative thinking?",
+        category: "philosophy",
       },
     ]
     return fallbacks[index % fallbacks.length]
   }
 
   return topic
-}
-
-// Robust JSON parsing that handles various GPT response formats
-function parseGPTResponse(content, character1, character2) {
-  if (!content || typeof content !== "string") {
-    throw new Error("Empty or invalid response content")
-  }
-
-  let cleanContent = content.trim()
-
-  // Remove markdown code blocks if present
-  if (cleanContent.startsWith("```json")) {
-    cleanContent = cleanContent.replace(/^```json\s*/, "").replace(/\s*```$/, "")
-  } else if (cleanContent.startsWith("```")) {
-    cleanContent = cleanContent.replace(/^```\s*/, "").replace(/\s*```$/, "")
-  }
-
-  // Remove any leading/trailing whitespace again
-  cleanContent = cleanContent.trim()
-
-  // Try to find JSON array in the response if it's embedded in text
-  const jsonMatch = cleanContent.match(/\[[\s\S]*\]/)
-  if (jsonMatch) {
-    cleanContent = jsonMatch[0]
-  }
-
-  let parsedTopics
-  try {
-    parsedTopics = JSON.parse(cleanContent)
-  } catch (parseError) {
-    console.error("JSON parse error. Content was:", cleanContent)
-    throw new Error(`Failed to parse JSON: ${parseError.message}`)
-  }
-
-  // Validate the response structure
-  if (!Array.isArray(parsedTopics)) {
-    throw new Error("Response is not an array")
-  }
-
-  if (parsedTopics.length === 0) {
-    throw new Error("Response array is empty")
-  }
-
-  // Take only first 2 topics and validate/sanitize them
-  const validatedTopics = parsedTopics.slice(0, 2).map((topic, index) => {
-    if (!topic || typeof topic !== "object") {
-      throw new Error(`Topic ${index + 1} is not a valid object`)
-    }
-
-    return {
-      id: sanitizeString(topic.id) || `relevant-topic-${Date.now()}-${index}`,
-      title: sanitizeString(topic.title) || `Relevant Topic ${index + 1}`,
-      description: sanitizeString(topic.description) || "A relevant debate topic for these great minds",
-      category: validateCategory(topic.category) || "philosophy",
-    }
-  })
-
-  // Ensure we have exactly 2 topics
-  while (validatedTopics.length < 2) {
-    const index = validatedTopics.length
-    validatedTopics.push({
-      id: `relevant-topic-${Date.now()}-${index}`,
-      title: `Universal Topic ${index + 1}`,
-      description: "A relevant debate topic for these great minds",
-      category: "philosophy",
-    })
-  }
-
-  return validatedTopics
 }
 
 // Sanitize string inputs
@@ -284,19 +294,9 @@ function validateCategory(category) {
   return validCategories.includes(category) ? category : "philosophy"
 }
 
-// Enhanced fallback function with RELEVANT topics based on character expertise
+// Enhanced fallback function with mixed serious/light topics
 function getDefaultTopics(character1, character2) {
-  const expertise1 = getExpertiseArea(character1)
-  const expertise2 = getExpertiseArea(character2)
-
-  // More varied fallback topics
-  const allFallbacks = [
-    {
-      id: "purpose-of-art",
-      title: "The Purpose of Art",
-      description: "Should art serve society or express personal truth?",
-      category: "arts",
-    },
+  const seriousFallbacks = [
     {
       id: "nature-of-knowledge",
       title: "The Nature of Knowledge",
@@ -310,26 +310,37 @@ function getDefaultTopics(character1, character2) {
       category: "philosophy",
     },
     {
-      id: "individual-vs-collective",
-      title: "Individual vs Collective Good",
-      description: "When should personal desires yield to societal needs?",
-      category: "politics",
-    },
-    {
       id: "beauty-and-truth",
       title: "Beauty and Truth",
       description: "Is there a connection between aesthetic beauty and truth?",
       category: "philosophy",
     },
+  ]
+
+  const lightFallbacks = [
     {
-      id: "progress-vs-tradition",
-      title: "Progress vs Tradition",
-      description: "Should we embrace change or preserve established ways?",
-      category: "culture",
+      id: "art-of-procrastination",
+      title: "The Art of Procrastination",
+      description: "Is delaying tasks a form of creative thinking?",
+      category: "philosophy",
+    },
+    {
+      id: "perfect-imperfection",
+      title: "Perfect Imperfection",
+      description: "Are flaws what make things truly beautiful?",
+      category: "arts",
+    },
+    {
+      id: "wisdom-of-fools",
+      title: "The Wisdom of Fools",
+      description: "Do jesters and comedians reveal deeper truths?",
+      category: "philosophy",
     },
   ]
 
-  // Return 2 random topics to avoid duplicates
-  const shuffled = [...allFallbacks].sort(() => Math.random() - 0.5)
-  return shuffled.slice(0, 2)
+  // Always return one serious, one light
+  const serious = seriousFallbacks[Math.floor(Math.random() * seriousFallbacks.length)]
+  const light = lightFallbacks[Math.floor(Math.random() * lightFallbacks.length)]
+
+  return [serious, light]
 }
