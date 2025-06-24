@@ -1322,9 +1322,13 @@ export default function Home() {
             )}
           </div>
 
-          {/* Character Grid - SINGLE UNIFIED INTERFACE */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-12">
-            {Object.entries(personas).map(([key, persona]) => {
+{/* Character Grid - SINGLE UNIFIED INTERFACE with randomized order */}
+<div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-12">
+  {useMemo(() => {
+    // Randomize character order once per session, then keep it stable
+    const personaEntries = Object.entries(personas)
+    return [...personaEntries].sort(() => Math.random() - 0.5)
+  }, [personas]).map(([key, persona]) => {
               const isSelected = mode === "question" ? selectedPersona === key : selectedCharacters.includes(key)
               const shouldGrayOut = shouldGrayOutCharacter(key)
               const isCurrentDebateSpeaker = currentSpeaker === key
