@@ -1,6 +1,6 @@
 // pages/api/continue-debate.js
 import OpenAI from "openai"
-import { personas } from "../../lib/personas"
+import { personas, AI_CONFIG } from "../../lib/personas"
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -56,6 +56,7 @@ export default async function handler(req, res) {
                     
                     Respond to this question from your unique perspective and knowledge.
                     Keep your response concise (2-3 sentences).
+                    ${AI_CONFIG.DEBATE.WORD_LIMIT_INSTRUCTION}
                     ${historicalContext ? "Only use knowledge available during your lifetime." : ""}`,
         },
         {
@@ -63,6 +64,7 @@ export default async function handler(req, res) {
           content: `How would you, ${persona1.name}, respond to the question: "${userQuestion}"?`,
         },
       ],
+      max_tokens: AI_CONFIG.DEBATE.TOKEN_LIMIT,
     })
 
     const response1 = response1Completion.choices[0].message.content.trim()
@@ -82,6 +84,7 @@ export default async function handler(req, res) {
                     
                     Respond to both the question and ${persona1.name}'s response from your unique perspective.
                     Keep your response concise (2-3 sentences).
+                    ${AI_CONFIG.DEBATE.WORD_LIMIT_INSTRUCTION}
                     ${historicalContext ? "Only use knowledge available during your lifetime." : ""}`,
         },
         {
@@ -89,6 +92,7 @@ export default async function handler(req, res) {
           content: `How would you, ${persona2.name}, respond to the question: "${userQuestion}" and to ${persona1.name}'s response: "${response1}"?`,
         },
       ],
+      max_tokens: AI_CONFIG.DEBATE.TOKEN_LIMIT,
     })
 
     const response2 = response2Completion.choices[0].message.content.trim()

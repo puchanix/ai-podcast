@@ -32,14 +32,14 @@ export default async function handler(req, res) {
           messages: [
             {
               role: "system",
-              content: `${persona1.prompt} You are starting a debate about "${topic}". Give a brief opening statement (2-3 sentences max). Be authentic to your character. ${AI_CONFIG.WORD_LIMIT_INSTRUCTION}`,
+              content: `${persona1.prompt} You are starting a debate about "${topic}". Give a brief opening statement (2-3 sentences max). Be authentic to your character. ${AI_CONFIG.DEBATE.WORD_LIMIT_INSTRUCTION}`,
             },
             {
               role: "user",
               content: `Give your opening statement on the topic: "${topic}"`,
             },
           ],
-          max_tokens: AI_CONFIG.TOKEN_LIMIT,
+          max_tokens: AI_CONFIG.DEBATE.TOKEN_LIMIT,
           temperature: 0.8,
           stop: ["\n\n", "Human:", "User:"],
         }),
@@ -55,14 +55,14 @@ export default async function handler(req, res) {
           messages: [
             {
               role: "system",
-              content: `${persona2.prompt} You are starting a debate about "${topic}". Give a brief opening statement (2-3 sentences max). Be authentic to your character. ${AI_CONFIG.WORD_LIMIT_INSTRUCTION}`,
+              content: `${persona2.prompt} You are starting a debate about "${topic}". Give a brief opening statement (2-3 sentences max). Be authentic to your character. ${AI_CONFIG.DEBATE.WORD_LIMIT_INSTRUCTION}`,
             },
             {
               role: "user",
               content: `Give your opening statement on the topic: "${topic}"`,
             },
           ],
-          max_tokens: AI_CONFIG.TOKEN_LIMIT,
+          max_tokens: AI_CONFIG.DEBATE.TOKEN_LIMIT,
           temperature: 0.8,
           stop: ["\n\n", "Human:", "User:"],
         }),

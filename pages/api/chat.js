@@ -26,8 +26,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: `Unknown character: ${characterKey}` })
     }
 
-    // Make the word limit instruction more prominent
-    const systemPrompt = `${characterPrompt} ${AI_CONFIG.WORD_LIMIT_INSTRUCTION}`
+    // Make the word limit instruction more prominent - using QUESTION limits for chat
+    const systemPrompt = `${characterPrompt} ${AI_CONFIG.QUESTION.WORD_LIMIT_INSTRUCTION}`
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      max_tokens: AI_CONFIG.TOKEN_LIMIT,
+      max_tokens: AI_CONFIG.QUESTION.TOKEN_LIMIT,
       temperature: 0.7,
       // Add stop sequences to avoid cutting mid-sentence
       stop: ["\n\n", "Human:", "User:"],

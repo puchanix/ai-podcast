@@ -76,16 +76,16 @@ ${stagePrompt}
 Previous conversation:
 ${context}
 
-Give your next response in 2-3 complete sentences. Stay true to your character, respond to the previous points made, and advance the debate. Be engaging and passionate about your position. ${AI_CONFIG.WORD_LIMIT_INSTRUCTION}`
+Give your next response in 2-3 complete sentences. Stay true to your character, respond to the previous points made, and advance the debate. Be engaging and passionate about your position. ${AI_CONFIG.DEBATE.WORD_LIMIT_INSTRUCTION}`
 
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
-        { role: "system", content: `${systemPrompt} ${AI_CONFIG.WORD_LIMIT_INSTRUCTION}` },
+        { role: "system", content: `${systemPrompt} ${AI_CONFIG.DEBATE.WORD_LIMIT_INSTRUCTION}` },
         { role: "user", content: prompt },
       ],
-      max_tokens: AI_CONFIG.TOKEN_LIMIT,
+      max_tokens: AI_CONFIG.DEBATE.TOKEN_LIMIT,
       temperature: 0.8,
       // Add stop sequences to avoid cutting mid-sentence
       stop: ["\n\n", "Human:", "User:"],
