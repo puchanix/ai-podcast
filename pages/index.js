@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import StickyDebateStatusBar from "../components/StickyDebateStatusBar"
 import useIsMobile from "../hooks/useIsMobile"
 import Layout from "../components/layout"
