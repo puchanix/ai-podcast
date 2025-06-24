@@ -61,6 +61,8 @@ async function generateTopicsWithRetry(persona1, persona2, character1, character
     const expertise1 = getExpertiseArea(character1)
     const expertise2 = getExpertiseArea(character2)
 
+    console.log(`Generating topics for ${expertise1} and ${expertise2}`)
+
     // Create the OpenAI request with RELEVANT UNIVERSAL topic generation
     const openaiPromise = openai.chat.completions.create({
       model: "gpt-3.5-turbo",
@@ -70,8 +72,8 @@ async function generateTopicsWithRetry(persona1, persona2, character1, character
           content: `You are creating debate topics for two great minds with different areas of expertise.
 
 DEBATER BACKGROUNDS:
-- First debater: ${expertise1} (${persona1.name})
-- Second debater: ${expertise2} (${persona2.name})
+- First debater: ${expertise1}
+- Second debater: ${expertise2}
 
 CRITICAL RULES:
 - Create UNIVERSAL topics that don't mention specific people or names
@@ -84,11 +86,6 @@ GOOD EXAMPLES:
 - For artist + philosopher: "The Role of Beauty in Understanding Truth"
 - For scientist + artist: "Logic vs Intuition in Creative Discovery"
 - For two philosophers: "The Nature of Human Consciousness"
-
-BAD EXAMPLES (avoid):
-- "Shakespeare vs Mozart in Creativity"
-- "Freud's Theory of Dreams"
-- "Who had more influence"
 
 Return ONLY a valid JSON array with exactly 2 objects. Each object must have:
 - id: unique kebab-case identifier
@@ -103,18 +100,24 @@ Do not wrap the response in markdown code blocks. Return only the JSON array.`,
           content: `Generate 2 universal debate topics that would be particularly engaging for a ${expertise1} and a ${expertise2} to discuss. Focus on areas where their different expertise would create interesting perspectives. Return only valid JSON array.`,
         },
       ],
-      temperature: 0.8,
+      temperature: 0.9, // Increased for more variety
       max_tokens: 400,
     })
 
     // Race between OpenAI request and timeout
     const completion = await Promise.race([openaiPromise, timeoutPromise])
 
+    console.log("Raw AI response:", completion.choices[0].message.content)
+
     // Parse the response with robust error handling
     const topics = parseGPTResponse(completion.choices[0].message.content, character1, character2)
 
-    // Validate topics don't contain forbidden content
-    const validatedTopics = topics.map((topic) => validateUniversalTopic(topic))
+    console.log("Parsed topics before validation:", topics)
+
+    // Validate topics don't contain forbidden content (less aggressive)
+    const validatedTopics = topics.map((topic, index) => validateUniversalTopic(topic, index))
+
+    console.log("Final validated topics:", validatedTopics)
 
     return validatedTopics
   } catch (error) {
@@ -153,48 +156,48 @@ function getExpertiseArea(characterId) {
   return expertiseMap[characterId] || "great thinker"
 }
 
-// Validate that topics are truly universal but relevant
-function validateUniversalTopic(topic) {
-  const forbiddenWords = [
+// Less aggressive validation that only catches obvious problems
+function validateUniversalTopic(topic, index) {
+  // Only check for the most obvious forbidden words
+  const strictlyForbiddenWords = [
     "shakespeare",
     "mozart",
     "freud",
-    "da vinci",
+    "leonardo",
     "socrates",
     "frida",
     "twain",
     "spinoza",
     "hypatia",
     "gandhi",
-    "leonardo",
-    "william",
-    "wolfgang",
-    "sigmund",
-    "baruch",
-    "mahatma",
-    "vs",
-    "versus",
-    "compared to",
-    "according to",
-    "influence of",
-    "legacy of",
-    "who",
-    "whose",
+    "da vinci",
   ]
 
   const title = (topic.title || "").toLowerCase()
   const description = (topic.description || "").toLowerCase()
 
-  const containsForbidden = forbiddenWords.some((word) => title.includes(word) || description.includes(word))
+  const containsStrictlyForbidden = strictlyForbiddenWords.some(
+    (word) => title.includes(word) || description.includes(word),
+  )
 
-  if (containsForbidden) {
-    // Replace with a safe universal topic
-    return {
-      id: `universal-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      title: "The Nature of Truth",
-      description: "What constitutes absolute truth versus relative perspective?",
-      category: "philosophy",
-    }
+  if (containsStrictlyForbidden) {
+    console.log(`Topic ${index + 1} contained forbidden word, replacing:`, topic)
+    // Use different fallbacks to avoid duplicates
+    const fallbacks = [
+      {
+        id: `universal-wisdom-${Date.now()}-${index}`,
+        title: "The Source of Wisdom",
+        description: "Where does true understanding come from?",
+        category: "philosophy",
+      },
+      {
+        id: `universal-creativity-${Date.now()}-${index}`,
+        title: "The Nature of Creativity",
+        description: "What drives human innovation and artistic expression?",
+        category: "arts",
+      },
+    ]
+    return fallbacks[index % fallbacks.length]
   }
 
   return topic
@@ -248,7 +251,7 @@ function parseGPTResponse(content, character1, character2) {
     }
 
     return {
-      id: sanitizeString(topic.id) || `relevant-topic-${index + 1}`,
+      id: sanitizeString(topic.id) || `relevant-topic-${Date.now()}-${index}`,
       title: sanitizeString(topic.title) || `Relevant Topic ${index + 1}`,
       description: sanitizeString(topic.description) || "A relevant debate topic for these great minds",
       category: validateCategory(topic.category) || "philosophy",
@@ -259,8 +262,8 @@ function parseGPTResponse(content, character1, character2) {
   while (validatedTopics.length < 2) {
     const index = validatedTopics.length
     validatedTopics.push({
-      id: `relevant-topic-${index + 1}`,
-      title: `Relevant Topic ${index + 1}`,
+      id: `relevant-topic-${Date.now()}-${index}`,
+      title: `Universal Topic ${index + 1}`,
       description: "A relevant debate topic for these great minds",
       category: "philosophy",
     })
@@ -286,82 +289,47 @@ function getDefaultTopics(character1, character2) {
   const expertise1 = getExpertiseArea(character1)
   const expertise2 = getExpertiseArea(character2)
 
-  // Character-pair specific relevant topics
-  const relevantTopics = {
-    // Artist + Artist
-    "art-art": [
-      {
-        id: "purpose-of-art",
-        title: "The Purpose of Art",
-        description: "Should art serve society or express personal truth?",
-        category: "arts",
-      },
-      {
-        id: "beauty-vs-meaning",
-        title: "Beauty vs Meaning in Art",
-        description: "Is aesthetic beauty more important than deeper meaning?",
-        category: "arts",
-      },
-    ],
-    // Artist + Philosopher
-    "art-philosophy": [
-      {
-        id: "art-as-truth",
-        title: "Art as a Path to Truth",
-        description: "Can artistic expression reveal truths that logic cannot?",
-        category: "philosophy",
-      },
-      {
-        id: "emotion-in-understanding",
-        title: "Role of Emotion in Understanding",
-        description: "Do feelings help or hinder our grasp of reality?",
-        category: "philosophy",
-      },
-    ],
-    // Philosopher + Philosopher
-    "philosophy-philosophy": [
-      {
-        id: "nature-of-knowledge",
-        title: "The Nature of Knowledge",
-        description: "How do we distinguish between belief and true knowledge?",
-        category: "philosophy",
-      },
-      {
-        id: "ethics-and-morality",
-        title: "Source of Moral Truth",
-        description: "Are moral principles universal or culturally determined?",
-        category: "philosophy",
-      },
-    ],
-    // Default fallback
-    default: [
-      {
-        id: "wisdom-vs-knowledge",
-        title: "Wisdom vs Knowledge",
-        description: "Is accumulated information the same as true understanding?",
-        category: "philosophy",
-      },
-      {
-        id: "individual-vs-collective",
-        title: "Individual vs Collective Good",
-        description: "When should personal desires yield to societal needs?",
-        category: "politics",
-      },
-    ],
-  }
+  // More varied fallback topics
+  const allFallbacks = [
+    {
+      id: "purpose-of-art",
+      title: "The Purpose of Art",
+      description: "Should art serve society or express personal truth?",
+      category: "arts",
+    },
+    {
+      id: "nature-of-knowledge",
+      title: "The Nature of Knowledge",
+      description: "How do we distinguish between belief and true knowledge?",
+      category: "philosophy",
+    },
+    {
+      id: "role-of-emotion",
+      title: "Role of Emotion in Understanding",
+      description: "Do feelings help or hinder our grasp of reality?",
+      category: "philosophy",
+    },
+    {
+      id: "individual-vs-collective",
+      title: "Individual vs Collective Good",
+      description: "When should personal desires yield to societal needs?",
+      category: "politics",
+    },
+    {
+      id: "beauty-and-truth",
+      title: "Beauty and Truth",
+      description: "Is there a connection between aesthetic beauty and truth?",
+      category: "philosophy",
+    },
+    {
+      id: "progress-vs-tradition",
+      title: "Progress vs Tradition",
+      description: "Should we embrace change or preserve established ways?",
+      category: "culture",
+    },
+  ]
 
-  // Determine topic category based on expertise
-  let topicKey = "default"
-  if (expertise1.includes("art") && expertise2.includes("art")) {
-    topicKey = "art-art"
-  } else if (
-    (expertise1.includes("art") && expertise2.includes("philosopher")) ||
-    (expertise1.includes("philosopher") && expertise2.includes("art"))
-  ) {
-    topicKey = "art-philosophy"
-  } else if (expertise1.includes("philosopher") && expertise2.includes("philosopher")) {
-    topicKey = "philosophy-philosophy"
-  }
-
-  return relevantTopics[topicKey] || relevantTopics.default
+  // Return 2 random topics to avoid duplicates
+  const shuffled = [...allFallbacks].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, 2)
 }
