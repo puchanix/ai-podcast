@@ -57,29 +57,54 @@ async function generateTopicsWithRetry(persona1, persona2, character1, character
       setTimeout(() => reject(new Error("Request timeout")), timeoutMs)
     })
 
-    // Create the OpenAI request
+    // Determine the areas of expertise for both characters
+    const expertise1 = getExpertiseArea(character1)
+    const expertise2 = getExpertiseArea(character2)
+
+    // Create the OpenAI request with RELEVANT UNIVERSAL topic generation
     const openaiPromise = openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
-          content: `You are a debate topic generator. Create exactly 2 compelling debate topics for ${persona1.name} and ${persona2.name}.
+          content: `You are creating debate topics for two great minds with different areas of expertise.
+
+DEBATER BACKGROUNDS:
+- First debater: ${expertise1} (${persona1.name})
+- Second debater: ${expertise2} (${persona2.name})
+
+CRITICAL RULES:
+- Create UNIVERSAL topics that don't mention specific people or names
+- Topics should be relevant to BOTH debaters' areas of expertise
+- Focus on concepts both minds would find intellectually engaging
+- Never use "vs" between people or direct comparisons
+- Make topics that leverage their different perspectives
+
+GOOD EXAMPLES:
+- For artist + philosopher: "The Role of Beauty in Understanding Truth"
+- For scientist + artist: "Logic vs Intuition in Creative Discovery"
+- For two philosophers: "The Nature of Human Consciousness"
+
+BAD EXAMPLES (avoid):
+- "Shakespeare vs Mozart in Creativity"
+- "Freud's Theory of Dreams"
+- "Who had more influence"
 
 Return ONLY a valid JSON array with exactly 2 objects. Each object must have:
 - id: unique kebab-case identifier
-- title: concise topic title (max 50 characters)  
-- description: brief explanation (max 100 characters)
+- title: relevant universal topic (max 50 characters, no names)
+- description: brief explanation (max 100 characters, no names)
 - category: one of "philosophy", "arts", "science", "politics", "history", "education"
 
 Do not wrap the response in markdown code blocks. Return only the JSON array.`,
         },
         {
           role: "user",
-          content: `Generate 2 debate topics for ${persona1.name} vs ${persona2.name}. Return only valid JSON array.`,
+          content: `Generate 2 universal debate topics that would be particularly engaging for a ${expertise1} and a ${expertise2} to discuss. Focus on areas where their different expertise would create interesting perspectives. Return only valid JSON array.`,
         },
       ],
       temperature: 0.8,
-      max_tokens: 400, // Reduced for faster response
+      max_tokens: 400,
     })
 
     // Race between OpenAI request and timeout
@@ -88,7 +113,10 @@ Do not wrap the response in markdown code blocks. Return only the JSON array.`,
     // Parse the response with robust error handling
     const topics = parseGPTResponse(completion.choices[0].message.content, character1, character2)
 
-    return topics
+    // Validate topics don't contain forbidden content
+    const validatedTopics = topics.map((topic) => validateUniversalTopic(topic))
+
+    return validatedTopics
   } catch (error) {
     console.error(`Topic generation attempt ${retryCount + 1} failed:`, error.message)
 
@@ -105,6 +133,71 @@ Do not wrap the response in markdown code blocks. Return only the JSON array.`,
     // If all retries failed, throw error to trigger fallback
     throw error
   }
+}
+
+// Get the area of expertise for each character
+function getExpertiseArea(characterId) {
+  const expertiseMap = {
+    daVinci: "Renaissance polymath (art, science, invention)",
+    socrates: "Ancient philosopher (ethics, knowledge, wisdom)",
+    frida: "Artist (self-expression, identity, pain)",
+    shakespeare: "Playwright and poet (human nature, drama)",
+    mozart: "Classical composer (musical harmony, creativity)",
+    twain: "Writer and humorist (social criticism, storytelling)",
+    freud: "Psychoanalyst (unconscious mind, human behavior)",
+    spinoza: "Rationalist philosopher (ethics, nature, logic)",
+    hypatia: "Mathematician and philosopher (logic, astronomy)",
+    gandhi: "Political leader (nonviolence, justice, truth)",
+  }
+
+  return expertiseMap[characterId] || "great thinker"
+}
+
+// Validate that topics are truly universal but relevant
+function validateUniversalTopic(topic) {
+  const forbiddenWords = [
+    "shakespeare",
+    "mozart",
+    "freud",
+    "da vinci",
+    "socrates",
+    "frida",
+    "twain",
+    "spinoza",
+    "hypatia",
+    "gandhi",
+    "leonardo",
+    "william",
+    "wolfgang",
+    "sigmund",
+    "baruch",
+    "mahatma",
+    "vs",
+    "versus",
+    "compared to",
+    "according to",
+    "influence of",
+    "legacy of",
+    "who",
+    "whose",
+  ]
+
+  const title = (topic.title || "").toLowerCase()
+  const description = (topic.description || "").toLowerCase()
+
+  const containsForbidden = forbiddenWords.some((word) => title.includes(word) || description.includes(word))
+
+  if (containsForbidden) {
+    // Replace with a safe universal topic
+    return {
+      id: `universal-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      title: "The Nature of Truth",
+      description: "What constitutes absolute truth versus relative perspective?",
+      category: "philosophy",
+    }
+  }
+
+  return topic
 }
 
 // Robust JSON parsing that handles various GPT response formats
@@ -155,9 +248,9 @@ function parseGPTResponse(content, character1, character2) {
     }
 
     return {
-      id: sanitizeString(topic.id) || `${character1}-${character2}-topic-${index + 1}`,
-      title: sanitizeString(topic.title) || `Topic ${index + 1}`,
-      description: sanitizeString(topic.description) || "A debate topic for these historical figures",
+      id: sanitizeString(topic.id) || `relevant-topic-${index + 1}`,
+      title: sanitizeString(topic.title) || `Relevant Topic ${index + 1}`,
+      description: sanitizeString(topic.description) || "A relevant debate topic for these great minds",
       category: validateCategory(topic.category) || "philosophy",
     }
   })
@@ -166,9 +259,9 @@ function parseGPTResponse(content, character1, character2) {
   while (validatedTopics.length < 2) {
     const index = validatedTopics.length
     validatedTopics.push({
-      id: `${character1}-${character2}-topic-${index + 1}`,
-      title: `Topic ${index + 1}`,
-      description: "A debate topic for these historical figures",
+      id: `relevant-topic-${index + 1}`,
+      title: `Relevant Topic ${index + 1}`,
+      description: "A relevant debate topic for these great minds",
       category: "philosophy",
     })
   }
@@ -188,134 +281,87 @@ function validateCategory(category) {
   return validCategories.includes(category) ? category : "philosophy"
 }
 
-// Enhanced fallback function with character-specific topics
+// Enhanced fallback function with RELEVANT topics based on character expertise
 function getDefaultTopics(character1, character2) {
-  const persona1 = personas[character1]
-  const persona2 = personas[character2]
+  const expertise1 = getExpertiseArea(character1)
+  const expertise2 = getExpertiseArea(character2)
 
-  if (!persona1 || !persona2) {
-    return [
+  // Character-pair specific relevant topics
+  const relevantTopics = {
+    // Artist + Artist
+    "art-art": [
       {
-        id: "general-philosophy",
-        title: "Philosophy and Knowledge",
-        description: "The pursuit of wisdom and understanding",
-        category: "philosophy",
+        id: "purpose-of-art",
+        title: "The Purpose of Art",
+        description: "Should art serve society or express personal truth?",
+        category: "arts",
       },
       {
-        id: "general-legacy",
-        title: "Historical Legacy",
-        description: "The lasting impact on humanity",
-        category: "history",
+        id: "beauty-vs-meaning",
+        title: "Beauty vs Meaning in Art",
+        description: "Is aesthetic beauty more important than deeper meaning?",
+        category: "arts",
       },
-    ]
-  }
-
-  // Create a normalized pair key for lookup
-  const sortedPair = [character1, character2].sort().join("_")
-
-  // Character-specific fallback topics
-  const characterPairTopics = {
-    daVinci_socrates: [
-      {
-        id: "knowledge-vs-wisdom",
-        title: "Knowledge vs. Wisdom",
-        description: "Is accumulated knowledge the same as true wisdom?",
-        category: "philosophy",
-      },
+    ],
+    // Artist + Philosopher
+    "art-philosophy": [
       {
         id: "art-as-truth",
-        title: "Art as Truth",
-        description: "Can artistic expression reveal deeper truths than logic?",
-        category: "arts",
-      },
-    ],
-    daVinci_frida: [
-      {
-        id: "personal-vs-universal",
-        title: "Personal vs. Universal Art",
-        description: "Should art express personal pain or universal beauty?",
-        category: "arts",
-      },
-      {
-        id: "innovation-vs-tradition",
-        title: "Innovation vs. Tradition",
-        description: "Breaking new ground versus respecting artistic heritage",
-        category: "arts",
-      },
-    ],
-    frida_socrates: [
-      {
-        id: "emotion-vs-reason",
-        title: "Emotion vs. Reason",
-        description: "Should decisions be guided by feeling or logic?",
+        title: "Art as a Path to Truth",
+        description: "Can artistic expression reveal truths that logic cannot?",
         category: "philosophy",
       },
       {
-        id: "suffering-and-wisdom",
-        title: "Suffering and Wisdom",
-        description: "Does personal pain lead to greater understanding?",
+        id: "emotion-in-understanding",
+        title: "Role of Emotion in Understanding",
+        description: "Do feelings help or hinder our grasp of reality?",
         category: "philosophy",
       },
     ],
-    mozart_shakespeare: [
+    // Philosopher + Philosopher
+    "philosophy-philosophy": [
       {
-        id: "music-vs-words",
-        title: "Music vs. Words",
-        description: "Which art form better expresses human emotion?",
-        category: "arts",
-      },
-      {
-        id: "divine-inspiration",
-        title: "Divine Inspiration",
-        description: "Is artistic genius a gift from above or human effort?",
-        category: "arts",
-      },
-    ],
-    mozart_socrates: [
-      {
-        id: "harmony-and-order",
-        title: "Harmony and Order",
-        description: "Is mathematical harmony the key to understanding life?",
+        id: "nature-of-knowledge",
+        title: "The Nature of Knowledge",
+        description: "How do we distinguish between belief and true knowledge?",
         category: "philosophy",
       },
       {
-        id: "beauty-and-truth",
-        title: "Beauty and Truth",
-        description: "Are beautiful things necessarily true?",
+        id: "ethics-and-morality",
+        title: "Source of Moral Truth",
+        description: "Are moral principles universal or culturally determined?",
         category: "philosophy",
       },
     ],
-    shakespeare_socrates: [
+    // Default fallback
+    default: [
       {
-        id: "human-nature",
-        title: "Human Nature",
-        description: "Are humans fundamentally good or flawed?",
+        id: "wisdom-vs-knowledge",
+        title: "Wisdom vs Knowledge",
+        description: "Is accumulated information the same as true understanding?",
         category: "philosophy",
       },
       {
-        id: "knowledge-through-story",
-        title: "Knowledge Through Story",
-        description: "Do stories teach better than philosophical inquiry?",
-        category: "education",
+        id: "individual-vs-collective",
+        title: "Individual vs Collective Good",
+        description: "When should personal desires yield to societal needs?",
+        category: "politics",
       },
     ],
   }
 
-  // Return character-specific topics or generic fallback
-  return (
-    characterPairTopics[sortedPair] || [
-      {
-        id: `${character1}-${character2}-expertise`,
-        title: "Approaches to Excellence",
-        description: `How ${persona1.name} and ${persona2.name} define mastery`,
-        category: "philosophy",
-      },
-      {
-        id: `${character1}-${character2}-legacy`,
-        title: "Lasting Impact",
-        description: `The enduring influence of ${persona1.name} and ${persona2.name}`,
-        category: "history",
-      },
-    ]
-  )
+  // Determine topic category based on expertise
+  let topicKey = "default"
+  if (expertise1.includes("art") && expertise2.includes("art")) {
+    topicKey = "art-art"
+  } else if (
+    (expertise1.includes("art") && expertise2.includes("philosopher")) ||
+    (expertise1.includes("philosopher") && expertise2.includes("art"))
+  ) {
+    topicKey = "art-philosophy"
+  } else if (expertise1.includes("philosopher") && expertise2.includes("philosopher")) {
+    topicKey = "philosophy-philosophy"
+  }
+
+  return relevantTopics[topicKey] || relevantTopics.default
 }
